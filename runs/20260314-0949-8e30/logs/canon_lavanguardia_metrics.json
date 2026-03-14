@@ -1,0 +1,9 @@
+{
+  "discovered": 181,
+  "processed": 120,
+  "kept": 28,
+  "discarded_by_date": 92,
+  "errors": 0,
+  "stop_reason": "max_articles_to_extract",
+  "last_url": "https://www.lavanguardia.com/nacional/20250205/10356004/fiscal-general-comparecera-18-enero-senado-agenciaslv20250205.html"
+}

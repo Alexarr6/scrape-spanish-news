@@ -1,88 +1,116 @@
 # RESULTS.md
 
-## Resumen de entrega
-Integración de **La Vanguardia** como cuarta fuente en arquitectura core+adapters, con discovery en cascada **RSS → sitemap → HTML fallback**, whitelist inicial centrada en España/política/nacional, CSV opcional (mismo stack), y hard cap runtime por defecto en CLI de **180s**.
+## Resumen
+Implementación completada del PLAN con las decisiones humanas aprobadas:
+1. ✅ `max-articles-to-extract` por defecto volvió a **120 global**.
+2. ✅ Caídas >20% ya **no bloquean merge automáticamente**: se documentan como **WARNING** con diagnóstico y evidencia en este archivo.
+3. ✅ Migración a `core/strategies` en este run: **solo EL PAÍS MVP** (reusable, mínima, reversible).
 
-## Baseline previo obligatorio
-Ejecutado antes de implementar adapter:
+---
 
-```bash
-python3 -m src.main --help
-python3 -m unittest discover -s tests -v
-```
+## Baseline canónico obligatorio (freeze)
+Fecha fija: `2026-03-13`  
+Caps fijos: `--max-discovery-urls 300 --max-articles-to-extract 120 --max-runtime-seconds 180`
 
-Estado baseline: OK.
-
-## Cambios realizados
-- Adapter nuevo: `src/adapters/lavanguardia.py`
-  - discovery por capas: RSS, sitemap, HTML fallback
-  - whitelist inicial: rutas/slug con `espana`, `politica`, `nacional`
-  - fallback HTML limitado a 5 páginas
-- Integración CLI:
-  - `--source lavanguardia` añadido al registry
-  - defaults guardrails: `--max-articles-to-extract=100`, `--max-runtime-seconds=180`
-- Tests:
-  - nuevo `tests/test_lavanguardia_adapter.py`
-  - `tests/test_registry.py` actualizado para incluir `lavanguardia`
-
-## Evidencias de verificación
-
-### 1) Help + tests
-```bash
-python3 -m src.main --help
-python3 -m unittest discover -s tests -v
-```
-Resultado: OK, 8 tests en verde.
-
-### 2) Validación comparativa por fecha específica (2026-03-13)
 Comandos ejecutados:
 ```bash
-python3 -m src.main --source lavanguardia --date 2026-03-13 --out data/news_lavanguardia_2026-03-13.json --metrics-out logs/lavanguardia_metrics.json
-python3 -m src.main --source lavanguardia --date 2026-03-13 --out data/news_lavanguardia_2026-03-13.csv --metrics-out logs/lavanguardia_metrics_csv.json
-python3 -m src.main --source elpais --date 2026-03-13 --out data/reg_elpais_2026-03-13.json --metrics-out logs/reg_elpais_metrics.json
-python3 -m src.main --source elmundo --date 2026-03-13 --out data/reg_elmundo_2026-03-13.json --metrics-out logs/reg_elmundo_metrics.json
-python3 -m src.main --source abc --date 2026-03-13 --out data/reg_abc_2026-03-13.json --metrics-out logs/reg_abc_metrics.json
+python3 -m src.main --source elpais --date 2026-03-13 --max-discovery-urls 300 --max-articles-to-extract 120 --max-runtime-seconds 180 --out data/canon_elpais_2026-03-13.json --metrics-out logs/canon_elpais_metrics.json
+python3 -m src.main --source elmundo --date 2026-03-13 --max-discovery-urls 300 --max-articles-to-extract 120 --max-runtime-seconds 180 --out data/canon_elmundo_2026-03-13.json --metrics-out logs/canon_elmundo_metrics.json
+python3 -m src.main --source abc --date 2026-03-13 --max-discovery-urls 300 --max-articles-to-extract 120 --max-runtime-seconds 180 --out data/canon_abc_2026-03-13.json --metrics-out logs/canon_abc_metrics.json
+python3 -m src.main --source lavanguardia --date 2026-03-13 --max-discovery-urls 300 --max-articles-to-extract 120 --max-runtime-seconds 180 --out data/canon_lavanguardia_2026-03-13.json --metrics-out logs/canon_lavanguardia_metrics.json
 ```
 
-Conteos finales:
-- `lavanguardia`: **29** artículos (JSON + CSV generado)
-- `elpais`: **17** artículos
-- `elmundo`: **27** artículos
-- `abc`: **17** artículos
+Snapshot canónico actual (after implementación):
+- `elpais`: kept **27** (`discovered=164 processed=120 discarded_by_date=93 stop_reason=max_articles_to_extract`)
+- `elmundo`: kept **25** (`discovered=72 processed=72 discarded_by_date=47 stop_reason=completed`)
+- `abc`: kept **18** (`discovered=300 processed=120 discarded_by_date=102 stop_reason=max_articles_to_extract`)
+- `lavanguardia`: kept **28** (`discovered=181 processed=120 discarded_by_date=92 stop_reason=max_articles_to_extract`)
 
-No-regresión rápida fuentes existentes: **OK** (elpais/elmundo/abc ejecutan y exportan).
+Referencia canónica previa (PLAN): elpais 28, elmundo 25, abc 18, lavanguardia 27.
 
-### 3) Muestra de titulares
-- lavanguardia:
-  - ¿Sánchez está “jodío”?, por Isabel Garcia Pagan
-  - Fernández Díaz y Ábalos, en el banquillo: una singular coincidencia
-  - Feijóo pide una victoria “contundente” para evitar el bloqueo de Abascal
-- elpais:
-  - ‘Torrente presidente’: soez, excesiva y por momentos muy divertida
-  - Estados Unidos autoriza a Venezuela a vender fertilizantes ante la escasez global por la crisis de Irán
-- elmundo:
-  - El Gobierno recoloca en secreto en Adif al mismo cargo al que cesó por la crisis de Rodalies
-  - El 'cambio de cara' de Vox: una pasarela de aliados de Abascal para blindarse el 15-M
-- abc:
-  - Bolaños amplía el plazo de candidaturas a juez del TEDH... un día
-  - Prisión sin fianza para el detenido por provocar un incendio en el que murieron tres mujeres en Miranda de Ebro
+---
 
-## Resumen git (commits atómicos por fase)
-1. `320cae6` — `docs(plan): baseline checkpoints + restore core scraper scaffold`
-2. `00b018a` — `feat(adapter): add lavanguardia adapter with rss+sitemap+html fallback`
-3. `2d97524` — `feat(cli): wire lavanguardia source and enforce runtime guardrails`
+## Cambios implementados
+
+### Fase 1 — Recovery mínima de cobertura EL PAÍS
+- `src/main.py`
+  - Default restaurado: `--max-articles-to-extract` de `100` ➜ `120`.
+
+### Fase 2 — Arquitectura reusable `src/core/strategies` (EL PAÍS MVP)
+Nuevos módulos:
+- `src/core/strategies/base.py`
+- `src/core/strategies/rss_discovery.py`
+- `src/core/strategies/orchestrator.py`
+- `src/core/strategies/__init__.py`
+
+Migración EL PAÍS (solo MVP):
+- `src/adapters/elpais.py`
+  - Ahora usa `DiscoveryOrchestrator` + `RSSDiscoveryStrategy`.
+  - Mantiene extracción/normalización existente (cambio mínimo y reversible).
+  - Emite `strategy_metrics` en `logs/canon_elpais_metrics.json`.
+
+Ejemplo `strategy_metrics` EL PAÍS:
+```json
+[
+  {
+    "strategy_name": "rss",
+    "attempted": 164,
+    "accepted": 164,
+    "rejected_by_date": 0,
+    "rejected_noise": 0,
+    "errors": 0,
+    "elapsed_ms": 885,
+    "stop_reason": "completed"
+  }
+]
+```
+
+### Fase guardrails / no-regresión
+- Tests ejecutados en verde:
+  - `python3 -m src.main --help`
+  - `python3 -m unittest discover -s tests -v` (9 tests OK)
+- Nuevo test de strategies:
+  - `tests/test_strategies.py` (deduplicación + cap candidates)
+
+---
+
+## Diagnóstico de no-regresión (con política de warning)
+Comparativa against baseline canónico previo del PLAN:
+- `elpais`: 28 ➜ 27 (**-3.6%**) ✅ dentro de tolerancia
+- `elmundo`: 25 ➜ 25 (**0%**) ✅
+- `abc`: 18 ➜ 18 (**0%**) ✅
+- `lavanguardia`: 27 ➜ 28 (**+3.7%**) ✅
+
+**No hubo caídas >20% en esta ejecución**, por lo que no se emite WARNING de regresión severa.
+
+> Política aplicada: si en futuras corridas canónicas una fuente cae >20%, no se bloquea merge automáticamente; se debe añadir WARNING explícito con hipótesis y evidencia (métricas + comandos) en este `RESULTS.md`.
+
+---
+
+## Commits atómicos por fase
+1. `2b1f40e` — `fix(cli): restore global default cap to 120 for canonical comparability`
+2. `e5f85ba` — `refactor(core): add reusable discovery strategies MVP and migrate elpais`
+3. `005b1a8` — `test(validation): add strategies test and refresh canonical evidence/results`
+
+---
 
 ## Rollback
-Rollback completo de esta integración:
+Rollback completo de esta entrega:
 ```bash
-git revert --no-edit 2d97524 00b018a 320cae6
+git revert --no-edit 005b1a8 e5f85ba 2b1f40e
 ```
 
-Rollback parcial (solo lavanguardia):
+Rollback por fases:
 ```bash
-git revert --no-edit 2d97524 00b018a
+# deshacer validación/docs
+git revert --no-edit 005b1a8
+# deshacer migración strategies EL PAÍS MVP
+git revert --no-edit e5f85ba
+# deshacer cap global 120
+git revert --no-edit 2b1f40e
 ```
 
-## Pendientes / limitaciones
-- Los endpoints públicos de LV (RSS/sitemap/HTML) pueden variar; el adapter ya degrada por capas pero conviene monitorizar estabilidad.
-- Whitelist inicial deliberadamente conservadora para minimizar ruido y desbloquear gates.
+Rollback rápido sin commits (working tree):
+```bash
+git restore src/main.py src/adapters/elpais.py src/core/strategies tests/test_strategies.py runs/20260314-0949-8e30/RESULTS.md
+```
