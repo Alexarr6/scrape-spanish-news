@@ -13,6 +13,7 @@ class Article:
     section: str = ""
     author: str = ""
     summary: str = ""
+    article_text: str = ""
     tags: str = ""
 
     def as_dict(self) -> dict:

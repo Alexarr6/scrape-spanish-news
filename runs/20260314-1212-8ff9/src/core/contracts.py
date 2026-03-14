@@ -13,6 +13,7 @@ class NewsItemModel:
     section: str = ""
     author: str = ""
     summary: str = ""
+    article_text: str = ""
     tags: str = ""
 
     @classmethod
@@ -31,6 +32,7 @@ class NewsItemModel:
             "section": value.get("section", ""),
             "author": value.get("author", ""),
             "summary": value.get("summary", ""),
+            "article_text": value.get("article_text", ""),
             "tags": value.get("tags", ""),
         }
         for k, v in data.items():

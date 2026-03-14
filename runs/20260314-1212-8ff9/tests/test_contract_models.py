@@ -25,6 +25,7 @@ class ContractModelsTests(unittest.TestCase):
             "section": "espana",
             "author": "",
             "summary": "",
+            "article_text": "",
             "tags": "",
         }
         row = NewsItemModel.model_validate(valid)
@@ -34,6 +35,11 @@ class ContractModelsTests(unittest.TestCase):
         invalid["title"] = 123
         with self.assertRaises(TypeError):
             NewsItemModel.model_validate(invalid)
+
+        invalid_text = dict(valid)
+        invalid_text["article_text"] = 123
+        with self.assertRaises(TypeError):
+            NewsItemModel.model_validate(invalid_text)
 
     def test_run_metrics_negative_cases(self):
         valid = {

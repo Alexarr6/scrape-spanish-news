@@ -8,7 +8,17 @@ from .contracts import validate_article_payload
 from .models import Article
 
 
-FIELDS = ["source", "title", "url", "published_at", "section", "author", "summary", "tags"]
+FIELDS = [
+    "source",
+    "title",
+    "url",
+    "published_at",
+    "section",
+    "author",
+    "summary",
+    "article_text",
+    "tags",
+]
 
 
 def export_articles(articles: list[Article], out_path: str) -> None:
