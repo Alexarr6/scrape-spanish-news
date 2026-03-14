@@ -218,6 +218,7 @@ git revert --no-edit <phase1-results>
 
 ---
 
+
 ## 9) Hardening wave (A/B/C) — 2026-03-14
 
 ### Phase A — Core contracts
@@ -293,4 +294,72 @@ git revert --no-edit d4780e4
 
 # Revert phase A only
 git revert --no-edit e74ebcd
+```
+
+## 10) Persistence + API v1 (Postgres-only, opt-in) — 2026-03-14
+
+Confirmed decisions implemented:
+1. Postgres-only target (no SQLite path)
+2. Idempotency key v1 = `(source, url)`
+3. Persistence opt-in via `--persist` / `--db-url`
+4. API v1 minimal endpoints
+
+### Structure delivered (separated modules)
+- **Core contracts** (existing scraper contracts + article_text):
+  - `src/core/models.py`
+  - `src/core/contracts.py`
+- **ORM models**:
+  - `src/persistence/orm_models.py`
+- **CRUD access layer**:
+  - `src/persistence/crud.py`
+- **Pydantic operation-oriented schemas**:
+  - `src/persistence/contracts.py` (`ArticleCreate`, `ArticleRead`, `ArticleUpdate`, `ArticleDelete`, `IngestResult`)
+- **DB/session wiring**:
+  - `src/persistence/db.py`
+- **FastAPI v1 minimal surface**:
+  - `src/api/v1/articles.py`
+  - `src/api/app.py` (factory mode)
+
+### End-to-end `article_text`
+`article_text` now flows through:
+- core article dataclass (`src/core/models.py`)
+- validation contract (`src/core/contracts.py`)
+- exports JSON/CSV (`src/core/export.py`)
+- persistence schemas + ORM + upsert (`src/persistence/*`)
+- API payload models and endpoints (`src/api/v1/articles.py`)
+
+### CLI compatibility + opt-in persistence
+- `src/main.py` keeps previous behavior by default.
+- New flags:
+  - `--persist` (disabled by default)
+  - `--db-url` (used only if `--persist` enabled)
+- If not using `--persist`, no DB path is invoked (existing output flow intact).
+
+### Verification evidence (executed)
+Commands run:
+```bash
+PYTHONPATH=runs/20260314-1212-8ff9 python3 -m src.main --help | head -80
+PYTHONPATH=runs/20260314-1212-8ff9 python3 -m unittest \
+  runs/20260314-1212-8ff9/tests/test_models.py \
+  runs/20260314-1212-8ff9/tests/test_contract_models.py \
+  runs/20260314-1212-8ff9/tests/test_export_article_text.py
+```
+Observed output:
+- CLI help includes new flags: `--persist`, `--db-url`
+- Unit tests: `Ran 6 tests ... OK`
+
+### Rollback hints (this increment)
+Targeted rollback commands (when commit hashes are available):
+```bash
+# 1) API layer
+git revert --no-edit <feat-api-v1-minimal>
+
+# 2) Persistence contracts/ORM/CRUD
+git revert --no-edit <feat-persistence-postgres-idempotent>
+
+# 3) CLI opt-in persistence + article_text export path
+git revert --no-edit <feat-cli-persist-optin-article-text>
+
+# 4) Verification docs section
+git revert --no-edit <docs-results-persistence-section>
 ```
