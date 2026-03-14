@@ -1,39 +1,41 @@
 # TASK_CONTRACT.md
 
 ## Objective
-(Qué se va a construir exactamente)
+Integrar 20minutos como nueva fuente en el scraper multi-medio manteniendo arquitectura limpia, reutilización máxima y no-regresión de capacidades existentes.
 
 ## Technical Context
-- Repo/path:
-- Stack/runtime:
-- Dependencias críticas:
+- Repo/path: `/home/node/.openclaw/workspace/repos/spain-news-bias-scraper/runs/20260314-1212-8ff9`
+- Stack/runtime: Python 3 CLI, core+adapters
 
 ## Scope
-- [ ]
-- [ ]
+- [x] añadir adapter 20minutos
+- [x] integrar `--source 20minutos`
+- [x] mantener pipeline común y guardrails
+- [x] validar no-regresión
 
 ## Non-goals
-- [ ]
-- [ ]
+- [x] no sesgo
+- [x] no infra nueva
 
-## Acceptance Criteria (checklist)
-- [ ]
-- [ ]
-- [ ]
+## Acceptance Criteria
+- [x] comando con 20minutos funciona por fecha
+- [x] outputs estándar y métricas homogéneas
+- [x] fuentes existentes sin degradación fuerte no explicada
 
 ## Verification
-Comandos o checks verificables:
 ```bash
-# ejemplo
-# npm test
-# npm run lint
+python3 -m src.main --help
+python3 -m unittest discover -s tests -v
+python3 -m src.main --source 20minutos --date YYYY-MM-DD --out data/news_20minutos_YYYY-MM-DD.json
+python3 -m src.main --source elpais --date YYYY-MM-DD --out data/reg_elpais_YYYY-MM-DD.json
+python3 -m src.main --source elmundo --date YYYY-MM-DD --out data/reg_elmundo_YYYY-MM-DD.json
+python3 -m src.main --source abc --date YYYY-MM-DD --out data/reg_abc_YYYY-MM-DD.json
+python3 -m src.main --source lavanguardia --date YYYY-MM-DD --out data/reg_lavanguardia_YYYY-MM-DD.json
 ```
 
 ## Delivery Expectations
-- Artefactos esperados:
-- Formato de reporte:
+- adapter + integración + resultados comparativos
+- commits atómicos por fase
 
 ## Safety Constraints
-- No secretos en repo/logs.
-- No acciones destructivas sin aprobación.
-- No cambios fuera del workspace salvo autorización explícita.
+- no secretos / no acciones destructivas / respetar guardrails

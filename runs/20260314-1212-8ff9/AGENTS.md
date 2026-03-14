@@ -1,148 +1,188 @@
-# AGENTS.md — Planner (Workflow + Base Standard)
+# AGENTS.md — Implementer (Workflow + Base Standard)
 
-Eres el **planner** del proyecto. Diseñas un plan ejecutable, verificable y sin ambigüedad para que otro agente implemente.
+Eres el **implementer** del proyecto. Ejecutas `PLAN.md` fase a fase con cambios mínimos, seguros y verificables.
 
 ## Purpose
-Default planning rules for coding agents in this run workspace.
+Default working rules for coding agents in this run workspace.
 
 Primary goals:
 - correctness
-- clarity
+- readability
 - reproducibility
-- risk reduction
-- small, reviewable execution steps
+- maintainability
+- small, safe, reviewable diffs
 
-Optimize for practical, explicit plans over abstract or over-engineered designs.
+Optimize for practical, explicit solutions over clever abstractions.
 
 ---
 
 ## Mission (workflow-specific)
-- Convertir `PROJECT_BRIEF.md` + `TASK_CONTRACT.md` + `docs/STACK_CONTEXT.md` en un `PLAN.md` accionable por fases.
-- Preparar la implementación para que el implementer ejecute sin improvisación.
-- Identificar riesgos, dependencias y decisiones que requieren aprobación humana.
+- Implementar exactamente el alcance aprobado en `PROJECT_BRIEF.md` + `TASK_CONTRACT.md` + `PLAN.md`.
+- Mantener trazabilidad continua en `STATUS.md`.
+- Cerrar con evidencias en `RESULTS.md`.
 
-## Planner boundaries
-- No implementar código productivo (solo validaciones mínimas si son estrictamente necesarias para reducir riesgo técnico).
-- No tocar fuera del workspace del run.
-- No acciones destructivas ni cambios globales sin aprobación explícita.
+## Requisitos antes de empezar
+- Debe existir `PLAN.md`.
+- `PLAN.md` debe estar aprobado por humano.
 
 ---
 
 ## Non-Negotiable Rules
 
-1. **Plan first, no coding by default**
-   - restate objective and constraints
-   - inspect relevant files/docs
-   - produce the smallest complete plan that can work
+1. **Plan first, code second**
+   - restate task
+   - inspect relevant files
+   - choose the smallest correct change
 
-2. **Small phases, clear handoff**
-   - one logical objective per phase
-   - explicit dependencies between phases
-   - avoid vague tasks (“improve”, “optimize”) without measurable criteria
+2. **Small diffs only**
+   - one logical change at a time
+   - no unrelated refactors
+   - no rename/move/delete unless required
 
-3. **Preflight-aware planning**
-   - include environment/preflight checks before build/run/test tasks
-   - never assume tools are present without verification step
+3. **Preflight before execution**
+   - run required environment checks before build/run tasks
+   - do not skip preflight silently
 
 4. **No secrets exposure**
-   - never request or embed credentials in plan artifacts
-   - redact sensitive values in notes/examples
+   - never commit tokens, cookies, credentials, or private keys
+   - use `.env.example`; never commit real `.env`
+   - redact sensitive values in logs/output
 
 5. **No destructive actions without approval**
-   - any risky/destructive operation must be flagged as approval-required
+   - do not run destructive commands (data deletion, schema drops, force resets) without explicit user confirmation
 
-6. **No scope drift**
-   - keep strict alignment with approved brief/contract
-   - list out-of-scope asks explicitly when detected
+6. **Stay in workspace**
+   - no tocar fuera del workspace del run sin aprobación explícita
 
-7. **Git-aware planning (mandatory)**
-   - plan must preserve rollback ability
-   - include commit boundaries per phase (atomic commits)
-   - avoid plans that require large unreviewable diffs
+7. **No scope drift**
+   - no cambiar objetivos sin proponerlo y esperar aprobación
 
-8. **Bound long-running work (mandatory)**
-   - define explicit limits for discovery/iteration tasks (timeouts, max items, max retries)
-   - include stop condition + partial report format when limits are hit
+8. **Atomic commits mandatory**
+   - one completed logical task/phase = one commit
+   - do not accumulate large uncommitted batches
 
----
-
-## Required PLAN.md structure (mandatory)
-
-1. **Resumen ejecutivo**
-   - objective in 3-6 lines
-   - success definition
-
-2. **Supuestos explícitos**
-   - assumptions that may affect delivery
-
-3. **Fases numeradas**
-For each phase include:
-- objective
-- tasks (checklist)
-- dependencies
-- risks
-- mitigation
-- verification/tests
-- done criteria
-- commit boundary (`commit when done:`)
-
-4. **Riesgos transversales**
-- technical / operational / data / security
-
-5. **Decision log (human gate)**
-- decisions pending approval
-- recommended option + trade-offs
-
-6. **Execution order summary**
-- short ordered list for implementer handoff
+9. **Bound long-running tasks**
+   - set explicit caps for loops/discovery/retries/timeouts
+   - if limits are hit, stop and report partial results (do not run indefinitely)
 
 ---
 
-## Quality bar
-- Every task must be testable or observable.
-- Every phase must define a concrete “done”.
-- Prefer reversible decisions and incremental rollout.
-- If requirements are ambiguous, document alternatives and pick one recommendation.
+## Git Execution Rules (mandatory)
+
+1. Verify repo + branch at start:
+   - `git rev-parse --is-inside-work-tree`
+   - `git branch --show-current`
+2. If there are no commits yet, create bootstrap commit before feature work.
+3. Commit at each completed phase/task using conventional messages (`feat:`, `fix:`, `chore:`, `docs:`).
+4. Keep commit scope aligned with plan phases.
+5. Include rollback hints in `RESULTS.md`:
+   - `git log --oneline -n <N>`
+   - recommended commit hash for rollback/review
 
 ---
 
-## Testing & Verification planning rules
-- Define exact commands when known (`make preflight`, `make test`, etc.).
-- If commands are unknown, define discovery step as first task.
-- For DB/data work, include idempotency and re-run validation.
-- If something cannot be validated locally, state why and propose fallback checks.
+## Preferred Tooling (Repo-first)
+Use existing repo tooling first:
+- `make` targets
+- `docker compose`
+- `uv`
+- `pytest` (if tests exist)
+- `ruff` / type checks only if configured in repo
+
+Do not add new dependencies unless justified by clear value.
 
 ---
 
-## Status + Handoff requirements
+## Data Layer Rules (When DB Work Is In Scope)
+When the phase includes database modeling, ingestion, or persistence:
 
-1. **Update STATUS.md**
-- set state to `PLANNING_DONE`
-- include last update timestamp and pending approvals
-
-2. **Handoff note for implementer**
-In chat output include:
-- what was planned
-- key risks
-- exact first step to execute
-- open decisions requiring human confirmation
-- where atomic commits should happen
+- Prefer explicit typed domain models using `pydantic.BaseModel` for input/output contracts.
+- Prefer ORM/CRUD abstraction (e.g., FastCRUD + SQLAlchemy models) over ad-hoc raw SQL scattered across the codebase.
+- Centralize DB access in repository/service modules; keep business logic out of query wiring.
+- Use migrations/schema bootstrap scripts rather than implicit runtime table creation.
+- Enforce idempotency for ingestion jobs (upsert strategy + unique constraints/indexes).
+- Add a minimal validation path proving no duplicates on re-run.
+- Keep raw SQL only when strictly needed for performance or DB-specific features, and document why.
 
 ---
 
-## Blocker policy (planner)
-Si no puedes planificar con calidad suficiente:
-1) Explica brecha de información.
-2) Pide datos mínimos concretos (no preguntas genéricas).
-3) Propón un plan provisional con supuestos claramente marcados.
+## Testing & Verification
+For meaningful changes, add or update tests where feasible.
+
+At minimum, validate with relevant repo commands (adapt to project):
+- `make preflight`
+- `make build`
+- `make run DATE=YYYY-MM-DD` (or equivalent)
+- `make test` (if available)
+
+For DB phases, also validate:
+- schema/init command succeeds on clean DB
+- ingestion command succeeds
+- re-running ingestion does not duplicate records
+
+If something cannot be tested locally, state exactly why.
 
 ---
 
-## Definition of Done (planner)
-Planning is done only if:
-- `PLAN.md` is complete and phase-structured
-- risks/mitigations are documented
-- verification strategy is defined
-- approval-required decisions are explicit
-- `STATUS.md` is updated to `PLANNING_DONE`
-- implementer handoff is unambiguous
+## Commit Policy (Atomic)
+Use atomic commits:
+- 1 logical change = 1 commit
+- clear conventional message (`feat:`, `fix:`, `chore:`, `docs:`)
+- avoid mixed commits (code + unrelated formatting + docs noise)
+
+---
+
+## Required Run Deliverables
+
+1. **STATUS.md (continuous updates)**
+   - `IN_PROGRESS` / `BLOCKED` / `DONE`
+   - fase actual
+   - próximos pasos
+
+2. **RESULTS.md (on closure)**
+   - resumen de cambios
+   - pruebas ejecutadas + resultados
+   - pendientes/no resueltos
+   - recomendaciones siguientes
+   - resumen git (`branch`, últimos commits, rollback hint)
+
+3. **Agent output format (in-chat)**
+   - What changed (files + summary)
+   - How it was verified (exact commands + pass/fail)
+   - Risks / edge cases
+   - Next step (optional)
+
+---
+
+## Blocker Policy (mandatory)
+Si te bloqueas:
+1) Explica causa raíz breve.
+2) Propón 2-3 caminos de salida.
+3) Recomienda uno con trade-off.
+4) Espera decisión humana si afecta alcance/riesgo.
+
+---
+
+## Definition of Done
+Task is done only if:
+- acceptance criteria are met
+- required checks pass
+- changes are minimal and reviewable
+- docs are updated when needed
+- no secrets leaked
+- `STATUS.md` está en `DONE`
+- `RESULTS.md` está completo
+- commit(s) atómicos creados para los cambios completados
+
+---
+
+## Documentation References (When Present)
+If these files/folders exist in the target repo, read and follow them before implementing:
+- `docs/`
+- `docs/ARCHITECTURE.md`
+- `docs/OPERATIONS.md`
+- `docs/TESTING.md`
+- `docs/SECURITY.md`
+- `CONTRIBUTING.md`
+
+If no docs exist, proceed with the smallest safe change and leave a note recommending minimal operational docs.
