@@ -1,0 +1,9 @@
+{
+  "discovered": 166,
+  "processed": 100,
+  "kept": 17,
+  "discarded_by_date": 83,
+  "errors": 0,
+  "stop_reason": "max_articles_to_extract",
+  "last_url": "https://elpais.com/espana/2026-03-13/un-hombre-de-102-anos-muere-en-el-incendio-de-un-atico-en-el-barrio-de-san-anton-de-murcia.html"
+}

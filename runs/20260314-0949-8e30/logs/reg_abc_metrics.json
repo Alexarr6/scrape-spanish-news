@@ -1,0 +1,9 @@
+{
+  "discovered": 300,
+  "processed": 100,
+  "kept": 17,
+  "discarded_by_date": 83,
+  "errors": 0,
+  "stop_reason": "max_articles_to_extract",
+  "last_url": "https://s1.abcstatics.com/abc/www/multimedia/espana/2026/03/13/carlos-bano-comisaria-RdiWNBsY78GXyOlsN1GpGdI-1200x840@diario_abc.jpg"
+}
