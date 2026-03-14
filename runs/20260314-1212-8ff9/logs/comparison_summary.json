@@ -1,62 +1,107 @@
 {
-  "canonical_date": "2026-03-13",
-  "regression": [
+  "schema_version": "comparison_summary.v1",
+  "generated_at": "2026-03-14T13:33:15+00:00",
+  "date": "2026-03-13",
+  "baseline_ref": "canon2",
+  "current_ref": "reg2",
+  "status": "ok",
+  "warnings": [],
+  "sources": [
     {
-      "source": "elpais",
-      "baseline": 25,
-      "final": 26,
-      "delta": 1,
-      "delta_pct": 4.0,
-      "stop_reason": "max_articles_to_extract",
-      "sample": [
-        "‘Torrente presidente’: soez, excesiva y por momentos muy divertida",
-        "La justicia venezolana niega el derecho a la amnistía a Perkins Rocha, el abogado de María Corina Machado"
-      ]
-    },
-    {
-      "source": "elmundo",
-      "baseline": 25,
-      "final": 25,
-      "delta": 0,
+      "source": "20minutos",
+      "baseline_count": 20,
+      "current_count": 20,
+      "delta_abs": 0,
       "delta_pct": 0.0,
-      "stop_reason": "completed",
-      "sample": [
-        "El Gobierno recoloca en secreto en Adif al mismo cargo al que cesó por la crisis de Rodalies",
-        "El 'cambio de cara' de Vox: una pasarela de aliados de Abascal para blindarse el 15-M"
-      ]
+      "status": "ok",
+      "warnings": [],
+      "metrics": {
+        "discovered": 35,
+        "processed": 35,
+        "kept": 20,
+        "discarded_by_date": 15,
+        "stop_reason": "completed"
+      }
     },
     {
       "source": "abc",
-      "baseline": 15,
-      "final": 15,
-      "delta": 0,
+      "baseline_count": 9,
+      "current_count": 9,
+      "delta_abs": 0,
       "delta_pct": 0.0,
-      "stop_reason": "max_articles_to_extract",
-      "sample": [
-        "Votar es defender la democracia",
-        "Desde Bolivia para el mundo: Felipe VI debuta en TikTok con un viejo amigo de juventud"
-      ]
+      "status": "ok",
+      "warnings": [],
+      "metrics": {
+        "discovered": 300,
+        "processed": 120,
+        "kept": 9,
+        "discarded_by_date": 111,
+        "stop_reason": "max_articles_to_extract"
+      }
+    },
+    {
+      "source": "eldiario",
+      "baseline_count": 20,
+      "current_count": 20,
+      "delta_abs": 0,
+      "delta_pct": 0.0,
+      "status": "ok",
+      "warnings": [],
+      "metrics": {
+        "discovered": 51,
+        "processed": 51,
+        "kept": 20,
+        "discarded_by_date": 31,
+        "stop_reason": "completed"
+      }
+    },
+    {
+      "source": "elmundo",
+      "baseline_count": 25,
+      "current_count": 25,
+      "delta_abs": 0,
+      "delta_pct": 0.0,
+      "status": "ok",
+      "warnings": [],
+      "metrics": {
+        "discovered": 72,
+        "processed": 72,
+        "kept": 25,
+        "discarded_by_date": 47,
+        "stop_reason": "completed"
+      }
+    },
+    {
+      "source": "elpais",
+      "baseline_count": 26,
+      "current_count": 26,
+      "delta_abs": 0,
+      "delta_pct": 0.0,
+      "status": "ok",
+      "warnings": [],
+      "metrics": {
+        "discovered": 162,
+        "processed": 120,
+        "kept": 26,
+        "discarded_by_date": 94,
+        "stop_reason": "max_articles_to_extract"
+      }
     },
     {
       "source": "lavanguardia",
-      "baseline": 27,
-      "final": 27,
-      "delta": 0,
+      "baseline_count": 27,
+      "current_count": 27,
+      "delta_abs": 0,
       "delta_pct": 0.0,
-      "stop_reason": "max_articles_to_extract",
-      "sample": [
-        "¿Sánchez está “jodío”?, por Isabel Garcia Pagan",
-        "Fernández Díaz y Ábalos, en el banquillo: una singular coincidencia"
-      ]
+      "status": "ok",
+      "warnings": [],
+      "metrics": {
+        "discovered": 180,
+        "processed": 120,
+        "kept": 27,
+        "discarded_by_date": 93,
+        "stop_reason": "max_articles_to_extract"
+      }
     }
-  ],
-  "source_20minutos": {
-    "count": 20,
-    "stop_reason": "completed",
-    "sample": [
-      "EEUU pide a sus ciudadanos que estén alerta ante \"amenazas\" en las manifestaciones en España por la guerra de este sábado",
-      "El Gobierno contempla bajar el IVA de la luz para contener los precios ante la crisis por la guerra de Irán",
-      "Un fallo de Hacienda deja sin combustible al cuarto mayor distribuidor de España y afecta a 570 gasolineras"
-    ]
-  }
+  ]
 }
