@@ -16,7 +16,7 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument("--date", required=True, help="UTC date as YYYY-MM-DD")
     parser.add_argument("--out", required=True, help="Output .json or .csv path")
     parser.add_argument("--max-discovery-urls", type=int, default=300)
-    parser.add_argument("--max-articles-to-extract", type=int, default=100)
+    parser.add_argument("--max-articles-to-extract", type=int, default=120)
     parser.add_argument("--max-runtime-seconds", type=int, default=180)
     parser.add_argument("--metrics-out", default="", help="Optional path for metrics JSON")
     return parser.parse_args()
