@@ -2,6 +2,8 @@ import json
 import unittest
 from pathlib import Path
 
+from src.core.contracts import NewsItemModel, RunMetricsModel
+
 
 class CrossSourceOutputMetricsContractTests(unittest.TestCase):
     date = "2026-03-13"
@@ -19,16 +21,6 @@ class CrossSourceOutputMetricsContractTests(unittest.TestCase):
 
     def test_output_item_shape_stable_for_each_source(self):
         run_root = Path(__file__).resolve().parents[1]
-        required_article_keys = {
-            "source",
-            "title",
-            "url",
-            "published_at",
-            "section",
-            "author",
-            "summary",
-            "tags",
-        }
 
         for source in self.sources:
             data_path = self._pick_existing(
@@ -42,20 +34,10 @@ class CrossSourceOutputMetricsContractTests(unittest.TestCase):
             rows = self._load_json(data_path)
             self.assertIsInstance(rows, list)
             self.assertGreater(len(rows), 0, f"expected at least one row for {source}")
-            first = rows[0]
-            self.assertEqual(set(first.keys()), required_article_keys)
-            for key in required_article_keys:
-                self.assertIsInstance(first[key], str)
+            NewsItemModel.model_validate(rows[0])
 
     def test_metrics_shape_stable_for_each_source(self):
         run_root = Path(__file__).resolve().parents[1]
-        required_metric_keys = {
-            "discovered",
-            "processed",
-            "kept",
-            "discarded_by_date",
-            "stop_reason",
-        }
 
         for source in self.sources:
             metrics_path = self._pick_existing(
@@ -69,12 +51,11 @@ class CrossSourceOutputMetricsContractTests(unittest.TestCase):
                 ],
             )
             metrics = self._load_json(metrics_path)
-            self.assertTrue(required_metric_keys.issubset(metrics.keys()))
-            self.assertIsInstance(metrics["discovered"], int)
-            self.assertIsInstance(metrics["processed"], int)
-            self.assertIsInstance(metrics["kept"], int)
-            self.assertIsInstance(metrics["discarded_by_date"], int)
-            self.assertIsInstance(metrics["stop_reason"], str)
+            parsed = RunMetricsModel.model_validate(metrics)
+            payload = parsed.model_dump()
+            if source in {"elpais", "eldiario"} and "strategy_metrics" in payload:
+                self.assertEqual(payload["strategy_metrics"].get("schema_version"), "discovery_strategy_metrics.v1")
+                self.assertIsInstance(payload["strategy_metrics"].get("strategies"), list)
 
 
 if __name__ == "__main__":

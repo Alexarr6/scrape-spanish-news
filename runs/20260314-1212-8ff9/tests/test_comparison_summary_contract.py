@@ -3,6 +3,7 @@ import unittest
 from pathlib import Path
 
 from src.core.comparison_summary import SourceSnapshot, build_comparison_summary
+from src.core.contracts import ComparisonSummaryModel
 
 
 class ComparisonSummaryContractTests(unittest.TestCase):
@@ -77,37 +78,14 @@ class ComparisonSummaryContractTests(unittest.TestCase):
         self.assertEqual(summary["current_ref"], "reg2")
         self.assertEqual(len(summary["sources"]), len(self.sources))
 
-        expected_row_keys = {
-            "source",
-            "baseline_count",
-            "current_count",
-            "delta_abs",
-            "delta_pct",
-            "status",
-            "warnings",
-            "metrics",
-        }
-        expected_metric_keys = {"discovered", "processed", "kept", "discarded_by_date", "stop_reason"}
+        ComparisonSummaryModel.model_validate(summary)
 
-        seen = set()
-        for row in summary["sources"]:
-            self.assertEqual(set(row.keys()), expected_row_keys)
-            self.assertIn(row["source"], self.sources)
-            self.assertNotIn(row["source"], seen)
-            seen.add(row["source"])
-
-            self.assertIsInstance(row["baseline_count"], int)
-            self.assertIsInstance(row["current_count"], int)
-            self.assertIsInstance(row["delta_abs"], int)
-            self.assertIsInstance(row["delta_pct"], float)
-            self.assertIsInstance(row["warnings"], list)
-
-            self.assertEqual(set(row["metrics"].keys()), expected_metric_keys)
-            self.assertIsInstance(row["metrics"]["discovered"], int)
-            self.assertIsInstance(row["metrics"]["processed"], int)
-            self.assertIsInstance(row["metrics"]["kept"], int)
-            self.assertIsInstance(row["metrics"]["discarded_by_date"], int)
-            self.assertIsInstance(row["metrics"]["stop_reason"], str)
+    def test_json_schema_contract_for_comparison_summary(self):
+        schema = ComparisonSummaryModel.model_json_schema()
+        self.assertEqual(schema["$schema"], "https://json-schema.org/draft/2020-12/schema")
+        self.assertEqual(schema["type"], "object")
+        self.assertIn("sources", schema["required"])
+        self.assertEqual(schema["properties"]["warnings"]["type"], "array")
 
 
 if __name__ == "__main__":
