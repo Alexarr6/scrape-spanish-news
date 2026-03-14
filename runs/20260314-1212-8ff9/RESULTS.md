@@ -142,3 +142,75 @@ git revert --no-edit ad60dc2   # adapter 20minutos
 git revert --no-edit d90ac17   # docs discovery
 git revert --no-edit c0dd9e8   # baseline
 ```
+
+---
+
+## 6) Phase-1 baseline (quick wins preflight)
+Comandos ejecutados desde `runs/20260314-1212-8ff9`:
+```bash
+pwd
+git rev-parse --show-toplevel
+git rev-parse --short HEAD
+git status --short
+python3 -m src.main --help
+python3 -m unittest discover -s tests -v
+```
+
+Resultado baseline:
+- `pwd`: `/home/node/.openclaw/workspace/repos/spain-news-bias-scraper/runs/20260314-1212-8ff9`
+- `git rev-parse --show-toplevel`: `/home/node/.openclaw/workspace/repos/spain-news-bias-scraper`
+- `git rev-parse --short HEAD`: `2ccf3a9`
+- CLI help: OK (`--source` incluye `{20minutos,abc,eldiario,elmundo,elpais,lavanguardia}`)
+- Suite tests baseline: OK (`11 passed` antes de añadir contratos)
+
+## 7) Phase-1 quick wins implemented
+
+### 7.1 Traceability mismatch fix (safe)
+**Before:** ambigüedad entre run implementador (`1212-8ff9`) y run de review (`1250-edr1`) sin puntero machine-readable.
+
+**After:**
+- `RUN_MANIFEST.md` define root canónico, companion run y comandos reproducibles.
+- `run_manifest.json` añade puntero machine-readable con `canonical_run_id`, rutas y `verify_commands`.
+- `tests/test_run_traceability.py` falla si se rompe/ausenta la trazabilidad.
+
+### 7.2 `comparison_summary` schema standardized
+**Before:** `logs/comparison_summary.json` tenía drift (`regression[]` + `source_20minutos` fuera de colección homogénea).
+
+**After:**
+- Contrato v1 documentado: `docs/contracts/comparison_summary.schema.json`.
+- Builder estable: `src/core/comparison_summary.py`.
+- Generador reproducible: `scripts/generate_comparison_summary.py`.
+- Salida normalizada: `logs/comparison_summary.json` con contrato único:
+  - metadatos globales (`generated_at`, `date`, `baseline_ref`, `current_ref`)
+  - estado/warnings globales
+  - `sources[]` homogéneo por fuente
+  - métricas mínimas estables (`discovered`, `processed`, `kept`, `discarded_by_date`, `stop_reason`)
+
+### 7.3 Integration/contract tests for schema stability
+Nuevos tests:
+- `tests/test_comparison_summary_contract.py`
+- `tests/test_cross_source_output_metrics_contract.py`
+- `tests/test_run_traceability.py`
+
+Validación final:
+```bash
+python3 scripts/generate_comparison_summary.py --date 2026-03-13 --out logs/comparison_summary.json
+python3 -m unittest discover -s tests -v
+```
+- Generación summary: OK (`6 source rows`)
+- Suite total: OK (`15 passed`)
+
+## 8) Rollback hints (Phase-1 quick wins)
+Rollback completo de quick wins (después de crear commits faseados):
+```bash
+# usar hashes de los commits de quick wins (ver git log --oneline)
+git revert --no-edit <phase1-docs-traceability> <phase1-schema-normalization> <phase1-contract-tests> <phase1-results>
+```
+
+Rollback por bloque:
+```bash
+git revert --no-edit <phase1-docs-traceability>
+git revert --no-edit <phase1-schema-normalization>
+git revert --no-edit <phase1-contract-tests>
+git revert --no-edit <phase1-results>
+```
