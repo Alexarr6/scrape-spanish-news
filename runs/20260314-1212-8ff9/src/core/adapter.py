@@ -6,6 +6,7 @@ from datetime import datetime, timezone
 import time
 from typing import Iterable
 
+from .contracts import validate_metrics_payload
 from .models import Article
 
 
@@ -71,4 +72,4 @@ class BaseSourceAdapter(ABC):
                     metrics["stop_reason"] = "too_many_errors"
                     break
 
-        return out, metrics
+        return out, validate_metrics_payload(metrics)

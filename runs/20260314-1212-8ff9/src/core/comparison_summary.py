@@ -4,6 +4,8 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Any
 
+from .contracts import validate_comparison_summary
+
 
 REQUIRED_METRIC_KEYS = (
     "discovered",
@@ -76,7 +78,7 @@ def build_comparison_summary(
 
     global_status = "warning" if global_warnings else "ok"
 
-    return {
+    payload = {
         "schema_version": "comparison_summary.v1",
         "generated_at": _iso_now_utc(),
         "date": date,
@@ -86,3 +88,4 @@ def build_comparison_summary(
         "warnings": global_warnings,
         "sources": sources,
     }
+    return validate_comparison_summary(payload)
