@@ -34,7 +34,8 @@ class CrossSourceOutputMetricsContractTests(unittest.TestCase):
             rows = self._load_json(data_path)
             self.assertIsInstance(rows, list)
             self.assertGreater(len(rows), 0, f"expected at least one row for {source}")
-            NewsItemModel.model_validate(rows[0])
+            for row in rows[: min(10, len(rows))]:
+                NewsItemModel.model_validate(row)
 
     def test_metrics_shape_stable_for_each_source(self):
         run_root = Path(__file__).resolve().parents[1]
@@ -53,7 +54,7 @@ class CrossSourceOutputMetricsContractTests(unittest.TestCase):
             metrics = self._load_json(metrics_path)
             parsed = RunMetricsModel.model_validate(metrics)
             payload = parsed.model_dump()
-            if source in {"elpais", "eldiario"} and "strategy_metrics" in payload:
+            if source in {"elpais", "eldiario", "abc"} and "strategy_metrics" in payload:
                 self.assertEqual(payload["strategy_metrics"].get("schema_version"), "discovery_strategy_metrics.v1")
                 self.assertIsInstance(payload["strategy_metrics"].get("strategies"), list)
 

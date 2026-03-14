@@ -1,4 +1,5 @@
 import json
+import re
 import unittest
 from pathlib import Path
 
@@ -20,7 +21,7 @@ class ComparisonSummaryContractTests(unittest.TestCase):
     def _load_json(self, path: Path):
         return json.loads(path.read_text(encoding="utf-8"))
 
-    def test_builds_stable_v1_schema_for_all_sources(self):
+    def _build_fixture_summary(self) -> dict:
         run_root = Path(__file__).resolve().parents[1]
         snapshots: list[SourceSnapshot] = []
 
@@ -65,12 +66,15 @@ class ComparisonSummaryContractTests(unittest.TestCase):
                 )
             )
 
-        summary = build_comparison_summary(
+        return build_comparison_summary(
             date=self.date,
             baseline_ref="canon2",
             current_ref="reg2",
             snapshots=snapshots,
         )
+
+    def test_builds_stable_v1_schema_for_all_sources(self):
+        summary = self._build_fixture_summary()
 
         self.assertEqual(summary["schema_version"], "comparison_summary.v1")
         self.assertEqual(summary["date"], self.date)
@@ -80,12 +84,51 @@ class ComparisonSummaryContractTests(unittest.TestCase):
 
         ComparisonSummaryModel.model_validate(summary)
 
-    def test_json_schema_contract_for_comparison_summary(self):
-        schema = ComparisonSummaryModel.model_json_schema()
-        self.assertEqual(schema["$schema"], "https://json-schema.org/draft/2020-12/schema")
-        self.assertEqual(schema["type"], "object")
-        self.assertIn("sources", schema["required"])
-        self.assertEqual(schema["properties"]["warnings"]["type"], "array")
+    def test_fixture_payload_respects_json_schema_constraints(self):
+        run_root = Path(__file__).resolve().parents[1]
+        schema = self._load_json(run_root / "docs/contracts/comparison_summary.schema.json")
+        summary = self._build_fixture_summary()
+
+        for key in schema["required"]:
+            self.assertIn(key, summary)
+        if schema.get("additionalProperties") is False:
+            self.assertEqual(set(summary.keys()), set(schema["properties"].keys()))
+
+        self.assertEqual(summary["schema_version"], schema["properties"]["schema_version"]["const"])
+        self.assertRegex(summary["date"], re.compile(schema["properties"]["date"]["pattern"]))
+        self.assertIn(summary["status"], schema["properties"]["status"]["enum"])
+
+        sources_schema = schema["properties"]["sources"]
+        self.assertGreaterEqual(len(summary["sources"]), sources_schema["minItems"])
+
+        row_schema = sources_schema["items"]
+        row_props = row_schema["properties"]
+        for row in summary["sources"]:
+            for key in row_schema["required"]:
+                self.assertIn(key, row)
+            if row_schema.get("additionalProperties") is False:
+                self.assertEqual(set(row.keys()), set(row_props.keys()))
+
+            self.assertGreaterEqual(row["baseline_count"], row_props["baseline_count"]["minimum"])
+            self.assertGreaterEqual(row["current_count"], row_props["current_count"]["minimum"])
+            self.assertIn(row["status"], row_props["status"]["enum"])
+            self.assertIsInstance(row["warnings"], list)
+
+            metrics = row["metrics"]
+            metrics_schema = row_props["metrics"]
+            for key in metrics_schema["required"]:
+                self.assertIn(key, metrics)
+            self.assertGreaterEqual(metrics["discovered"], metrics_schema["properties"]["discovered"]["minimum"])
+            self.assertGreaterEqual(metrics["processed"], metrics_schema["properties"]["processed"]["minimum"])
+            self.assertGreaterEqual(metrics["kept"], metrics_schema["properties"]["kept"]["minimum"])
+            self.assertGreaterEqual(
+                metrics["discarded_by_date"],
+                metrics_schema["properties"]["discarded_by_date"]["minimum"],
+            )
+            self.assertGreaterEqual(
+                len(metrics["stop_reason"]),
+                metrics_schema["properties"]["stop_reason"]["minLength"],
+            )
 
 
 if __name__ == "__main__":
