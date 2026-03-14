@@ -1,19 +1,20 @@
-- State: DONE
-- Current phase: Phase-1 quick wins implemented (F0-F4)
-- Last update: 2026-03-14 13:34 UTC
+- State: HARDENING_WAVE_DONE
+- Current phase: A/B/C implemented in canonical run root with atomic commits
+- Last update: 2026-03-14 13:58 UTC
 
-## Completed in this run
-- [x] Fase 0 preflight baseline captured (root/hash/help/tests)
-- [x] Fase 1 run-root traceability mismatch fixed via canonical manifest + machine-readable pointer + traceability test
-- [x] Fase 2 `comparison_summary` normalized to v1 schema (`sources[]` homogeneous for all sources)
-- [x] Fase 3 integration/contract tests added for cross-source output + metrics schema stability
-- [x] Fase 4 evidence and rollback hints updated in `RESULTS.md`
+## Completed
+- [x] Phase A: Core contract models + boundary validation bridges
+- [x] Phase B: Deterministic contract fixtures + stronger negative tests + comparison summary schema assertions
+- [x] Phase C: ElDiario discovery metrics envelope standardized (low-risk instrumentation step)
+- [x] Verification run completed (`21` tests passing + CLI smoke evidence)
+- [x] Results + rollback hints updated in `RESULTS.md`
 
-## Canonical vs companion run decision applied
-- Canonical implementation root: `runs/20260314-1212-8ff9`
-- Companion docs/review root: `runs/20260314-1250-edr1` (non-executable for implementation)
+## Atomic commits
+1. `e74ebcd` — feat(core): add pydantic-style contract models for news and metrics payloads
+2. `d4780e4` — test(contract): enforce schema validation for news, metrics, and comparison summary
+3. `f038c11` — refactor(discovery): standardize eldiario discovery metrics envelope
 
-## Verification snapshot
-- `python3 -m src.main --help` -> OK
-- `python3 scripts/generate_comparison_summary.py --date 2026-03-13 --out logs/comparison_summary.json` -> OK (6 sources)
-- `python3 -m unittest discover -s tests -v` -> OK (15 tests)
+## Notes for handoff
+- Changes were kept minimal/reversible and preserve existing CLI/output keys.
+- `strategy_metrics` keeps backward compatibility by accepting legacy list format and normalizing to envelope form.
+- Rollback can be applied per-phase in reverse order via `git revert` (see `RESULTS.md`).

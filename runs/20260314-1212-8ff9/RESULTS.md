@@ -215,3 +215,82 @@ git revert --no-edit <phase1-schema-normalization>
 git revert --no-edit <phase1-contract-tests>
 git revert --no-edit <phase1-results>
 ```
+
+---
+
+## 9) Hardening wave (A/B/C) — 2026-03-14
+
+### Phase A — Core contracts
+Implemented core contract models in `src/core/contracts.py` and wired validation bridges at boundaries:
+- `src/core/adapter.py` now validates `metrics` via `validate_metrics_payload`.
+- `src/core/export.py` validates article payloads before JSON/CSV write.
+- `src/core/comparison_summary.py` validates final summary payload before return.
+
+Compatibility note:
+- Legacy `strategy_metrics` list payloads are still accepted and normalized to envelope form for backward compatibility.
+
+Commit:
+- `e74ebcd` — `feat(core): add pydantic-style contract models for news and metrics payloads`
+
+### Phase B — Stronger contract tests + fixtures
+Added deterministic contract fixtures and negative tests:
+- `tests/test_contract_models.py`
+- `tests/fixtures/comparison_summary_valid.json`
+- Strengthened:
+  - `tests/test_comparison_summary_contract.py`
+  - `tests/test_cross_source_output_metrics_contract.py`
+
+Includes:
+- Required/missing field failures
+- Type mismatch failures
+- Comparison summary schema assertions (`model_json_schema` shape)
+
+Commit:
+- `d4780e4` — `test(contract): enforce schema validation for news, metrics, and comparison summary`
+
+### Phase C — One low-risk standardization beyond ElPais
+Standardized ElDiario discovery instrumentation to strategy-envelope shape without changing discovery order (RSS -> sitemap(+robots) -> HTML fallback):
+- `src/core/strategies/metrics.py` (shared envelope helper)
+- `src/adapters/eldiario.py` emits `strategy_metrics` envelope
+- `src/adapters/elpais.py` aligned to same envelope helper
+- `tests/test_eldiario_adapter.py` extended with envelope assertion
+
+Commit:
+- `f038c11` — `refactor(discovery): standardize eldiario discovery metrics envelope`
+
+### Verification evidence
+Commands executed (from canonical root `runs/20260314-1212-8ff9`):
+```bash
+python3 -m unittest discover -s tests -v
+python3 -m src.main --help
+python3 -m src.main --source eldiario --date 2026-03-13 --out data/standardized_eldiario.json --metrics-out logs/standardized_eldiario_metrics.json --max-runtime-seconds 20
+python3 - <<'PY'
+import json
+m=json.load(open('logs/standardized_eldiario_metrics.json'))
+print(sorted(m.keys()))
+print(m.get('strategy_metrics',{}).get('schema_version'))
+print(len(m.get('strategy_metrics',{}).get('strategies',[])))
+PY
+```
+
+Observed:
+- Test suite: **21 passed**
+- CLI help: OK
+- ElDiario smoke: `kept=20`, `stop_reason=max_runtime_seconds`
+- `strategy_metrics.schema_version`: `discovery_strategy_metrics.v1`
+- `strategy_metrics.strategies` length: `3`
+
+### Rollback hints (hardening wave)
+```bash
+# Revert docs/evidence commit (this section)
+git revert --no-edit <docs-results-commit>
+
+# Revert phase C only
+git revert --no-edit f038c11
+
+# Revert phase B only
+git revert --no-edit d4780e4
+
+# Revert phase A only
+git revert --no-edit e74ebcd
+```
