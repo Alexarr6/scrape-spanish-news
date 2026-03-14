@@ -1,0 +1,21 @@
+{
+  "discovered": 164,
+  "processed": 120,
+  "kept": 25,
+  "discarded_by_date": 95,
+  "errors": 0,
+  "stop_reason": "max_articles_to_extract",
+  "last_url": "https://elpais.com/deportes/tenis/2026-03-14/ni-nadal-ni-djokovic-ni-federer-iban-tan-rapido-la-pista-dura-ensalza-al-implacable-alcaraz.html",
+  "strategy_metrics": [
+    {
+      "strategy_name": "rss",
+      "attempted": 164,
+      "accepted": 164,
+      "rejected_by_date": 0,
+      "rejected_noise": 0,
+      "errors": 0,
+      "elapsed_ms": 1806,
+      "stop_reason": "completed"
+    }
+  ]
+}
