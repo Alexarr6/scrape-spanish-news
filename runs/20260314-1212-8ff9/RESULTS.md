@@ -98,12 +98,12 @@ Resumen estructurado adicional: `logs/comparison_summary.json`.
 
 Rollback total de esta entrega:
 ```bash
-git revert --no-edit 5e84f7e c482178 ad60dc2 d90ac17 c0dd9e8
+git revert --no-edit <validation_commit> c482178 ad60dc2 d90ac17 c0dd9e8
 ```
 
 Rollback por fase:
 ```bash
-git revert --no-edit 5e84f7e   # validación + evidencia final
+git revert --no-edit <validation_commit>   # validación + evidencia final
 git revert --no-edit c482178   # wiring CLI
 git revert --no-edit ad60dc2   # adapter 20minutos
 git revert --no-edit d90ac17   # docs discovery
