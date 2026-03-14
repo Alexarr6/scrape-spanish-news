@@ -157,6 +157,7 @@ python3 -m unittest discover -s tests -v
 ```
 
 Resultado baseline:
+- evidencia completa guardada en `logs/phase1_baseline.txt`
 - `pwd`: `/home/node/.openclaw/workspace/repos/spain-news-bias-scraper/runs/20260314-1212-8ff9`
 - `git rev-parse --show-toplevel`: `/home/node/.openclaw/workspace/repos/spain-news-bias-scraper`
 - `git rev-parse --short HEAD`: `2ccf3a9`
