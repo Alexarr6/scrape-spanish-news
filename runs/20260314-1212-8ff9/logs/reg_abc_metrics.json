@@ -1,0 +1,9 @@
+{
+  "discovered": 300,
+  "processed": 120,
+  "kept": 15,
+  "discarded_by_date": 105,
+  "errors": 0,
+  "stop_reason": "max_articles_to_extract",
+  "last_url": "https://s1.abcstatics.com/abc/www/multimedia/espana/2026/03/13/reina-sofia-cordoba-kUzH-U201192731812uV-1200x840@diario_abc.jpg"
+}

@@ -1,0 +1,62 @@
+{
+  "canonical_date": "2026-03-13",
+  "regression": [
+    {
+      "source": "elpais",
+      "baseline": 25,
+      "final": 26,
+      "delta": 1,
+      "delta_pct": 4.0,
+      "stop_reason": "max_articles_to_extract",
+      "sample": [
+        "‘Torrente presidente’: soez, excesiva y por momentos muy divertida",
+        "La justicia venezolana niega el derecho a la amnistía a Perkins Rocha, el abogado de María Corina Machado"
+      ]
+    },
+    {
+      "source": "elmundo",
+      "baseline": 25,
+      "final": 25,
+      "delta": 0,
+      "delta_pct": 0.0,
+      "stop_reason": "completed",
+      "sample": [
+        "El Gobierno recoloca en secreto en Adif al mismo cargo al que cesó por la crisis de Rodalies",
+        "El 'cambio de cara' de Vox: una pasarela de aliados de Abascal para blindarse el 15-M"
+      ]
+    },
+    {
+      "source": "abc",
+      "baseline": 15,
+      "final": 15,
+      "delta": 0,
+      "delta_pct": 0.0,
+      "stop_reason": "max_articles_to_extract",
+      "sample": [
+        "Votar es defender la democracia",
+        "Desde Bolivia para el mundo: Felipe VI debuta en TikTok con un viejo amigo de juventud"
+      ]
+    },
+    {
+      "source": "lavanguardia",
+      "baseline": 27,
+      "final": 27,
+      "delta": 0,
+      "delta_pct": 0.0,
+      "stop_reason": "max_articles_to_extract",
+      "sample": [
+        "¿Sánchez está “jodío”?, por Isabel Garcia Pagan",
+        "Fernández Díaz y Ábalos, en el banquillo: una singular coincidencia"
+      ]
+    }
+  ],
+  "source_20minutos": {
+    "count": 20,
+    "stop_reason": "completed",
+    "sample": [
+      "EEUU pide a sus ciudadanos que estén alerta ante \"amenazas\" en las manifestaciones en España por la guerra de este sábado",
+      "El Gobierno contempla bajar el IVA de la luz para contener los precios ante la crisis por la guerra de Irán",
+      "Un fallo de Hacienda deja sin combustible al cuarto mayor distribuidor de España y afecta a 570 gasolineras"
+    ]
+  }
+}

@@ -1,116 +1,111 @@
 # RESULTS.md
 
 ## Resumen
-Implementación completada del PLAN con las decisiones humanas aprobadas:
-1. ✅ `max-articles-to-extract` por defecto volvió a **120 global**.
-2. ✅ Caídas >20% ya **no bloquean merge automáticamente**: se documentan como **WARNING** con diagnóstico y evidencia en este archivo.
-3. ✅ Migración a `core/strategies` en este run: **solo EL PAÍS MVP** (reusable, mínima, reversible).
+Implementación de `20minutos` completada en run `20260314-1212-8ff9` respetando core+adapters, baseline canónico, guardrails y validación de no-regresión.
+
+Fecha canónica usada en todo el run: **2026-03-13**.
 
 ---
 
-## Baseline canónico obligatorio (freeze)
-Fecha fija: `2026-03-13`  
-Caps fijos: `--max-discovery-urls 300 --max-articles-to-extract 120 --max-runtime-seconds 180`
-
-Comandos ejecutados:
+## Fase 0 — Baseline canónico (antes de cambios)
+Preflight ejecutado:
 ```bash
-python3 -m src.main --source elpais --date 2026-03-13 --max-discovery-urls 300 --max-articles-to-extract 120 --max-runtime-seconds 180 --out data/canon_elpais_2026-03-13.json --metrics-out logs/canon_elpais_metrics.json
-python3 -m src.main --source elmundo --date 2026-03-13 --max-discovery-urls 300 --max-articles-to-extract 120 --max-runtime-seconds 180 --out data/canon_elmundo_2026-03-13.json --metrics-out logs/canon_elmundo_metrics.json
-python3 -m src.main --source abc --date 2026-03-13 --max-discovery-urls 300 --max-articles-to-extract 120 --max-runtime-seconds 180 --out data/canon_abc_2026-03-13.json --metrics-out logs/canon_abc_metrics.json
-python3 -m src.main --source lavanguardia --date 2026-03-13 --max-discovery-urls 300 --max-articles-to-extract 120 --max-runtime-seconds 180 --out data/canon_lavanguardia_2026-03-13.json --metrics-out logs/canon_lavanguardia_metrics.json
+python3 -V
+python3 -m src.main --help
+python3 -m unittest discover -s tests -v
 ```
 
-Snapshot canónico actual (after implementación):
-- `elpais`: kept **27** (`discovered=164 processed=120 discarded_by_date=93 stop_reason=max_articles_to_extract`)
-- `elmundo`: kept **25** (`discovered=72 processed=72 discarded_by_date=47 stop_reason=completed`)
-- `abc`: kept **18** (`discovered=300 processed=120 discarded_by_date=102 stop_reason=max_articles_to_extract`)
-- `lavanguardia`: kept **28** (`discovered=181 processed=120 discarded_by_date=92 stop_reason=max_articles_to_extract`)
-
-Referencia canónica previa (PLAN): elpais 28, elmundo 25, abc 18, lavanguardia 27.
-
----
-
-## Cambios implementados
-
-### Fase 1 — Recovery mínima de cobertura EL PAÍS
-- `src/main.py`
-  - Default restaurado: `--max-articles-to-extract` de `100` ➜ `120`.
-
-### Fase 2 — Arquitectura reusable `src/core/strategies` (EL PAÍS MVP)
-Nuevos módulos:
-- `src/core/strategies/base.py`
-- `src/core/strategies/rss_discovery.py`
-- `src/core/strategies/orchestrator.py`
-- `src/core/strategies/__init__.py`
-
-Migración EL PAÍS (solo MVP):
-- `src/adapters/elpais.py`
-  - Ahora usa `DiscoveryOrchestrator` + `RSSDiscoveryStrategy`.
-  - Mantiene extracción/normalización existente (cambio mínimo y reversible).
-  - Emite `strategy_metrics` en `logs/canon_elpais_metrics.json`.
-
-Ejemplo `strategy_metrics` EL PAÍS:
-```json
-[
-  {
-    "strategy_name": "rss",
-    "attempted": 164,
-    "accepted": 164,
-    "rejected_by_date": 0,
-    "rejected_noise": 0,
-    "errors": 0,
-    "elapsed_ms": 885,
-    "stop_reason": "completed"
-  }
-]
+Baseline congelado:
+```bash
+python3 -m src.main --source elpais --date 2026-03-13 --out data/canon_elpais_2026-03-13.json --metrics-out logs/canon_elpais_metrics.json
+python3 -m src.main --source elmundo --date 2026-03-13 --out data/canon_elmundo_2026-03-13.json --metrics-out logs/canon_elmundo_metrics.json
+python3 -m src.main --source abc --date 2026-03-13 --out data/canon_abc_2026-03-13.json --metrics-out logs/canon_abc_metrics.json
+python3 -m src.main --source lavanguardia --date 2026-03-13 --out data/canon_lavanguardia_2026-03-13.json --metrics-out logs/canon_lavanguardia_metrics.json
 ```
 
-### Fase guardrails / no-regresión
-- Tests ejecutados en verde:
-  - `python3 -m src.main --help`
-  - `python3 -m unittest discover -s tests -v` (9 tests OK)
-- Nuevo test de strategies:
-  - `tests/test_strategies.py` (deduplicación + cap candidates)
+Conteos baseline:
+- `elpais`: 26
+- `elmundo`: 25
+- `abc`: 15
+- `lavanguardia`: 27
 
 ---
 
-## Diagnóstico de no-regresión (con política de warning)
-Comparativa against baseline canónico previo del PLAN:
-- `elpais`: 28 ➜ 27 (**-3.6%**) ✅ dentro de tolerancia
-- `elmundo`: 25 ➜ 25 (**0%**) ✅
-- `abc`: 18 ➜ 18 (**0%**) ✅
-- `lavanguardia`: 27 ➜ 28 (**+3.7%**) ✅
+## Fase 1 — Discovery 20minutos
+Documento: `docs/DISCOVERY_20MINUTOS.md`
 
-**No hubo caídas >20% en esta ejecución**, por lo que no se emite WARNING de regresión severa.
+Estrategia final:
+1. **RSS primario** (`/rss/`, `/rss/nacional/`, `/rss/actualidad/`)
+2. **Sitemap fallback** (candidatos mantenidos, no bloqueantes)
+3. **HTML fallback** (`/nacional/`, `minuteca/politica`, `minuteca/espana`)
 
-> Política aplicada: si en futuras corridas canónicas una fuente cae >20%, no se bloquea merge automáticamente; se debe añadir WARNING explícito con hipótesis y evidencia (métricas + comandos) en este `RESULTS.md`.
-
----
-
-## Commits atómicos por fase
-1. `2b1f40e` — `fix(cli): restore global default cap to 120 for canonical comparability`
-2. `e5f85ba` — `refactor(core): add reusable discovery strategies MVP and migrate elpais`
-3. `005b1a8` — `test(validation): add strategies test and refresh canonical evidence/results`
+Whitelist temática inicial: España / política / nacional.
 
 ---
 
-## Rollback
-Rollback completo de esta entrega:
+## Fase 2-3 — Adapter + CLI
+Cambios principales:
+- nuevo adapter: `src/adapters/minutos20.py`
+- registro CLI: `src/adapters/registry.py` añade `20minutos`
+- test adapter: `tests/test_20minutos_adapter.py`
+- test registry actualizado para incluir `20minutos`
+
+Verificación:
 ```bash
-git revert --no-edit 005b1a8 e5f85ba 2b1f40e
+python3 -m src.main --help
+python3 -m unittest discover -s tests -v
+python3 -m src.main --source 20minutos --date 2026-03-13 --out data/news_20minutos_2026-03-13.json --metrics-out logs/news_20minutos_metrics.json
 ```
 
-Rollback por fases:
+Resultado `20minutos`:
+- kept: **20**
+- stop_reason: `completed`
+
+Muestra de titulares (20minutos):
+- "Huelga de basuras de Madrid, en directo: el Ayuntamiento espera que hoy se alcance un acuerdo para desconvocar el paro"
+- "Feijóo no quiere amnistía, pero sí para su hermano"
+- "Puigdemont reclama al PSOE "cumplir íntegramente" los pactos y no "rebajar" la ley de amnistía"
+
+---
+
+## Fase 4 — No-regresión final
+Regeneración final fuentes previas:
 ```bash
-# deshacer validación/docs
-git revert --no-edit 005b1a8
-# deshacer migración strategies EL PAÍS MVP
-git revert --no-edit e5f85ba
-# deshacer cap global 120
-git revert --no-edit 2b1f40e
+python3 -m src.main --source elpais --date 2026-03-13 --out data/reg_elpais_2026-03-13.json --metrics-out logs/reg_elpais_metrics.json
+python3 -m src.main --source elmundo --date 2026-03-13 --out data/reg_elmundo_2026-03-13.json --metrics-out logs/reg_elmundo_metrics.json
+python3 -m src.main --source abc --date 2026-03-13 --out data/reg_abc_2026-03-13.json --metrics-out logs/reg_abc_metrics.json
+python3 -m src.main --source lavanguardia --date 2026-03-13 --out data/reg_lavanguardia_2026-03-13.json --metrics-out logs/reg_lavanguardia_metrics.json
 ```
 
-Rollback rápido sin commits (working tree):
+Comparativa baseline vs final:
+- `elpais`: 26 → 26 (0.0%)
+- `elmundo`: 25 → 25 (0.0%)
+- `abc`: 15 → 15 (0.0%)
+- `lavanguardia`: 27 → 27 (0.0%)
+
+No hay caída relevante; no aplica warning de regresión.
+
+Resumen estructurado adicional: `logs/comparison_summary.json`.
+
+---
+
+## Commits atómicos + rollback
+1. `chore(baseline): freeze canonical regression baseline for existing sources`
+2. `docs(discovery): define 20minutos ingestion strategy and guardrails`
+3. `feat(adapter): add 20minutos adapter with utc date filter and guardrails`
+4. `feat(cli): wire 20minutos source into multi-source command routing`
+5. `test(validation): add comparative regression evidence for existing sources + 20minutos`
+
+Rollback total de esta entrega:
 ```bash
-git restore src/main.py src/adapters/elpais.py src/core/strategies tests/test_strategies.py runs/20260314-0949-8e30/RESULTS.md
+git revert --no-edit 5e84f7e c482178 ad60dc2 d90ac17 c0dd9e8
+```
+
+Rollback por fase:
+```bash
+git revert --no-edit 5e84f7e   # validación + evidencia final
+git revert --no-edit c482178   # wiring CLI
+git revert --no-edit ad60dc2   # adapter 20minutos
+git revert --no-edit d90ac17   # docs discovery
+git revert --no-edit c0dd9e8   # baseline canónico
 ```
