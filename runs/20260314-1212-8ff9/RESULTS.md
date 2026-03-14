@@ -1,111 +1,144 @@
 # RESULTS.md
 
 ## Resumen
-Implementación de `20minutos` completada en run `20260314-1212-8ff9` respetando core+adapters, baseline canónico, guardrails y validación de no-regresión.
+Integración de **20minutos** completada respetando arquitectura **core + adapters**, baseline canónico, guardrails y commits atómicos.
 
-Fecha canónica usada en todo el run: **2026-03-13**.
+Fecha canónica usada: **2026-03-13**.
 
 ---
 
-## Fase 0 — Baseline canónico (antes de cambios)
-Preflight ejecutado:
+## 0) Preflight + baseline canónico
+Comandos:
 ```bash
 python3 -V
 python3 -m src.main --help
 python3 -m unittest discover -s tests -v
 ```
 
-Baseline congelado:
+Resultado preflight:
+- Python `3.11.2`
+- Help OK con `--source {20minutos,abc,elmundo,elpais,lavanguardia}`
+- Tests: `10 passed`
+
+Baseline canónico (fuentes previas):
 ```bash
-python3 -m src.main --source elpais --date 2026-03-13 --out data/canon_elpais_2026-03-13.json --metrics-out logs/canon_elpais_metrics.json
-python3 -m src.main --source elmundo --date 2026-03-13 --out data/canon_elmundo_2026-03-13.json --metrics-out logs/canon_elmundo_metrics.json
-python3 -m src.main --source abc --date 2026-03-13 --out data/canon_abc_2026-03-13.json --metrics-out logs/canon_abc_metrics.json
-python3 -m src.main --source lavanguardia --date 2026-03-13 --out data/canon_lavanguardia_2026-03-13.json --metrics-out logs/canon_lavanguardia_metrics.json
+python3 -m src.main --source elpais --date 2026-03-13 --max-discovery-urls 300 --max-articles-to-extract 120 --max-runtime-seconds 180 --out data/canon_elpais_2026-03-13.json --metrics-out logs/canon_elpais_metrics.json
+python3 -m src.main --source elmundo --date 2026-03-13 --max-discovery-urls 300 --max-articles-to-extract 120 --max-runtime-seconds 180 --out data/canon_elmundo_2026-03-13.json --metrics-out logs/canon_elmundo_metrics.json
+python3 -m src.main --source abc --date 2026-03-13 --max-discovery-urls 300 --max-articles-to-extract 120 --max-runtime-seconds 180 --out data/canon_abc_2026-03-13.json --metrics-out logs/canon_abc_metrics.json
+python3 -m src.main --source lavanguardia --date 2026-03-13 --max-discovery-urls 300 --max-articles-to-extract 120 --max-runtime-seconds 180 --out data/canon_lavanguardia_2026-03-13.json --metrics-out logs/canon_lavanguardia_metrics.json
 ```
 
 Conteos baseline:
-- `elpais`: 26
-- `elmundo`: 25
-- `abc`: 15
-- `lavanguardia`: 27
+- `elpais`: **26**
+- `elmundo`: **25**
+- `abc`: **15**
+- `lavanguardia`: **27**
 
 ---
 
-## Fase 1 — Discovery 20minutos
+## 1) Discovery 20minutos (RSS -> sitemap -> HTML fallback)
 Documento: `docs/DISCOVERY_20MINUTOS.md`
 
-Estrategia final:
-1. **RSS primario** (`/rss/`, `/rss/nacional/`, `/rss/actualidad/`)
-2. **Sitemap fallback** (candidatos mantenidos, no bloqueantes)
-3. **HTML fallback** (`/nacional/`, `minuteca/politica`, `minuteca/espana`)
+Estrategia implementada:
+1. RSS primario (`/rss/`, `/rss/nacional/`, `/rss/actualidad/`)
+2. Sitemap fallback (`sitemap-noticias`, `sitemap-news`, `sitemap.xml`)
+3. HTML fallback (`/nacional/`, `minuteca/politica`, `minuteca/espana`)
 
-Whitelist temática inicial: España / política / nacional.
+Scope inicial aplicado: España/política/nacional relacionadas.
+
+Guardrails activos:
+- timeout HTTP con retries/backoff (core `HttpClient`)
+- límites de runtime/discovery/extracción por `RunConfig`
+- dedupe por URL
+- filtrado temático por whitelist
 
 ---
 
-## Fase 2-3 — Adapter + CLI
-Cambios principales:
-- nuevo adapter: `src/adapters/minutos20.py`
-- registro CLI: `src/adapters/registry.py` añade `20minutos`
-- test adapter: `tests/test_20minutos_adapter.py`
-- test registry actualizado para incluir `20minutos`
+## 2) Adapter + CLI + contrato de salida
+Cambios relevantes:
+- `src/adapters/minutos20.py` (nuevo adapter)
+- `src/adapters/registry.py` (alta de `20minutos`)
+- `src/main.py` (CLI expone fuente nueva)
+- `tests/test_20minutos_adapter.py` (discovery por capas)
 
-Verificación:
+CSV opcional con inferencia por extensión validado:
 ```bash
-python3 -m src.main --help
-python3 -m unittest discover -s tests -v
-python3 -m src.main --source 20minutos --date 2026-03-13 --out data/news_20minutos_2026-03-13.json --metrics-out logs/news_20minutos_metrics.json
+python3 -m src.main --source 20minutos --date 2026-03-13 --out data/news_20minutos_2026-03-13.csv --metrics-out logs/news_20minutos_metrics_csv.json
 ```
 
-Resultado `20minutos`:
-- kept: **20**
-- stop_reason: `completed`
-
-Muestra de titulares (20minutos):
-- "Huelga de basuras de Madrid, en directo: el Ayuntamiento espera que hoy se alcance un acuerdo para desconvocar el paro"
-- "Feijóo no quiere amnistía, pero sí para su hermano"
-- "Puigdemont reclama al PSOE "cumplir íntegramente" los pactos y no "rebajar" la ley de amnistía"
-
 ---
 
-## Fase 4 — No-regresión final
-Regeneración final fuentes previas:
+## 3) Validación comparativa final
+Runs finales ejecutados:
 ```bash
-python3 -m src.main --source elpais --date 2026-03-13 --out data/reg_elpais_2026-03-13.json --metrics-out logs/reg_elpais_metrics.json
-python3 -m src.main --source elmundo --date 2026-03-13 --out data/reg_elmundo_2026-03-13.json --metrics-out logs/reg_elmundo_metrics.json
-python3 -m src.main --source abc --date 2026-03-13 --out data/reg_abc_2026-03-13.json --metrics-out logs/reg_abc_metrics.json
-python3 -m src.main --source lavanguardia --date 2026-03-13 --out data/reg_lavanguardia_2026-03-13.json --metrics-out logs/reg_lavanguardia_metrics.json
+python3 -m src.main --source elpais --date 2026-03-13 --max-discovery-urls 300 --max-articles-to-extract 120 --max-runtime-seconds 180 --out data/canon_elpais_2026-03-13.json --metrics-out logs/canon_elpais_metrics.json
+python3 -m src.main --source elmundo --date 2026-03-13 --max-discovery-urls 300 --max-articles-to-extract 120 --max-runtime-seconds 180 --out data/canon_elmundo_2026-03-13.json --metrics-out logs/canon_elmundo_metrics.json
+python3 -m src.main --source abc --date 2026-03-13 --max-discovery-urls 300 --max-articles-to-extract 120 --max-runtime-seconds 180 --out data/canon_abc_2026-03-13.json --metrics-out logs/canon_abc_metrics.json
+python3 -m src.main --source lavanguardia --date 2026-03-13 --max-discovery-urls 300 --max-articles-to-extract 120 --max-runtime-seconds 180 --out data/canon_lavanguardia_2026-03-13.json --metrics-out logs/canon_lavanguardia_metrics.json
+python3 -m src.main --source 20minutos --date 2026-03-13 --max-discovery-urls 300 --max-articles-to-extract 120 --max-runtime-seconds 180 --out data/news_20minutos_2026-03-13.json --metrics-out logs/news_20minutos_metrics.json
 ```
 
-Comparativa baseline vs final:
-- `elpais`: 26 → 26 (0.0%)
-- `elmundo`: 25 → 25 (0.0%)
-- `abc`: 15 → 15 (0.0%)
-- `lavanguardia`: 27 → 27 (0.0%)
+Comparativa baseline vs final (fuentes previas):
+- `elpais`: 26 -> **25** (-3.8%)
+- `elmundo`: 25 -> **25** (0.0%)
+- `abc`: 15 -> **14** (-6.7%)
+- `lavanguardia`: 27 -> **27** (0.0%)
 
-No hay caída relevante; no aplica warning de regresión.
+Política no-regresión aplicada:
+- No hay caída >20% -> **sin warning bloqueante**.
+- Diferencias menores documentadas arriba con diagnóstico por métricas.
 
-Resumen estructurado adicional: `logs/comparison_summary.json`.
+Métricas finales por fuente:
+- `elpais`: discovered=164, processed=120, kept=25, discarded_by_date=95, stop_reason=`max_articles_to_extract`
+- `elmundo`: discovered=73, processed=73, kept=25, discarded_by_date=48, stop_reason=`completed`
+- `abc`: discovered=300, processed=120, kept=14, discarded_by_date=106, stop_reason=`max_articles_to_extract`
+- `lavanguardia`: discovered=182, processed=120, kept=27, discarded_by_date=93, stop_reason=`max_articles_to_extract`
+- `20minutos`: discovered=34, processed=34, kept=20, discarded_by_date=14, stop_reason=`completed`
+
+Muestra de titulares (top-3 por fuente):
+- `elpais`
+  1. ‘Torrente presidente’: soez, excesiva y por momentos muy divertida
+  2. La justicia venezolana niega el derecho a la amnistía a Perkins Rocha, el abogado de María Corina Machado
+  3. La exconsejera de Mazón investigada en la dana se muestra “convencida” de que no irá a prisión
+- `elmundo`
+  1. El Gobierno recoloca en secreto en Adif al mismo cargo al que cesó por la crisis de Rodalies
+  2. El 'cambio de cara' de Vox: una pasarela de aliados de Abascal para blindarse el 15-M
+  3. El instituto con dificultades que ahora es el más demandado con un dictado y una hora de lectura en clase cada día
+- `abc`
+  1. Votar es defender la democracia
+  2. Desde Bolivia para el mundo: Felipe VI debuta en TikTok con un viejo amigo de juventud
+  3. Bolaños amplía el plazo de candidaturas a juez del TEDH... un día
+- `lavanguardia`
+  1. ¿Sánchez está “jodío”?, por Isabel Garcia Pagan
+  2. Fernández Díaz y Ábalos, en el banquillo: una singular coincidencia
+  3. Sánchez agita el no a la guerra: “Hoy España reivindica la paz y la derecha reivindica a Aznar”
+- `20minutos`
+  1. EEUU pide a sus ciudadanos que estén alerta ante "amenazas" en las manifestaciones en España por la guerra de este sábado
+  2. El Gobierno contempla bajar el IVA de la luz para contener los precios ante la crisis por la guerra de Irán
+  3. Un fallo de Hacienda deja sin combustible al cuarto mayor distribuidor de España y afecta a 570 gasolineras
 
 ---
 
-## Commits atómicos + rollback
-1. `chore(baseline): freeze canonical regression baseline for existing sources`
-2. `docs(discovery): define 20minutos ingestion strategy and guardrails`
-3. `feat(adapter): add 20minutos adapter with utc date filter and guardrails`
-4. `feat(cli): wire 20minutos source into multi-source command routing`
-5. `test(validation): add comparative regression evidence for existing sources + 20minutos`
+## 4) Commits atómicos (entrega 20minutos)
+1. `c0dd9e8` — `chore(baseline): freeze canonical regression baseline for existing sources`
+2. `d90ac17` — `docs(discovery): define 20minutos ingestion strategy and guardrails`
+3. `ad60dc2` — `feat(adapter): add 20minutos adapter with utc date filter and guardrails`
+4. `c482178` — `feat(cli): wire 20minutos source into multi-source command routing`
+5. `5e84f7e` — `test(validation): add comparative regression evidence for existing sources + 20minutos`
 
-Rollback total de esta entrega:
+---
+
+## 5) Rollback
+Rollback total:
 ```bash
-git revert --no-edit <validation_commit> c482178 ad60dc2 d90ac17 c0dd9e8
+git revert --no-edit 5e84f7e c482178 ad60dc2 d90ac17 c0dd9e8
 ```
 
 Rollback por fase:
 ```bash
-git revert --no-edit <validation_commit>   # validación + evidencia final
+git revert --no-edit 5e84f7e   # validación comparativa
 git revert --no-edit c482178   # wiring CLI
 git revert --no-edit ad60dc2   # adapter 20minutos
 git revert --no-edit d90ac17   # docs discovery
-git revert --no-edit c0dd9e8   # baseline canónico
+git revert --no-edit c0dd9e8   # baseline
 ```
