@@ -3,6 +3,7 @@ import unittest
 from pathlib import Path
 
 from src.core.contracts import NewsItemModel, RunMetricsModel
+from tests.fixture_paths import EVIDENCE_ROOT, pick_existing
 
 
 class CrossSourceOutputMetricsContractTests(unittest.TestCase):
@@ -11,14 +12,7 @@ class CrossSourceOutputMetricsContractTests(unittest.TestCase):
 
     @property
     def archived_run_root(self) -> Path:
-        return Path(__file__).resolve().parents[1] / "runs" / "20260314-1212-8ff9"
-
-    def _pick_existing(self, run_root: Path, candidates: list[str]) -> Path:
-        for rel in candidates:
-            path = run_root / rel
-            if path.exists():
-                return path
-        self.fail(f"missing all candidates: {candidates}")
+        return EVIDENCE_ROOT
 
     def _load_json(self, path: Path):
         return json.loads(path.read_text(encoding="utf-8"))
@@ -27,7 +21,7 @@ class CrossSourceOutputMetricsContractTests(unittest.TestCase):
         run_root = self.archived_run_root
 
         for source in self.sources:
-            data_path = self._pick_existing(
+            data_path = pick_existing(
                 run_root,
                 [
                     f"data/reg2_{source}_{self.date}.json",
@@ -45,7 +39,7 @@ class CrossSourceOutputMetricsContractTests(unittest.TestCase):
         run_root = self.archived_run_root
 
         for source in self.sources:
-            metrics_path = self._pick_existing(
+            metrics_path = pick_existing(
                 run_root,
                 [
                     f"logs/reg2_{source}_metrics.json",

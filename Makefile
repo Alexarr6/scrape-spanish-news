@@ -11,6 +11,7 @@ APP_ROOT := $(REPO_ROOT)
 UV ?= $(or $(shell command -v uv 2>/dev/null),$(HOME)/.local/bin/uv)
 UV_RUN := $(UV) run --project $(REPO_ROOT)
 RUFF := $(UV_RUN) ruff
+PRE_COMMIT := $(UV_RUN) pre-commit
 PYTHON := $(UV_RUN) python
 LOCAL_TZ ?= Europe/Madrid
 DATE ?= $(if $(RUN_DATE),$(RUN_DATE),$(shell TZ=$(LOCAL_TZ) date +%F))
@@ -35,7 +36,7 @@ LOCAL_DB_USER ?= spain_news
 LOCAL_DB_PASSWORD ?= spain_news_dev
 LOCAL_DATABASE_URL := postgresql+psycopg://$(LOCAL_DB_USER):$(LOCAL_DB_PASSWORD)@$(LOCAL_DB_HOST):$(LOCAL_DB_PORT)/$(LOCAL_DB_NAME)
 
-.PHONY: help print-app-root preflight sync lint test smoke run-source run-source-persist run-all run-all-persist api scheduler-once scheduler-dry-run status tail-log verify-output verify-db db-url db-up db-down db-logs db-psql db-check clean-state
+.PHONY: help print-app-root preflight sync pre-commit lint check test smoke run-source run-source-persist run-all run-all-persist api scheduler-once scheduler-dry-run status tail-log verify-output verify-db db-url db-up db-down db-logs db-psql db-check clean-state
 
 help:
 	@printf '%s\n' \
@@ -45,6 +46,8 @@ help:
 	  '  make sync                     Create/update the uv-managed environment' \
 	  '  make preflight                Check uv/runtime wiring' \
 	  '  make lint                     Run ruff using the managed environment' \
+	  '  make pre-commit               Run repo hooks (ruff-check + ruff-format)' \
+	  '  make check                    Canonical local gate: pre-commit + tests' \
 	  '  make test                     Run tests from repo root' \
 	  '' \
 	  'Runtime:' \
@@ -96,6 +99,11 @@ preflight:
 
 lint: preflight
 	@PYTHONPATH="$(APP_ROOT):$${PYTHONPATH:-}" $(RUFF) check src tests scripts
+
+pre-commit: preflight
+	@cd "$(APP_ROOT)" && $(PRE_COMMIT) run --all-files
+
+check: pre-commit test
 
 test: preflight
 	@cd "$(APP_ROOT)" && \

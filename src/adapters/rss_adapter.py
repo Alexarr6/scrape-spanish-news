@@ -94,7 +94,7 @@ def _read_meta(page: str, key: str) -> str:
         if idx == -1:
             continue
         chunk = page[idx : idx + 400]
-        marker = "content=\""
+        marker = 'content="'
         m = chunk.lower().find(marker)
         if m == -1:
             continue

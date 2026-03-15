@@ -5,6 +5,7 @@ from pathlib import Path
 
 from src.core.comparison_summary import SourceSnapshot, build_comparison_summary
 from src.core.contracts import ComparisonSummaryModel
+from tests.fixture_paths import EVIDENCE_ROOT, pick_existing
 
 
 class ComparisonSummaryContractTests(unittest.TestCase):
@@ -13,14 +14,7 @@ class ComparisonSummaryContractTests(unittest.TestCase):
 
     @property
     def archived_run_root(self) -> Path:
-        return Path(__file__).resolve().parents[1] / "runs" / "20260314-1212-8ff9"
-
-    def _pick_existing(self, run_root: Path, candidates: list[str]) -> Path:
-        for rel in candidates:
-            path = run_root / rel
-            if path.exists():
-                return path
-        self.fail(f"missing all candidates: {candidates}")
+        return EVIDENCE_ROOT
 
     def _load_json(self, path: Path):
         return json.loads(path.read_text(encoding="utf-8"))
@@ -30,7 +24,7 @@ class ComparisonSummaryContractTests(unittest.TestCase):
         snapshots: list[SourceSnapshot] = []
 
         for source in self.sources:
-            baseline_path = self._pick_existing(
+            baseline_path = pick_existing(
                 run_root,
                 [
                     f"data/canon2_{source}_{self.date}.json",
@@ -38,7 +32,7 @@ class ComparisonSummaryContractTests(unittest.TestCase):
                     f"data/news_{source}_{self.date}.json",
                 ],
             )
-            current_path = self._pick_existing(
+            current_path = pick_existing(
                 run_root,
                 [
                     f"data/reg2_{source}_{self.date}.json",
@@ -46,7 +40,7 @@ class ComparisonSummaryContractTests(unittest.TestCase):
                     f"data/news_{source}_{self.date}.json",
                 ],
             )
-            metrics_path = self._pick_existing(
+            metrics_path = pick_existing(
                 run_root,
                 [
                     f"logs/reg2_{source}_metrics.json",
@@ -90,8 +84,7 @@ class ComparisonSummaryContractTests(unittest.TestCase):
 
     def test_fixture_payload_respects_json_schema_constraints(self):
         schema_path = (
-            Path(__file__).resolve().parents[1]
-            / "docs/contracts/comparison_summary.schema.json"
+            Path(__file__).resolve().parents[1] / "docs/contracts/comparison_summary.schema.json"
         )
         schema = self._load_json(schema_path)
         summary = self._build_fixture_summary()

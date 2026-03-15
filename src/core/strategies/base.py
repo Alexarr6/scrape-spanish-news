@@ -9,8 +9,7 @@ from src.core.adapter import RunConfig
 class DiscoveryStrategy(Protocol):
     name: str
 
-    def discover(self, target_date: str, cfg: RunConfig) -> list[str]:
-        ...
+    def discover(self, target_date: str, cfg: RunConfig) -> list[str]: ...
 
 
 @dataclass

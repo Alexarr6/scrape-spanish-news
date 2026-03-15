@@ -9,14 +9,20 @@ The authoritative workflow is `uv`-managed from repo root.
 ```bash
 make sync
 make preflight
-make test
+make check
 make smoke SOURCE=elpais
 ```
 
-Direct lint path:
+Canonical local gate:
 
 ```bash
-~/.local/bin/uv run ruff check src tests scripts
+make check
+```
+
+If you want the hooks installed locally:
+
+```bash
+uv run pre-commit install
 ```
 
 For persistent runs / API against any Postgres:
@@ -99,4 +105,5 @@ CRON_TZ=Europe/Madrid
 
 - `make` uses the root uv workflow and falls back to `~/.local/bin/uv` if `uv` is not already on `PATH`.
 - `.env` is optional and only meant for boring local overrides like `LOCAL_DB_*` or `DATABASE_URL`.
-- Historical evidence-based fixtures still live under `runs/20260314-1212-8ff9/`; runtime code does not.
+- Runtime code does not depend on `runs/` anymore. The active evidence fixtures used by contract tests now live under `tests/fixtures/evidence/20260314-1212-8ff9/`.
+- `scripts/detect_app_root.sh` was removed; repo root is the only supported app root.

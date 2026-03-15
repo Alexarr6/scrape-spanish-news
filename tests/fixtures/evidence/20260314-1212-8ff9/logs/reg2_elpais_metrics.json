@@ -1,0 +1,21 @@
+{
+  "discovered": 162,
+  "processed": 120,
+  "kept": 26,
+  "discarded_by_date": 94,
+  "errors": 0,
+  "stop_reason": "max_articles_to_extract",
+  "last_url": "https://elpais.com/deportes/2026-03-13/pyongyang-cancela-su-maraton-la-rendija-deportiva-de-corea-del-norte-al-mundo.html",
+  "strategy_metrics": [
+    {
+      "strategy_name": "rss",
+      "attempted": 162,
+      "accepted": 162,
+      "rejected_by_date": 0,
+      "rejected_noise": 0,
+      "errors": 0,
+      "elapsed_ms": 768,
+      "stop_reason": "completed"
+    }
+  ]
+}
