@@ -2,10 +2,12 @@
 
 ## Resumen de entrega
 
-Se añadió una capa operativa en la raíz del repo: `Makefile` como interfaz canónica, detección automática del app runnable y un scheduler shell simple con `flock`, retry, logs y estado en `var/`.
+Se dejó la raíz del repo como superficie operativa canónica con workflow gestionado por `uv`: `pyproject.toml` real, `ruff` configurado, `Makefile` usando `uv run`, detección automática del app runnable y un scheduler shell simple con `flock`, retry, logs y estado en `var/`.
 
 ## Cambios realizados
-- `Makefile` en raíz con targets de preflight, test, smoke, run manual, persistencia, API, scheduler y verificaciones.
+- `pyproject.toml` en raíz con dependencias runtime/dev reales y configuración canónica de `ruff`.
+- `.python-version` para fijar el runtime esperado.
+- `Makefile` en raíz con targets de sync, preflight, lint, test, smoke, run manual, persistencia, API, scheduler y verificaciones, todo vía `uv`.
 - nuevos targets opcionales de DB local: `db-url`, `db-up`, `db-down`, `db-logs`, `db-psql`, `db-check`.
 - `compose.yaml` con un Postgres local mínimo para pruebas de persistencia end-to-end.
 - `.env.example` con valores aburridos de desarrollo local, sin secretos reales.

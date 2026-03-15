@@ -5,6 +5,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 DETECT_SCRIPT="$SCRIPT_DIR/detect_app_root.sh"
 APP_ROOT_REL="${APP_ROOT:-$($DETECT_SCRIPT)}"
+UV="${UV:-uv}"
 LOCAL_TZ="${LOCAL_TZ:-Europe/Madrid}"
 SCHEDULER_RETRY_DELAY_SECONDS="${SCHEDULER_RETRY_DELAY_SECONDS:-120}"
 SCHEDULER_MAX_RETRIES="${SCHEDULER_MAX_RETRIES:-1}"
@@ -74,20 +75,20 @@ maybe_alert() {
 run_attempt() {
   local attempt="$1"
   log "attempt ${attempt}: preflight"
-  make --no-print-directory -C "$REPO_ROOT" preflight APP_ROOT="$APP_ROOT_REL"
+  make --no-print-directory -C "$REPO_ROOT" preflight APP_ROOT="$APP_ROOT_REL" UV="$UV"
   log "attempt ${attempt}: run-all-persist date=$DATE_LOCAL"
-  make --no-print-directory -C "$REPO_ROOT" run-all-persist APP_ROOT="$APP_ROOT_REL" DATE="$DATE_LOCAL" OUT_PREFIX=sched DATABASE_URL="$DATABASE_URL"
+  make --no-print-directory -C "$REPO_ROOT" run-all-persist APP_ROOT="$APP_ROOT_REL" DATE="$DATE_LOCAL" OUT_PREFIX=sched DATABASE_URL="$DATABASE_URL" UV="$UV"
   log "attempt ${attempt}: verify-output date=$DATE_LOCAL"
-  make --no-print-directory -C "$REPO_ROOT" verify-output APP_ROOT="$APP_ROOT_REL" DATE="$DATE_LOCAL" OUT_PREFIX=sched
+  make --no-print-directory -C "$REPO_ROOT" verify-output APP_ROOT="$APP_ROOT_REL" DATE="$DATE_LOCAL" OUT_PREFIX=sched UV="$UV"
   if [[ -n "${DATABASE_URL:-}" ]]; then
     log "attempt ${attempt}: verify-db"
-    make --no-print-directory -C "$REPO_ROOT" verify-db APP_ROOT="$APP_ROOT_REL" DATABASE_URL="$DATABASE_URL"
+    make --no-print-directory -C "$REPO_ROOT" verify-db APP_ROOT="$APP_ROOT_REL" DATABASE_URL="$DATABASE_URL" UV="$UV"
   fi
 }
 
 if [[ "$DRY_RUN" == "1" ]]; then
-  log "dry-run repo_root=$REPO_ROOT app_root=$APP_ROOT_REL date=$DATE_LOCAL max_retries=$SCHEDULER_MAX_RETRIES"
-  log "dry-run command: make -C $REPO_ROOT run-all-persist APP_ROOT=$APP_ROOT_REL DATE=$DATE_LOCAL OUT_PREFIX=sched"
+  log "dry-run repo_root=$REPO_ROOT app_root=$APP_ROOT_REL date=$DATE_LOCAL max_retries=$SCHEDULER_MAX_RETRIES uv=$UV"
+  log "dry-run command: make -C $REPO_ROOT run-all-persist APP_ROOT=$APP_ROOT_REL DATE=$DATE_LOCAL OUT_PREFIX=sched UV=$UV"
   exit 0
 fi
 
@@ -99,6 +100,14 @@ if [[ -z "${DATABASE_URL:-}" ]]; then
   exit 1
 fi
 
+if ! command -v "$UV" >/dev/null 2>&1; then
+  log "fatal: uv is required for scheduled runs"
+  write_state "$LAST_STATUS_FILE" "preflight_failed"
+  write_state "$LAST_RUN_FILE" "$DATE_UTC_NOW"
+  write_state "$LAST_ERROR_FILE" "uv missing"
+  exit 1
+fi
+
 exec 9>"$LOCK_FILE"
 if ! flock -n 9; then
   log "skip: previous run still active"
@@ -107,7 +116,7 @@ if ! flock -n 9; then
   exit 0
 fi
 
-log "scheduler start repo_root=$REPO_ROOT app_root=$APP_ROOT_REL date=$DATE_LOCAL"
+log "scheduler start repo_root=$REPO_ROOT app_root=$APP_ROOT_REL date=$DATE_LOCAL uv=$UV"
 
 attempt=0
 max_attempts=$((SCHEDULER_MAX_RETRIES + 1))
@@ -121,10 +130,11 @@ while (( attempt < max_attempts )); do
     write_state "$LAST_ERROR_FILE" ""
     write_state "$CONSECUTIVE_FAILURES_FILE" "0"
     exit 0
+  else
+    rc=$?
+    log "attempt $attempt failed rc=$rc"
   fi
 
-  rc=$?
-  log "attempt $attempt failed rc=$rc"
   if (( attempt < max_attempts )); then
     log "sleeping ${SCHEDULER_RETRY_DELAY_SECONDS}s before retry"
     sleep "$SCHEDULER_RETRY_DELAY_SECONDS"

@@ -1,14 +1,16 @@
 # spain-news-bias-scraper
 
-Repo root is now the operator surface.
+Repo root is the operator surface.
 
 ## Quick start
 
+The authoritative workflow is `uv`-managed from repo root.
+
 ```bash
-make preflight
+uv sync
+uv run ruff check runs/20260314-1212-8ff9/src runs/20260314-1212-8ff9/tests scripts
 make test
 make smoke SOURCE=elpais
-make run-all DATE=$(date +%F)
 ```
 
 For persistent runs / API against any Postgres:
@@ -35,7 +37,7 @@ Default local dev connection string:
 
 ```bash
 make db-url
-# prints: postgresql://spain_news:spain_news_dev@127.0.0.1:5432/spain_news_bias
+# prints: postgresql://spain_news:spain_news_dev@127.0.0.1:5433/spain_news_bias
 ```
 
 If you want different local dev values, edit `.env` before `make db-up`.
@@ -100,3 +102,8 @@ Override manually if needed:
 ```bash
 make preflight APP_ROOT=runs/20260314-1212-8ff9
 ```
+
+## Notes
+
+- `make` now expects `uv` to exist; it no longer relies on host-global Python packages.
+- `.env` is optional and only meant for boring local overrides like `LOCAL_DB_*` or `DATABASE_URL`.

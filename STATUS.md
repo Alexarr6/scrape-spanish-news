@@ -1,6 +1,6 @@
 - State: IMPLEMENTED
-- Current phase: root operator surface + scheduler wrapper added
-- Last update: 2026-03-15 16:45 UTC
+- Current phase: uv-managed root operator surface + scheduler wrapper repaired
+- Last update: 2026-03-15 17:33 UTC
 
 ## Progress log
 - [x] reviewed project brief / contract / plan template
