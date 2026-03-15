@@ -24,6 +24,7 @@ make check
 - `ArticleCRUD.ingest_many()` is now atomic per batch: rows are flushed during the batch and committed once at the end.
 - If any SQLAlchemy persistence error is raised during batch ingest, the whole batch is rolled back and the response reports `rolled_back: true` with zero persisted insert/update counters.
 - Route coverage now includes 200 / 404 / 422 behavior with dependency overrides against an isolated SQLAlchemy test session.
+- `article_text` and `tags` are persisted end-to-end, but they only populate if the source article page exposes them. The scraper now reads `articleBody` from JSON-LD for full text and prefers explicit `article:tag` metadata, falling back to `news_keywords`/`keywords` when present. If a page exposes none of those, the fields remain empty by design.
 
 If you want the hooks installed locally:
 

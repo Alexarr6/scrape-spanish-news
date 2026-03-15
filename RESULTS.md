@@ -14,6 +14,7 @@ La raíz del repo quedó como única estructura canónica. `src/`, `tests/`, scr
 - `pyproject.toml` actualizado para describir la app real, añadir `psycopg[binary]` y ahora también `httpx` en dev para tests de FastAPI.
 - `src/persistence/db.py` actualizado para normalizar URLs PostgreSQL hacia `postgresql+psycopg://`.
 - `src/persistence/crud.py` endurecido: `ingest_many()` hace un solo commit por lote, `upsert()` reutiliza flush/refresh sin commits forzados por fila, y el fallo SQLAlchemy en lote provoca rollback total explícito.
+- `src/adapters/rss_adapter.py` ya no deja `article_text` y `tags` vacíos por omisión en todos los casos: ahora extrae `articleBody` desde JSON-LD y tags desde `article:tag` o, si no existe, desde `news_keywords`/`keywords` cuando la página los publica.
 - `src/persistence/contracts.py` amplía `IngestResult` con `rolled_back` para dejar clara la semántica de lote.
 - Añadidos `tests/test_persistence_crud.py` y `tests/test_api_articles.py` con cobertura DB-backed para insert/update/idempotencia/rollback y rutas 200/404/422 con overrides de dependencia.
 - `Makefile` y `scripts/run_scheduled.sh` simplificados para usar la raíz como único app root.

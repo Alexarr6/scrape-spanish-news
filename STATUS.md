@@ -1,6 +1,6 @@
 - State: CLEANUP_DONE
-- Current phase: surgical scheduler bugfix applied; `verify-output` no longer expands `source_2026`-style bogus variables and scheduler failures now propagate honestly through retries/status
-- Last update: 2026-03-15 21:48 UTC
+- Current phase: article metadata diagnosis complete; `article_text` now comes from JSON-LD `articleBody` when present and `tags` now come from page metadata (`article:tag` first, then `news_keywords`/`keywords`)
+- Last update: 2026-03-15 22:30 UTC
 
 ## Phase 2 outcome
 - `src/persistence/crud.py` no longer commits row-by-row during `ingest_many()`; rows are flushed as needed and committed once per batch.
@@ -20,6 +20,11 @@ make test
 - Fixed `make verify-output` shell expansion so file paths use `$${source}` instead of accidentally interpolating names like `source_2026` under `set -u`.
 - Fixed `scripts/run_scheduled.sh` so every stage in `run_attempt()` has explicit `|| return $?`; this avoids Bash's annoying `set -e` suppression when a function is executed inside an `if` condition.
 - Result: failed verification now makes the attempt fail, increments scheduler failure state after retries, and prevents bogus `scheduler success` log lines.
+
+## Article metadata diagnosis outcome
+- Root cause: persistence/DB were fine; extraction was the dumb part. `Article`, export, CRUD and ORM already carried `article_text` and `tags` end-to-end, but `GenericRSSAdapter.normalize()` never populated either field, so they defaulted to `""` and were stored as empty strings.
+- `article_text` should now populate when an article page exposes `articleBody` inside JSON-LD (confirmed on sampled live article pages from EL PAÍS, El Mundo, elDiario.es, La Vanguardia and 20minutos).
+- `tags` should now populate when the page exposes repeated `article:tag` metadata or keyword metadata (`news_keywords` / `keywords`). If a source page exposes none of those, `tags` still remain empty on purpose; no fake inference was added.
 
 ## Remaining follow-up
 1. Re-run `uv run pre-commit run --all-files` and commit the resulting formatting so `make check` is genuinely green from a clean working tree.
