@@ -19,6 +19,12 @@ Canonical local gate:
 make check
 ```
 
+## Persistence/API behavior notes
+
+- `ArticleCRUD.ingest_many()` is now atomic per batch: rows are flushed during the batch and committed once at the end.
+- If any SQLAlchemy persistence error is raised during batch ingest, the whole batch is rolled back and the response reports `rolled_back: true` with zero persisted insert/update counters.
+- Route coverage now includes 200 / 404 / 422 behavior with dependency overrides against an isolated SQLAlchemy test session.
+
 If you want the hooks installed locally:
 
 ```bash
