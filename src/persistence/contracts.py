@@ -49,3 +49,4 @@ class IngestResult(BaseModel):
     updated: int = 0
     unchanged: int = 0
     errors: int = 0
+    rolled_back: bool = False

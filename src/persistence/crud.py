@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from sqlalchemy import Select, select
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
 from src.persistence.contracts import ArticleCreate, ArticleRead, ArticleUpdate, IngestResult
@@ -12,6 +13,12 @@ class ArticleCRUD:
 
     def __init__(self, session: Session) -> None:
         self.session = session
+
+    def _finalize_row(self, row: ArticleORM, *, commit: bool) -> None:
+        self.session.flush()
+        if commit:
+            self.session.commit()
+        self.session.refresh(row)
 
     def list(self, limit: int = 100, offset: int = 0) -> list[ArticleRead]:
         stmt: Select[tuple[ArticleORM]] = (
@@ -26,7 +33,7 @@ class ArticleCRUD:
             return None
         return ArticleRead.model_validate(row)
 
-    def upsert(self, payload: ArticleCreate) -> tuple[ArticleRead, str]:
+    def upsert(self, payload: ArticleCreate, *, commit: bool = True) -> tuple[ArticleRead, str]:
         existing = self.session.execute(
             select(ArticleORM).where(
                 ArticleORM.source == payload.source,
@@ -34,11 +41,13 @@ class ArticleCRUD:
             )
         ).scalar_one_or_none()
 
+        payload_data = payload.model_dump(mode="python")
+        payload_data["url"] = str(payload_data["url"])
+
         if existing is None:
-            row = ArticleORM(**payload.model_dump(mode="json"))
+            row = ArticleORM(**payload_data)
             self.session.add(row)
-            self.session.commit()
-            self.session.refresh(row)
+            self._finalize_row(row, commit=commit)
             return ArticleRead.model_validate(row), "inserted"
 
         mutable_fields = (
@@ -52,7 +61,6 @@ class ArticleCRUD:
             "tags",
         )
         changed = False
-        payload_data = payload.model_dump(mode="json")
         for field in mutable_fields:
             new_value = payload_data[field]
             if getattr(existing, field) != new_value:
@@ -62,8 +70,7 @@ class ArticleCRUD:
         if not changed:
             return ArticleRead.model_validate(existing), "unchanged"
 
-        self.session.commit()
-        self.session.refresh(existing)
+        self._finalize_row(existing, commit=commit)
         return ArticleRead.model_validate(existing), "updated"
 
     def update(self, article_id: int, payload: ArticleUpdate) -> ArticleRead | None:
@@ -88,16 +95,20 @@ class ArticleCRUD:
 
     def ingest_many(self, rows: list[ArticleCreate]) -> IngestResult:
         result = IngestResult()
-        for row in rows:
-            try:
-                _, status = self.upsert(row)
+        if not rows:
+            return result
+
+        try:
+            for row in rows:
+                _, status = self.upsert(row, commit=False)
                 if status == "inserted":
                     result.inserted += 1
                 elif status == "updated":
                     result.updated += 1
                 else:
                     result.unchanged += 1
-            except Exception:
-                self.session.rollback()
-                result.errors += 1
-        return result
+            self.session.commit()
+            return result
+        except SQLAlchemyError:
+            self.session.rollback()
+            return IngestResult(errors=len(rows), rolled_back=True)
