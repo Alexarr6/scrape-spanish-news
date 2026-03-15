@@ -1,22 +1,28 @@
 # spain-news-bias-scraper
 
-Repo root is the operator surface.
+Repo root is the canonical app root now. `runs/` is archive/history only.
 
 ## Quick start
 
 The authoritative workflow is `uv`-managed from repo root.
 
 ```bash
-uv sync
-uv run ruff check runs/20260314-1212-8ff9/src runs/20260314-1212-8ff9/tests scripts
+make sync
+make preflight
 make test
 make smoke SOURCE=elpais
+```
+
+Direct lint path:
+
+```bash
+~/.local/bin/uv run ruff check src tests scripts
 ```
 
 For persistent runs / API against any Postgres:
 
 ```bash
-export DATABASE_URL='postgresql://user:pass@host:5432/dbname'
+export DATABASE_URL='postgresql+psycopg://user:pass@host:5432/dbname'
 make run-all-persist DATE=$(date +%F)
 make api
 ```
@@ -37,7 +43,7 @@ Default local dev connection string:
 
 ```bash
 make db-url
-# prints: postgresql://spain_news:spain_news_dev@127.0.0.1:5433/spain_news_bias
+# prints: postgresql+psycopg://spain_news:spain_news_dev@127.0.0.1:5433/spain_news_bias
 ```
 
 If you want different local dev values, edit `.env` before `make db-up`.
@@ -86,24 +92,11 @@ Recommended cron pattern (Madrid time, 4 runs/day):
 
 ```cron
 CRON_TZ=Europe/Madrid
-15 7,12,17,22 * * * cd /home/node/.openclaw/workspace/repos/spain-news-bias-scraper && DATABASE_URL='***external-or-local***' bash scripts/run_scheduled.sh
-```
-
-## Runtime detection
-
-This repo intentionally treats `runs/` as legacy/history.
-The root Makefile and scheduler detect the best available runnable app root like this:
-
-1. repo root, if `src/main.py` exists there in the future
-2. otherwise the newest `runs/*` directory that contains `src/main.py`
-
-Override manually if needed:
-
-```bash
-make preflight APP_ROOT=runs/20260314-1212-8ff9
+15 7,12,17,22 * * * cd /home/node/.openclaw/workspace/repos/spain-news-bias-scraper && DATABASE_URL='postgresql+psycopg://***external-or-local***' bash scripts/run_scheduled.sh
 ```
 
 ## Notes
 
-- `make` now expects `uv` to exist; it no longer relies on host-global Python packages.
+- `make` uses the root uv workflow and falls back to `~/.local/bin/uv` if `uv` is not already on `PATH`.
 - `.env` is optional and only meant for boring local overrides like `LOCAL_DB_*` or `DATABASE_URL`.
+- Historical evidence-based fixtures still live under `runs/20260314-1212-8ff9/`; runtime code does not.

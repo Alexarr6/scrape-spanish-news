@@ -1,27 +1,20 @@
-- State: IMPLEMENTED
-- Current phase: uv-managed root operator surface + scheduler wrapper repaired
-- Last update: 2026-03-15 17:33 UTC
+- State: IMPLEMENTATION_DONE
+- Current phase: canonical app promoted to repo root; runtime no longer depends on `runs/`
+- Last update: 2026-03-15 17:55 UTC
 
 ## Progress log
-- [x] reviewed project brief / contract / plan template
-- [x] reviewed current repo structure and runnable historical app roots
-- [x] added root `Makefile` as canonical operator surface
-- [x] added runtime detection bridge so root ops can prefer future root code and fall back to runnable legacy `runs/*`
-- [x] added `scripts/run_scheduled.sh` with lock, retry, logs, and state files under root `var/`
-- [x] documented root-first operation and cron usage
-- [x] added optional local Postgres Docker Compose path at repo root
-- [x] added root Makefile targets for local DB lifecycle and connectivity checks
-- [x] documented exact local persistence and scheduler verification steps
+- [x] promoted canonical `src/` and `tests/` from `runs/20260314-1212-8ff9/` into repo root
+- [x] promoted required support assets to root (`docs/contracts/comparison_summary.schema.json`, `scripts/generate_comparison_summary.py`)
+- [x] updated root `pyproject.toml` to describe the real app and use `psycopg[binary]`
+- [x] normalized Postgres URL handling to prefer `postgresql+psycopg://`
+- [x] simplified `Makefile`, `scripts/detect_app_root.sh`, and `scripts/run_scheduled.sh` to treat repo root as canonical
+- [x] kept `runs/` intact as archive/evidence only
 
-## Blockers
-- the actual scraper code still lives under a historical run directory today; ops now bridge to it instead of pretending root is already promoted
-- persistent runs and API still require a real `DATABASE_URL` (external or the optional local Compose DB)
-- this host may not have Docker/Compose available; the local DB path is implemented anyway, but runtime verification depends on the host tooling
+## Current outcome
+- Repo root is now a normal Python project layout with authoritative `src/` and `tests/`.
+- Scheduler and operator commands execute against root, not against `runs/...` discovery.
+- Archived run artifacts are still available for evidence-based contract tests, but they are no longer on the runtime path.
 
-## Next steps
-- run `make preflight`
-- run `make test`
-- optional local DB path: `cp .env.example .env && make db-up && make db-check`
-- export `DATABASE_URL="$(make --no-print-directory db-url)"` and run `make run-source-persist SOURCE=elpais`
-- run `make scheduler-once && make verify-db && make status`
-- install cron outside git if the human wants the proposed schedule
+## Remaining blockers / caveats
+- Validation still depends on host capabilities: `uv`, outbound scraping network access, and Docker Compose for the optional local Postgres path.
+- Evidence-based tests intentionally still read fixture artifacts from `runs/20260314-1212-8ff9/`.

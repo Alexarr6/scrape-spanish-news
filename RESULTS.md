@@ -2,30 +2,23 @@
 
 ## Resumen de entrega
 
-Se dejó la raíz del repo como superficie operativa canónica con workflow gestionado por `uv`: `pyproject.toml` real, `ruff` configurado, `Makefile` usando `uv run`, detección automática del app runnable y un scheduler shell simple con `flock`, retry, logs y estado en `var/`.
+Se promovió la app canónica desde `runs/20260314-1212-8ff9/` a la raíz del repo. La raíz ya contiene `src/`, `tests/` y los assets mínimos necesarios para operar y testear. `runs/` queda como archivo/evidencia, no como dependencia de runtime.
 
 ## Cambios realizados
-- `pyproject.toml` en raíz con dependencias runtime/dev reales y configuración canónica de `ruff`.
-- `.python-version` para fijar el runtime esperado.
-- `Makefile` en raíz con targets de sync, preflight, lint, test, smoke, run manual, persistencia, API, scheduler y verificaciones, todo vía `uv`.
-- nuevos targets opcionales de DB local: `db-url`, `db-up`, `db-down`, `db-logs`, `db-psql`, `db-check`.
-- `compose.yaml` con un Postgres local mínimo para pruebas de persistencia end-to-end.
-- `.env.example` con valores aburridos de desarrollo local, sin secretos reales.
-- `scripts/detect_app_root.sh` para preferir una futura app en raíz y, mientras tanto, caer al mejor `runs/*` runnable sin convertirlo en arquitectura oficial.
-- `scripts/run_scheduled.sh` como entrypoint único para cron/systemd.
-- `.gitignore` para ignorar `var/` runtime state.
-- `README.md` y `STATUS.md` actualizados con el flujo root-first y la verificación local con Postgres.
+- `src/` promovido a raíz como código canónico.
+- `tests/` promovido a raíz como suite canónica.
+- `docs/contracts/comparison_summary.schema.json` promovido a raíz.
+- `scripts/generate_comparison_summary.py` promovido a `scripts/`.
+- `pyproject.toml` actualizado para describir la app real y añadir `psycopg[binary]`.
+- `src/persistence/db.py` actualizado para normalizar URLs PostgreSQL hacia `postgresql+psycopg://`.
+- `Makefile`, `scripts/detect_app_root.sh` y `scripts/run_scheduled.sh` simplificados para usar la raíz como único app root.
+- `README.md`, `.gitignore` y `STATUS.md` actualizados al flujo root-first real.
+- tests de evidencia adaptados para leer fixtures archivados desde `runs/20260314-1212-8ff9/` sin reintroducir dependencia de runtime.
 
-## Evidencias de verificación
-- validación estática del `Makefile` y documentación completada.
-- la verificación runtime de `db-up`/`db-check`/`scheduler-once` depende de que este host tenga Docker Compose y de aceptar tráfico saliente del scraper; si no, quedan documentados los comandos exactos para que el humano lo ejecute.
+## Validación intentada
+- Pendiente ejecutar la batería completa en este host tras regenerar `uv.lock` con `uv sync`.
+- El path de DB local sigue dependiendo de Docker Compose disponible en host.
 
-## Pendientes / limitaciones
-- El código runnable real todavía vive bajo `runs/...`; esto ahora está encapsulado por detección, no resuelto por refactor.
-- `DATABASE_URL` sigue siendo obligatorio para `run-all-persist`, `api` y scheduler productivo.
-
-## Recomendaciones siguientes
-- Ejecutar `make preflight && make test`.
-- Probar `make smoke SOURCE=elpais`.
-- Con `DATABASE_URL`, probar `make scheduler-dry-run && make scheduler-once`.
-- Si todo va fino, instalar cron fuera del repo.
+## Caveats
+- Los tests de contratos/evidencia siguen leyendo artefactos archivados de `runs/20260314-1212-8ff9/`; eso es intencional y ya no afecta al runtime.
+- No se borró ni reescribió historia bajo `runs/`.

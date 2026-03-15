@@ -7,8 +7,8 @@ export
 endif
 
 REPO_ROOT := $(CURDIR)
-APP_ROOT ?= $(shell bash scripts/detect_app_root.sh)
-UV ?= uv
+APP_ROOT := $(REPO_ROOT)
+UV ?= $(or $(shell command -v uv 2>/dev/null),$(HOME)/.local/bin/uv)
 UV_RUN := $(UV) run --project $(REPO_ROOT)
 RUFF := $(UV_RUN) ruff
 PYTHON := $(UV_RUN) python
@@ -33,24 +33,24 @@ LOCAL_DB_PORT ?= 5433
 LOCAL_DB_NAME ?= spain_news_bias
 LOCAL_DB_USER ?= spain_news
 LOCAL_DB_PASSWORD ?= spain_news_dev
-LOCAL_DATABASE_URL := postgresql://$(LOCAL_DB_USER):$(LOCAL_DB_PASSWORD)@$(LOCAL_DB_HOST):$(LOCAL_DB_PORT)/$(LOCAL_DB_NAME)
+LOCAL_DATABASE_URL := postgresql+psycopg://$(LOCAL_DB_USER):$(LOCAL_DB_PASSWORD)@$(LOCAL_DB_HOST):$(LOCAL_DB_PORT)/$(LOCAL_DB_NAME)
 
 .PHONY: help print-app-root preflight sync lint test smoke run-source run-source-persist run-all run-all-persist api scheduler-once scheduler-dry-run status tail-log verify-output verify-db db-url db-up db-down db-logs db-psql db-check clean-state
 
 help:
 	@printf '%s\n' \
-	  'Root operator surface for spain-news-bias-scraper' \
+	  'Root app + operator surface for spain-news-bias-scraper' \
 	  '' \
 	  'Bootstrap:' \
 	  '  make sync                     Create/update the uv-managed environment' \
-	  '  make preflight                Check uv/runtime/app-root wiring' \
+	  '  make preflight                Check uv/runtime wiring' \
 	  '  make lint                     Run ruff using the managed environment' \
-	  '  make test                     Run tests from detected app root' \
+	  '  make test                     Run tests from repo root' \
 	  '' \
 	  'Runtime:' \
 	  '  make smoke SOURCE=elpais      Quick non-persistent scrape' \
 	  '  make run-source SOURCE=...    Run one source for DATE=$(DATE)' \
-	  '  make run-source-persist SOURCE=... DATABASE_URL=postgresql://...' \
+	  '  make run-source-persist SOURCE=... DATABASE_URL=postgresql+psycopg://...' \
 	  '  make run-all                  Run all sources sequentially without persistence' \
 	  '  make run-all-persist          Run all sources sequentially with persistence' \
 	  '  make api DATABASE_URL=...     Run FastAPI app via uvicorn' \
@@ -61,7 +61,7 @@ help:
 	  '  make status                   Show scheduler state files' \
 	  '  make tail-log                 Tail scheduler log' \
 	  '  make verify-output            Check expected JSON/metrics files for DATE' \
-	  '  make verify-db DATABASE_URL=postgresql://...  Check article row count' \
+	  '  make verify-db DATABASE_URL=postgresql+psycopg://...  Check article row count' \
 	  '' \
 	  'Optional local DB:' \
 	  '  make db-url                   Print the local dev DATABASE_URL' \
@@ -72,9 +72,9 @@ help:
 	  '  make db-check                 Wait for local Postgres readiness' \
 	  '' \
 	  'Notes:' \
-	  '  - Repo root is the operator surface.' \
+	  '  - Repo root is the canonical app root.' \
 	  '  - The authoritative Python workflow is uv sync + uv run ...' \
-	  '  - The runnable app root is auto-detected; override with APP_ROOT=... if needed.'
+	  '  - Historical runs/ remain archive/evidence only.'
 
 print-app-root:
 	@printf '%s\n' "$(APP_ROOT)"
@@ -84,20 +84,18 @@ sync:
 
 preflight:
 	@set -euo pipefail; \
-	mkdir -p "$(LOCK_DIR)" "$(LOG_DIR)" "$(STATE_DIR)"; \
-	printf 'repo_root=%s\n' "$(REPO_ROOT)"; \
+	mkdir -p "$(LOCK_DIR)" "$(LOG_DIR)" "$(STATE_DIR)" "data"; \
 	printf 'app_root=%s\n' "$(APP_ROOT)"; \
 	command -v "$(UV)" >/dev/null || { echo 'uv missing'; exit 1; }; \
 	command -v flock >/dev/null || { echo 'flock missing'; exit 1; }; \
-	[[ -d "$(APP_ROOT)" ]] || { echo 'app root missing'; exit 1; }; \
-	[[ -f "$(APP_ROOT)/src/main.py" ]] || { echo 'src/main.py missing under app root'; exit 1; }; \
+	[[ -f "$(APP_ROOT)/src/main.py" ]] || { echo 'src/main.py missing under repo root'; exit 1; }; \
 	if [[ -z "$(DATABASE_URL)" ]]; then echo 'warning: DATABASE_URL not set; persist/api targets will fail until you provide it'; fi; \
 	if ! command -v docker >/dev/null 2>&1; then echo 'warning: docker not found; host-based mode is the intended default'; fi; \
 	PYTHONPATH="$(APP_ROOT):$${PYTHONPATH:-}" $(PYTHON) -m src.main --help >/dev/null; \
 	echo 'python entrypoint ok'
 
 lint: preflight
-	@PYTHONPATH="$(APP_ROOT):$${PYTHONPATH:-}" $(RUFF) check runs/20260314-1212-8ff9/src runs/20260314-1212-8ff9/tests scripts
+	@PYTHONPATH="$(APP_ROOT):$${PYTHONPATH:-}" $(RUFF) check src tests scripts
 
 test: preflight
 	@cd "$(APP_ROOT)" && \
@@ -140,10 +138,10 @@ api: preflight
 	@cd "$(APP_ROOT)" && PYTHONPATH="$(APP_ROOT):$${PYTHONPATH:-}" $(PYTHON) -m uvicorn src.api.app:create_app --factory --host "$(API_HOST)" --port "$(API_PORT)"
 
 scheduler-dry-run:
-	@DRY_RUN=1 APP_ROOT="$(APP_ROOT)" DATABASE_URL="$(DATABASE_URL)" UV="$(UV)" bash "$(SCHEDULER_SCRIPT)"
+	@DRY_RUN=1 DATABASE_URL="$(DATABASE_URL)" UV="$(UV)" bash "$(SCHEDULER_SCRIPT)"
 
 scheduler-once:
-	@APP_ROOT="$(APP_ROOT)" DATABASE_URL="$(DATABASE_URL)" UV="$(UV)" bash "$(SCHEDULER_SCRIPT)"
+	@DATABASE_URL="$(DATABASE_URL)" UV="$(UV)" bash "$(SCHEDULER_SCRIPT)"
 
 status:
 	@set -euo pipefail; \
