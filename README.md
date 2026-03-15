@@ -77,6 +77,8 @@ make verify-db
 
 Scheduled persistent runs remain strict: `DATABASE_URL` must be set.
 
+`scheduler-once` runs one scheduled batch end-to-end: preflight, `run-all-persist`, `verify-output`, and `verify-db` (when `DATABASE_URL` is set). If any verification step fails, the attempt now fails honestly and the wrapper retries/fails instead of reporting a false success.
+
 ```bash
 export DATABASE_URL="$(make --no-print-directory db-url)"
 make scheduler-once

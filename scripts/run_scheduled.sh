@@ -73,14 +73,14 @@ maybe_alert() {
 run_attempt() {
   local attempt="$1"
   log "attempt ${attempt}: preflight"
-  make --no-print-directory -C "$REPO_ROOT" preflight UV="$UV"
+  make --no-print-directory -C "$REPO_ROOT" preflight UV="$UV" || return $?
   log "attempt ${attempt}: run-all-persist date=$DATE_LOCAL"
-  make --no-print-directory -C "$REPO_ROOT" run-all-persist DATE="$DATE_LOCAL" OUT_PREFIX=sched DATABASE_URL="$DATABASE_URL" UV="$UV"
+  make --no-print-directory -C "$REPO_ROOT" run-all-persist DATE="$DATE_LOCAL" OUT_PREFIX=sched DATABASE_URL="$DATABASE_URL" UV="$UV" || return $?
   log "attempt ${attempt}: verify-output date=$DATE_LOCAL"
-  make --no-print-directory -C "$REPO_ROOT" verify-output DATE="$DATE_LOCAL" OUT_PREFIX=sched UV="$UV"
+  make --no-print-directory -C "$REPO_ROOT" verify-output DATE="$DATE_LOCAL" OUT_PREFIX=sched UV="$UV" || return $?
   if [[ -n "${DATABASE_URL:-}" ]]; then
     log "attempt ${attempt}: verify-db"
-    make --no-print-directory -C "$REPO_ROOT" verify-db DATABASE_URL="$DATABASE_URL" UV="$UV"
+    make --no-print-directory -C "$REPO_ROOT" verify-db DATABASE_URL="$DATABASE_URL" UV="$UV" || return $?
   fi
 }
 

@@ -1,6 +1,6 @@
 - State: CLEANUP_DONE
-- Current phase: final archive removal completed; `runs/` deleted, `make check` is clean on first run, Postgres smoke attempted and blocked by missing Docker on host
-- Last update: 2026-03-15 20:41 UTC
+- Current phase: surgical scheduler bugfix applied; `verify-output` no longer expands `source_2026`-style bogus variables and scheduler failures now propagate honestly through retries/status
+- Last update: 2026-03-15 21:48 UTC
 
 ## Phase 2 outcome
 - `src/persistence/crud.py` no longer commits row-by-row during `ingest_many()`; rows are flushed as needed and committed once per batch.
@@ -16,7 +16,11 @@ make check
 make test
 ```
 
+## Scheduler bugfix outcome
+- Fixed `make verify-output` shell expansion so file paths use `$${source}` instead of accidentally interpolating names like `source_2026` under `set -u`.
+- Fixed `scripts/run_scheduled.sh` so every stage in `run_attempt()` has explicit `|| return $?`; this avoids Bash's annoying `set -e` suppression when a function is executed inside an `if` condition.
+- Result: failed verification now makes the attempt fail, increments scheduler failure state after retries, and prevents bogus `scheduler success` log lines.
+
 ## Remaining follow-up
 1. Re-run `uv run pre-commit run --all-files` and commit the resulting formatting so `make check` is genuinely green from a clean working tree.
 2. Add a small Postgres-backed smoke/integration verification path (documented local target or CI step) beyond the SQLite-backed tests.
-3. Final archive removal is in progress in this cleanup pass; no active code/tests should depend on historical run paths when done.

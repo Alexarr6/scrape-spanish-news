@@ -166,8 +166,8 @@ verify-output: preflight
 	missing=0; \
 	if [[ -n "$(SOURCE)" ]]; then sources="$(SOURCE)"; else sources="$(SOURCES)"; fi; \
 	for source in $$sources; do \
-	  data_file="$(APP_ROOT)/data/$(OUT_PREFIX)_$$source_$(DATE).json"; \
-	  metrics_file="$(APP_ROOT)/logs/$(OUT_PREFIX)_$$source_$(DATE)_metrics.json"; \
+	  data_file="$(APP_ROOT)/data/$(OUT_PREFIX)_$${source}_$(DATE).json"; \
+	  metrics_file="$(APP_ROOT)/logs/$(OUT_PREFIX)_$${source}_$(DATE)_metrics.json"; \
 	  [[ -f "$$data_file" ]] || { echo "missing $$data_file"; missing=1; }; \
 	  [[ -f "$$metrics_file" ]] || { echo "missing $$metrics_file"; missing=1; }; \
 	done; \
