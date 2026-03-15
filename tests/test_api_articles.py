@@ -60,7 +60,6 @@ def _build_client() -> TestClient:
     return TestClient(app)
 
 
-
 def test_article_routes_return_200_404_and_close_sessions():
     TrackingSession.closed_sessions = []
     client = _build_client()
@@ -76,7 +75,6 @@ def test_article_routes_return_200_404_and_close_sessions():
     assert missing.status_code == 404
     assert missing.json() == {"detail": "Article not found"}
     assert len(TrackingSession.closed_sessions) == 3
-
 
 
 def test_article_routes_return_422_for_invalid_payload_and_params():

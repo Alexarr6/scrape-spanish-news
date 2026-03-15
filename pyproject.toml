@@ -31,9 +31,6 @@ extend-exclude = [
   ".venv",
   "data",
   "var",
-  "runs/*/.venv",
-  "runs/*/data",
-  "runs/*/logs",
   "**/__pycache__",
 ]
 

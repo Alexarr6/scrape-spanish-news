@@ -1,6 +1,6 @@
 # spain-news-bias-scraper
 
-Repo root is the canonical app root now. `runs/` is archive/history only.
+Repo root is the canonical app root. Historical `runs/` baggage is gone.
 
 ## Quick start
 
@@ -111,5 +111,6 @@ CRON_TZ=Europe/Madrid
 
 - `make` uses the root uv workflow and falls back to `~/.local/bin/uv` if `uv` is not already on `PATH`.
 - `.env` is optional and only meant for boring local overrides like `LOCAL_DB_*` or `DATABASE_URL`.
-- Runtime code does not depend on `runs/` anymore. The active evidence fixtures used by contract tests now live under `tests/fixtures/evidence/20260314-1212-8ff9/`.
+- Runtime code and tests do not depend on `runs/` anymore. The active evidence fixtures used by contract tests live under `tests/fixtures/evidence/20260314-1212-8ff9/`.
 - `scripts/detect_app_root.sh` was removed; repo root is the only supported app root.
+- `make check` is expected to pass cleanly on the first run from a fresh `make sync` state without mutating tracked files.

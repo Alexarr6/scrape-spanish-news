@@ -4,9 +4,7 @@
 .venv/
 __pycache__/
 *.pyc
-runs/**/__pycache__/
-runs/**/*.pyc
-runs/**/.venv/
 var/
 data/
 logs/*.json
+logs/*.log

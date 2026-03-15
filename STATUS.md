@@ -1,6 +1,6 @@
-- State: PHASE_2_TRANSACTIONS_AND_API_TESTS_DONE
-- Current phase: persistence transaction semantics are explicit, DB-backed CRUD tests exist, and FastAPI article routes have meaningful coverage
-- Last update: 2026-03-15 18:33 UTC
+- State: CLEANUP_DONE
+- Current phase: final archive removal completed; `runs/` deleted, `make check` is clean on first run, Postgres smoke attempted and blocked by missing Docker on host
+- Last update: 2026-03-15 20:41 UTC
 
 ## Phase 2 outcome
 - `src/persistence/crud.py` no longer commits row-by-row during `ingest_many()`; rows are flushed as needed and committed once per batch.
@@ -17,5 +17,6 @@ make test
 ```
 
 ## Remaining follow-up
-1. If desired later, add a Postgres-backed integration path in CI or a documented local DB smoke target beyond the SQLite-backed unit/integration tests.
-2. Continue archive pruning under `runs/` separately from this focused persistence/API pass.
+1. Re-run `uv run pre-commit run --all-files` and commit the resulting formatting so `make check` is genuinely green from a clean working tree.
+2. Add a small Postgres-backed smoke/integration verification path (documented local target or CI step) beyond the SQLite-backed tests.
+3. Final archive removal is in progress in this cleanup pass; no active code/tests should depend on historical run paths when done.

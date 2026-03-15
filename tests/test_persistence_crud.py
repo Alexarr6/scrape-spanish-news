@@ -23,7 +23,9 @@ class FlushExplodesOnce(Session):
         return super().flush(*args, **kwargs)
 
 
-def _payload(*, title: str = "Title", source: str = "elpais", url: str = "https://elpais.com/a") -> ArticleCreate:
+def _payload(
+    *, title: str = "Title", source: str = "elpais", url: str = "https://elpais.com/a"
+) -> ArticleCreate:
     now = datetime(2026, 3, 15, 12, 0)
     return ArticleCreate(
         source=source,
@@ -56,7 +58,6 @@ def test_upsert_inserts_new_article():
     assert session.scalar(select(ArticleORM.id).where(ArticleORM.source == "elpais")) == article.id
 
 
-
 def test_upsert_updates_existing_article():
     session = _session()
     crud = ArticleCRUD(session)
@@ -72,7 +73,6 @@ def test_upsert_updates_existing_article():
     assert row.title == "Updated title"
 
 
-
 def test_upsert_is_idempotent_when_payload_is_unchanged():
     session = _session()
     crud = ArticleCRUD(session)
@@ -83,7 +83,6 @@ def test_upsert_is_idempotent_when_payload_is_unchanged():
     assert status == "unchanged"
     assert repeated.id == original.id
     assert session.query(ArticleORM).count() == 1
-
 
 
 def test_ingest_many_rolls_back_entire_batch_on_failure():
@@ -97,22 +96,43 @@ def test_ingest_many_rolls_back_entire_batch_on_failure():
         ]
     )
 
-    assert result.model_dump() == {"inserted": 0, "updated": 0, "unchanged": 0, "errors": 2, "rolled_back": True}
+    assert result.model_dump() == {
+        "inserted": 0,
+        "updated": 0,
+        "unchanged": 0,
+        "errors": 2,
+        "rolled_back": True,
+    }
     assert session.query(ArticleORM).count() == 0
-
 
 
 def test_ingest_many_tracks_insert_update_and_unchanged_without_row_by_row_commits():
     session = _session()
     crud = ArticleCRUD(session)
 
-    initial = crud.ingest_many([_payload(url="https://elpais.com/a"), _payload(url="https://elpais.com/b")])
-    follow_up = crud.ingest_many([
-        _payload(url="https://elpais.com/a", title="Title updated"),
-        _payload(url="https://elpais.com/b"),
-    ])
+    initial = crud.ingest_many(
+        [_payload(url="https://elpais.com/a"), _payload(url="https://elpais.com/b")]
+    )
+    follow_up = crud.ingest_many(
+        [
+            _payload(url="https://elpais.com/a", title="Title updated"),
+            _payload(url="https://elpais.com/b"),
+        ]
+    )
 
-    assert initial.model_dump() == {"inserted": 2, "updated": 0, "unchanged": 0, "errors": 0, "rolled_back": False}
-    assert follow_up.model_dump() == {"inserted": 0, "updated": 1, "unchanged": 1, "errors": 0, "rolled_back": False}
+    assert initial.model_dump() == {
+        "inserted": 2,
+        "updated": 0,
+        "unchanged": 0,
+        "errors": 0,
+        "rolled_back": False,
+    }
+    assert follow_up.model_dump() == {
+        "inserted": 0,
+        "updated": 1,
+        "unchanged": 1,
+        "errors": 0,
+        "rolled_back": False,
+    }
     rows = session.execute(select(ArticleORM).order_by(ArticleORM.url)).scalars().all()
     assert [row.title for row in rows] == ["Title updated", "Title"]

@@ -2,7 +2,7 @@
 
 ## Resumen de entrega
 
-Se promovió la app canónica desde `runs/20260314-1212-8ff9/` a la raíz del repo. La raíz ya contiene `src/`, `tests/` y los assets mínimos necesarios para operar y testear. `runs/` queda como archivo/evidencia, no como dependencia de runtime.
+La raíz del repo quedó como única estructura canónica. `src/`, `tests/`, scripts y fixtures viven en ubicaciones estables y `runs/` fue eliminado por completo después de mover lo útil a `tests/fixtures/evidence/20260314-1212-8ff9/`.
 
 ## Cambios realizados
 - `src/` promovido a raíz como código canónico.
@@ -16,9 +16,10 @@ Se promovió la app canónica desde `runs/20260314-1212-8ff9/` a la raíz del re
 - Añadidos `tests/test_persistence_crud.py` y `tests/test_api_articles.py` con cobertura DB-backed para insert/update/idempotencia/rollback y rutas 200/404/422 con overrides de dependencia.
 - `Makefile` y `scripts/run_scheduled.sh` simplificados para usar la raíz como único app root.
 - `README.md`, `.gitignore` y `STATUS.md` actualizados al flujo root-first real y a la nueva semántica de persistencia.
-- tests de evidencia adaptados para leer fixtures promovidos a `tests/fixtures/evidence/20260314-1212-8ff9/`, sin depender del árbol archivado completo.
+- tests de evidencia adaptados para leer fixtures promovidos a `tests/fixtures/evidence/20260314-1212-8ff9/`, sin depender de un árbol archivado vivo.
+- `tests/test_export_article_text.py` ya no escribe salidas temporales dentro de `runs/...`; usa un directorio temporal aislado.
 - Se añadió `pre-commit` con solo hooks de Ruff (`ruff-check`, `ruff-format`) y un `make check` canónico para el gate local.
-- Se eliminó el shim legado `scripts/detect_app_root.sh` y se limpiaron caches/artefactos obvios del repo.
+- Se eliminó el shim legado `scripts/detect_app_root.sh`, se limpiaron caches/artefactos obvios del repo y se borró `runs/` tras retirar sus últimas dependencias.
 
 ## Validación intentada
 - `PYTHONPATH=. .venv/bin/python -m pytest -q tests/test_persistence_crud.py tests/test_api_articles.py` ✅
@@ -28,5 +29,5 @@ Se promovió la app canónica desde `runs/20260314-1212-8ff9/` a la raíz del re
 
 ## Caveats
 - Los nuevos tests de persistencia/API usan SQLite aislado para estabilidad local; no sustituyen una pasada de integración real contra Postgres.
-- `runs/` sigue siendo archivo/evidencia; los tests ya no dependen de rutas vivas dentro de ese árbol para sus fixtures activas.
-- No se borró ni reescribió historia bajo `runs/`.
+- Los fixtures activos siguen usando el identificador histórico `20260314-1212-8ff9` para trazabilidad, pero ya viven bajo `tests/fixtures/evidence/...`.
+- La validación Postgres local depende de que el host tenga Docker/Compose operativos.

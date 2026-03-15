@@ -77,7 +77,7 @@ help:
 	  'Notes:' \
 	  '  - Repo root is the canonical app root.' \
 	  '  - The authoritative Python workflow is uv sync + uv run ...' \
-	  '  - Historical runs/ remain archive/evidence only.'
+	  '  - Repo root is the only supported app root; tests use fixtures under tests/fixtures/evidence.'
 
 print-app-root:
 	@printf '%s\n' "$(APP_ROOT)"
