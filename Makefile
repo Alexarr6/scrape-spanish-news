@@ -18,8 +18,17 @@ LOG_DIR := $(VAR_ROOT)/log
 STATE_DIR := $(VAR_ROOT)/state
 LEGACY_SITE_PACKAGES := $(firstword $(wildcard $(APP_ROOT)/.venv/lib/python*/site-packages))
 PYTHONPATH_VALUE := $(APP_ROOT)$(if $(LEGACY_SITE_PACKAGES),:$(LEGACY_SITE_PACKAGES))
+COMPOSE_FILE ?= compose.yaml
+DOCKER_COMPOSE := docker compose -f $(COMPOSE_FILE)
+LOCAL_DB_SERVICE ?= postgres
+LOCAL_DB_HOST ?= 127.0.0.1
+LOCAL_DB_PORT ?= 5432
+LOCAL_DB_NAME ?= spain_news_bias
+LOCAL_DB_USER ?= spain_news
+LOCAL_DB_PASSWORD ?= spain_news_dev
+LOCAL_DATABASE_URL := postgresql://$(LOCAL_DB_USER):$(LOCAL_DB_PASSWORD)@$(LOCAL_DB_HOST):$(LOCAL_DB_PORT)/$(LOCAL_DB_NAME)
 
-.PHONY: help print-app-root preflight test smoke run-source run-source-persist run-all run-all-persist api scheduler-once scheduler-dry-run status tail-log verify-output verify-db clean-state
+.PHONY: help print-app-root preflight test smoke run-source run-source-persist run-all run-all-persist api scheduler-once scheduler-dry-run status tail-log verify-output verify-db db-url db-up db-down db-logs db-psql db-check clean-state
 
 help:
 	@printf '%s\n' \
@@ -40,10 +49,17 @@ help:
 	  '  make tail-log                 Tail scheduler log' \
 	  '  make verify-output            Check expected JSON/metrics files for DATE' \
 	  '  make verify-db DATABASE_URL=postgresql://...  Check article row count' \
+	  '  make db-url                   Print the local dev DATABASE_URL' \
+	  '  make db-up                    Start optional local Postgres via Docker Compose' \
+	  '  make db-down                  Stop optional local Postgres' \
+	  '  make db-logs                  Tail local Postgres logs' \
+	  '  make db-psql                  Open psql inside the local Postgres container' \
+	  '  make db-check                 Wait for local Postgres readiness' \
 	  '' \
 	  'Notes:' \
 	  '  - Repo root is the operator surface.' \
-	  '  - The runnable app root is auto-detected; override with APP_ROOT=... if needed.'
+	  '  - The runnable app root is auto-detected; override with APP_ROOT=... if needed.' \
+	  '  - Docker is optional; host-based non-persistent runs do not need it.'
 
 print-app-root:
 	@printf '%s\n' "$(APP_ROOT)"
@@ -140,6 +156,49 @@ verify-db: preflight
 	@set -euo pipefail; \
 	[[ -n "$(DATABASE_URL)" ]] || { echo 'DATABASE_URL is required for verify-db'; exit 1; }; \
 	cd "$(APP_ROOT)" && PYTHONPATH="$(PYTHONPATH_VALUE):$${PYTHONPATH:-}" DATABASE_URL="$(DATABASE_URL)" "$(PYTHON)" -c "import os; from sqlalchemy import text; from src.persistence.db import create_postgres_engine, resolve_db_url; engine=create_postgres_engine(resolve_db_url(os.environ['DATABASE_URL'])); conn=engine.connect(); print(f'articles_total={conn.execute(text(\"select count(*) from articles\")).scalar_one()}'); conn.close()"
+
+db-url:
+	@printf '%s\n' "$(LOCAL_DATABASE_URL)"
+
+db-up:
+	@set -euo pipefail; \
+	command -v docker >/dev/null 2>&1 || { echo 'docker is required for db-up'; exit 1; }; \
+	docker compose version >/dev/null 2>&1 || { echo 'docker compose is required for db-up'; exit 1; }; \
+	[[ -f "$(COMPOSE_FILE)" ]] || { echo 'compose file missing: $(COMPOSE_FILE)'; exit 1; }; \
+	$(DOCKER_COMPOSE) up -d $(LOCAL_DB_SERVICE); \
+	echo 'local Postgres start requested'; \
+	$(MAKE) --no-print-directory db-check
+
+db-down:
+	@set -euo pipefail; \
+	command -v docker >/dev/null 2>&1 || { echo 'docker is required for db-down'; exit 1; }; \
+	docker compose version >/dev/null 2>&1 || { echo 'docker compose is required for db-down'; exit 1; }; \
+	[[ -f "$(COMPOSE_FILE)" ]] || { echo 'compose file missing: $(COMPOSE_FILE)'; exit 1; }; \
+	$(DOCKER_COMPOSE) down
+
+db-logs:
+	@set -euo pipefail; \
+	command -v docker >/dev/null 2>&1 || { echo 'docker is required for db-logs'; exit 1; }; \
+	docker compose version >/dev/null 2>&1 || { echo 'docker compose is required for db-logs'; exit 1; }; \
+	[[ -f "$(COMPOSE_FILE)" ]] || { echo 'compose file missing: $(COMPOSE_FILE)'; exit 1; }; \
+	$(DOCKER_COMPOSE) logs -f $(LOCAL_DB_SERVICE)
+
+db-psql:
+	@set -euo pipefail; \
+	command -v docker >/dev/null 2>&1 || { echo 'docker is required for db-psql'; exit 1; }; \
+	docker compose version >/dev/null 2>&1 || { echo 'docker compose is required for db-psql'; exit 1; }; \
+	[[ -f "$(COMPOSE_FILE)" ]] || { echo 'compose file missing: $(COMPOSE_FILE)'; exit 1; }; \
+	$(DOCKER_COMPOSE) exec $(LOCAL_DB_SERVICE) psql -U "$(LOCAL_DB_USER)" -d "$(LOCAL_DB_NAME)"
+
+db-check:
+	@set -euo pipefail; \
+	command -v docker >/dev/null 2>&1 || { echo 'docker is required for db-check'; exit 1; }; \
+	docker compose version >/dev/null 2>&1 || { echo 'docker compose is required for db-check'; exit 1; }; \
+	[[ -f "$(COMPOSE_FILE)" ]] || { echo 'compose file missing: $(COMPOSE_FILE)'; exit 1; }; \
+	container_id="$$($(DOCKER_COMPOSE) ps -q $(LOCAL_DB_SERVICE))"; \
+	[[ -n "$$container_id" ]] || { echo 'local Postgres container is not running; start it with make db-up'; exit 1; }; \
+	docker exec "$$container_id" pg_isready -U "$(LOCAL_DB_USER)" -d "$(LOCAL_DB_NAME)" >/dev/null 2>&1 || { echo 'local Postgres is not ready yet'; exit 1; }; \
+	echo "local Postgres ready at $(LOCAL_DB_HOST):$(LOCAL_DB_PORT) db=$(LOCAL_DB_NAME) user=$(LOCAL_DB_USER)"
 
 clean-state:
 	@mkdir -p "$(STATE_DIR)" "$(LOCK_DIR)"; \
