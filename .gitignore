@@ -12,3 +12,5 @@ AGENTS.md
 RESULTS.md
 STATUS.md
 TODO.md
+frontend/node_modules/
+frontend/dist/

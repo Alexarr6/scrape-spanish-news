@@ -19,6 +19,30 @@ Canonical local gate:
 make check
 ```
 
+## Semantic explorer Phase 0 frontend foundation
+
+The new app foundation lives in `frontend/` as a separate Vite + React + TypeScript workspace.
+
+Development split is intentionally boring:
+
+```bash
+# terminal 1
+export DATABASE_URL='postgresql+psycopg://user:pass@host:5432/dbname'
+make api
+
+# terminal 2
+make frontend-check
+cd frontend && npm run dev
+```
+
+That gives you:
+
+- `http://127.0.0.1:4173` for Vite dev
+- `/api/v1/semantic/explorer/*` from FastAPI as the canonical semantic data surface
+- optional built-app serving at `http://127.0.0.1:8000/explorer` after `make frontend-build`
+
+Phase 0 is foundation only: API contract, app workspace, build wiring, and a minimal deck.gl-backed shell that proves the frontend can load canonical explorer data without shoving browser logic into backend modules.
+
 ## Persistence/API behavior notes
 
 - `ArticleCRUD.ingest_many()` is now atomic per batch: rows are flushed during the batch and committed once at the end.
@@ -39,6 +63,56 @@ export DATABASE_URL='postgresql+psycopg://user:pass@host:5432/dbname'
 make run-all-persist DATE=$(date +%F)
 make api
 ```
+
+## Semantic persistence with pgvector
+
+The semantic workflow is still boring on purpose, but now the durable source of truth is Postgres instead of disposable local files.
+
+### What it does now
+
+- keeps scraped content in `articles`
+- stores OpenAI embeddings in `article_embeddings` via pgvector, with the vector width aligned to the selected embedding model
+- stores derived 2D PCA coordinates in a separate `article_projections` table
+- supports bounded backfill / incremental sync for missing or changed articles
+- supports nearest-neighbor similarity queries in Postgres
+- still exports rebuildable JSON/HTML artifacts under `data/semantic/`
+
+Use the same `--embedding-model` for `semantic-db-init` and `semantic-sync`. `text-embedding-3-small` uses 1536 dims; `text-embedding-3-large` uses 3072. If you switch models against an existing populated semantic table, rebuild or clear semantic embeddings first.
+
+### Required env
+
+```bash
+export DATABASE_URL='postgresql+psycopg://user:pass@host:5432/dbname'
+export OPENAI_API_KEY='sk-...'
+```
+
+### Smoke flow
+
+```bash
+make sync
+make preflight
+make semantic-db-init SEMANTIC_ARGS="--embedding-model text-embedding-3-small"
+make semantic-sync LIMIT=50 SEMANTIC_ARGS="--embedding-model text-embedding-3-small"
+make semantic-project PROJECTION_SET=pca_2d_latest
+make semantic-smoke LIMIT=50
+```
+
+### Direct commands
+
+```bash
+uv run python scripts/init_pgvector.py --db-url "$DATABASE_URL" --embedding-model text-embedding-3-small
+uv run python scripts/semantic_sync.py --db-url "$DATABASE_URL" --limit 50 --embedding-model text-embedding-3-small
+uv run python scripts/semantic_project.py --db-url "$DATABASE_URL" --projection-set pca_2d_latest
+uv run python scripts/semantic_neighbors.py --db-url "$DATABASE_URL" --article-id 123 --limit 5
+uv run python scripts/build_semantic_map.py --db-url "$DATABASE_URL" --projection-set pca_2d_latest --limit 50
+```
+
+Artifacts land in:
+
+- `data/semantic/articles_embeddings_<stamp>.jsonl`
+- `data/semantic/articles_points_<stamp>.json`
+- `data/semantic/semantic_map_<stamp>.html`
+- `logs/semantic_<stamp>_metrics.json`
 
 ## Optional local Postgres for persistence testing
 

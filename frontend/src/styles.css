@@ -1,0 +1,85 @@
+:root {
+  color-scheme: dark;
+  font-family: Inter, system-ui, sans-serif;
+  background: #0b1220;
+  color: #e5eefb;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+}
+
+.app-shell {
+  min-height: 100vh;
+  display: grid;
+  grid-template-columns: 18rem 1fr 22rem;
+  grid-template-rows: auto 1fr;
+  grid-template-areas:
+    'status status status'
+    'filters map inspector';
+}
+
+.status-bar {
+  grid-area: status;
+  display: flex;
+  gap: 0.75rem;
+  align-items: center;
+  padding: 1rem 1.25rem;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.25);
+  background: #111827;
+}
+
+.filter-panel,
+.inspector-panel {
+  padding: 1rem;
+  border-right: 1px solid rgba(148, 163, 184, 0.18);
+  background: #111827;
+}
+
+.filter-panel {
+  grid-area: filters;
+}
+
+.inspector-panel {
+  grid-area: inspector;
+  border-right: 0;
+  border-left: 1px solid rgba(148, 163, 184, 0.18);
+}
+
+.map-panel {
+  grid-area: map;
+  min-height: 0;
+}
+
+.map-canvas {
+  position: relative;
+  height: 100%;
+  min-height: calc(100vh - 65px);
+  background: radial-gradient(circle at top, #1d4ed8, #0b1220 65%);
+}
+
+.map-overlay {
+  position: absolute;
+  top: 1rem;
+  left: 1rem;
+  max-width: 18rem;
+  padding: 0.875rem 1rem;
+  border-radius: 0.75rem;
+  background: rgba(15, 23, 42, 0.84);
+  border: 1px solid rgba(148, 163, 184, 0.25);
+}
+
+.status-chip {
+  padding: 0.2rem 0.55rem;
+  border-radius: 999px;
+  background: rgba(59, 130, 246, 0.18);
+}
+
+.stack ul {
+  margin: 0.25rem 0 0;
+  padding-left: 1.25rem;
+}

@@ -36,7 +36,7 @@ LOCAL_DB_USER ?= spain_news
 LOCAL_DB_PASSWORD ?= spain_news_dev
 LOCAL_DATABASE_URL := postgresql+psycopg://$(LOCAL_DB_USER):$(LOCAL_DB_PASSWORD)@$(LOCAL_DB_HOST):$(LOCAL_DB_PORT)/$(LOCAL_DB_NAME)
 
-.PHONY: help print-app-root preflight sync pre-commit lint check test smoke run-source run-source-persist run-all run-all-persist api scheduler-once scheduler-dry-run status tail-log verify-output verify-db db-url db-up db-down db-logs db-psql db-check clean-state
+.PHONY: help print-app-root preflight sync pre-commit lint check test smoke run-source run-source-persist run-all run-all-persist api semantic-db-init semantic-sync semantic-project semantic-neighbors semantic-build semantic-smoke scheduler-once scheduler-dry-run status tail-log verify-output verify-db db-url db-up db-down db-logs db-psql db-check clean-state
 
 help:
 	@printf '%s\n' \
@@ -57,6 +57,12 @@ help:
 	  '  make run-all                  Run all sources sequentially without persistence' \
 	  '  make run-all-persist          Run all sources sequentially with persistence' \
 	  '  make api DATABASE_URL=...     Run FastAPI app via uvicorn' \
+	  '  make semantic-db-init DATABASE_URL=...           Create pgvector extension + semantic tables' \
+	  '  make semantic-sync DATABASE_URL=... LIMIT=100    Backfill/sync missing or changed embeddings' \
+	  '  make semantic-project DATABASE_URL=...           Rebuild the named 2D projection set' \
+	  '  make semantic-neighbors DATABASE_URL=... ARTICLE_ID=...  Query nearest neighbors' \
+	  '  make semantic-build DATABASE_URL=... LIMIT=500   Export semantic artifacts from persisted state' \
+	  '  make semantic-smoke DATABASE_URL=...             Export a bounded semantic smoke artifact set' \
 	  '' \
 	  'Scheduler + verification:' \
 	  '  make scheduler-dry-run        Show scheduled execution plan' \
@@ -109,6 +115,14 @@ test: preflight
 	@cd "$(APP_ROOT)" && \
 	PYTHONPATH="$(APP_ROOT):$${PYTHONPATH:-}" $(PYTHON) -m pytest -q tests
 
+frontend-install:
+	@cd "$(APP_ROOT)/frontend" && npm install --include=dev
+
+frontend-build:
+	@cd "$(APP_ROOT)/frontend" && npm run build
+
+frontend-check: frontend-install frontend-build
+
 smoke: preflight
 	@$(MAKE) --no-print-directory run-source SOURCE="$(if $(SOURCE),$(SOURCE),elpais)" DATE="$(DATE)" OUT_PREFIX=smoke MAX_DISCOVERY_URLS=20 MAX_ARTICLES_TO_EXTRACT=10 MAX_RUNTIME_SECONDS=45
 
@@ -144,6 +158,38 @@ run-all-persist: preflight
 api: preflight
 	@[[ -n "$(DATABASE_URL)" ]] || { echo 'DATABASE_URL is required for api'; exit 1; }
 	@cd "$(APP_ROOT)" && PYTHONPATH="$(APP_ROOT):$${PYTHONPATH:-}" $(PYTHON) -m uvicorn src.api.app:create_app --factory --host "$(API_HOST)" --port "$(API_PORT)"
+
+semantic-db-init: preflight
+	@set -euo pipefail; \
+	[[ -n "$(DATABASE_URL)" ]] || { echo 'DATABASE_URL is required for semantic-db-init'; exit 1; }; \
+	cd "$(APP_ROOT)" && PYTHONPATH="$(APP_ROOT):$${PYTHONPATH:-}" $(PYTHON) scripts/init_pgvector.py --db-url "$(DATABASE_URL)" $${SEMANTIC_ARGS:-}
+
+semantic-sync: preflight
+	@set -euo pipefail; \
+	[[ -n "$(DATABASE_URL)" ]] || { echo 'DATABASE_URL is required for semantic-sync'; exit 1; }; \
+	[[ -n "$${OPENAI_API_KEY:-}" ]] || { echo 'OPENAI_API_KEY is required for semantic-sync'; exit 1; }; \
+	cd "$(APP_ROOT)" && PYTHONPATH="$(APP_ROOT):$${PYTHONPATH:-}" $(PYTHON) scripts/semantic_sync.py --db-url "$(DATABASE_URL)" --limit "$${LIMIT:-100}" $${SEMANTIC_ARGS:-}
+
+semantic-project: preflight
+	@set -euo pipefail; \
+	[[ -n "$(DATABASE_URL)" ]] || { echo 'DATABASE_URL is required for semantic-project'; exit 1; }; \
+	cd "$(APP_ROOT)" && PYTHONPATH="$(APP_ROOT):$${PYTHONPATH:-}" $(PYTHON) scripts/semantic_project.py --db-url "$(DATABASE_URL)" --projection-set "$${PROJECTION_SET:-pca_2d_latest}" --out-json "data/semantic/articles_points_$${PROJECTION_SET:-pca_2d_latest}.json" --out-html "data/semantic/semantic_map_$${PROJECTION_SET:-pca_2d_latest}.html" $${SEMANTIC_ARGS:-}
+
+semantic-neighbors: preflight
+	@set -euo pipefail; \
+	[[ -n "$(DATABASE_URL)" ]] || { echo 'DATABASE_URL is required for semantic-neighbors'; exit 1; }; \
+	[[ -n "$${ARTICLE_ID:-}" ]] || { echo 'ARTICLE_ID is required for semantic-neighbors'; exit 1; }; \
+	cd "$(APP_ROOT)" && PYTHONPATH="$(APP_ROOT):$${PYTHONPATH:-}" $(PYTHON) scripts/semantic_neighbors.py --db-url "$(DATABASE_URL)" --article-id "$${ARTICLE_ID}" --limit "$${LIMIT:-5}"
+
+semantic-build: preflight
+	@set -euo pipefail; \
+	[[ -n "$(DATABASE_URL)" ]] || { echo 'DATABASE_URL is required for semantic-build'; exit 1; }; \
+	cd "$(APP_ROOT)" && PYTHONPATH="$(APP_ROOT):$${PYTHONPATH:-}" $(PYTHON) scripts/build_semantic_map.py --db-url "$(DATABASE_URL)" --limit "$${LIMIT:-500}" --projection-set "$${PROJECTION_SET:-pca_2d_latest}" $${SEMANTIC_ARGS:-}
+
+semantic-smoke: preflight
+	@set -euo pipefail; \
+	[[ -n "$(DATABASE_URL)" ]] || { echo 'DATABASE_URL is required for semantic-smoke'; exit 1; }; \
+	cd "$(APP_ROOT)" && PYTHONPATH="$(APP_ROOT):$${PYTHONPATH:-}" $(PYTHON) scripts/build_semantic_map.py --db-url "$(DATABASE_URL)" --limit "$${LIMIT:-50}" --projection-set "$${PROJECTION_SET:-pca_2d_latest}" $${SEMANTIC_ARGS:-}
 
 scheduler-dry-run:
 	@DRY_RUN=1 DATABASE_URL="$(DATABASE_URL)" UV="$(UV)" bash "$(SCHEDULER_SCRIPT)"
