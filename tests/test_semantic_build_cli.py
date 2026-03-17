@@ -1,6 +1,10 @@
 import pytest
 
-from scripts.build_semantic_map import _artifact_paths, _canonicalize_semantic_records, _summary_line
+from scripts.build_semantic_map import (
+    _artifact_paths,
+    _canonicalize_semantic_records,
+    _summary_line,
+)
 from src.semantic.contracts import (
     AnalysisMetadataArtifact,
     ClusterArtifact,
@@ -42,8 +46,30 @@ def test_summary_line_reports_cluster_and_outlier_counts() -> None:
 
 def test_canonicalize_semantic_records_uses_point_order_for_shared_ids() -> None:
     embeddings = [
-        EmbeddingArtifact(article_id=2, source="b", title="B", url="https://e/2", published_at="", section="", summary_snippet="", text_length=1, embedding_model="test", embedding=[0.0, 1.0]),
-        EmbeddingArtifact(article_id=1, source="a", title="A", url="https://e/1", published_at="", section="", summary_snippet="", text_length=1, embedding_model="test", embedding=[1.0, 0.0]),
+        EmbeddingArtifact(
+            article_id=2,
+            source="b",
+            title="B",
+            url="https://e/2",
+            published_at="",
+            section="",
+            summary_snippet="",
+            text_length=1,
+            embedding_model="test",
+            embedding=[0.0, 1.0],
+        ),
+        EmbeddingArtifact(
+            article_id=1,
+            source="a",
+            title="A",
+            url="https://e/1",
+            published_at="",
+            section="",
+            summary_snippet="",
+            text_length=1,
+            embedding_model="test",
+            embedding=[1.0, 0.0],
+        ),
     ]
     points = [
         PointArtifact(article_id=1, source="a", title="A", url="https://e/1", published_at=""),
@@ -63,7 +89,18 @@ def test_canonicalize_semantic_records_uses_point_order_for_shared_ids() -> None
 
 def test_canonicalize_semantic_records_rejects_drift() -> None:
     embeddings = [
-        EmbeddingArtifact(article_id=1, source="a", title="A", url="https://e/1", published_at="", section="", summary_snippet="", text_length=1, embedding_model="test", embedding=[1.0, 0.0])
+        EmbeddingArtifact(
+            article_id=1,
+            source="a",
+            title="A",
+            url="https://e/1",
+            published_at="",
+            section="",
+            summary_snippet="",
+            text_length=1,
+            embedding_model="test",
+            embedding=[1.0, 0.0],
+        )
     ]
     points = [
         PointArtifact(article_id=1, source="a", title="A", url="https://e/1", published_at=""),

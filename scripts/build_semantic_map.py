@@ -137,7 +137,11 @@ def _canonicalize_semantic_records(
             f"embeddings_only={sorted(embedding_ids - point_ids)}"
         )
 
-    canonical_ids = [point.article_id for point in points[:limit]] if limit else [point.article_id for point in points]
+    canonical_ids = (
+        [point.article_id for point in points[:limit]]
+        if limit
+        else [point.article_id for point in points]
+    )
     canonical_points = [points_by_id[article_id] for article_id in canonical_ids]
     canonical_embeddings = [embeddings_by_id[article_id] for article_id in canonical_ids]
     return canonical_embeddings, canonical_points

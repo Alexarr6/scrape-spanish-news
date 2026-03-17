@@ -44,7 +44,9 @@ def analyze_points(
         config=asdict(config),
     )
     if not points:
-        return SemanticAnalysisArtifact(points=[], clusters=[], unclustered_article_ids=[], metadata=metadata)
+        return SemanticAnalysisArtifact(
+            points=[], clusters=[], unclustered_article_ids=[], metadata=metadata
+        )
 
     points_by_id = {point.article_id: point for point in points}
     embeddings_by_id = {embedding.article_id: embedding for embedding in embeddings}
@@ -89,7 +91,9 @@ def analyze_points(
         for article_id in ordered_ids
     }
     diversity = {
-        article_id: _neighbor_source_summary(article_id, ordered_ids, points_by_id, distance_map, neighbor_k)
+        article_id: _neighbor_source_summary(
+            article_id, ordered_ids, points_by_id, distance_map, neighbor_k
+        )
         for article_id in ordered_ids
     }
 
@@ -163,18 +167,29 @@ def analyze_points(
     for cluster_id, member_ids in sorted(cluster_members.items()):
         member_points = [points_by_id[article_id] for article_id in sorted(member_ids)]
         member_sources = Counter(point.source for point in member_points)
-        representative_ids = [point.article_id for point in sorted(member_points, key=lambda item: item.article_id)[:3]]
+        representative_ids = [
+            point.article_id
+            for point in sorted(member_points, key=lambda item: item.article_id)[:3]
+        ]
         clusters.append(
             ClusterArtifact(
                 cluster_id=cluster_id,
                 size=len(member_points),
                 article_ids=sorted(member_ids),
                 representative_article_ids=representative_ids,
-                top_sources=dict(sorted(member_sources.items(), key=lambda item: (-item[1], item[0]))),
+                top_sources=dict(
+                    sorted(member_sources.items(), key=lambda item: (-item[1], item[0]))
+                ),
                 source_count=len(member_sources),
                 source_dominance=max(member_sources.values()) / len(member_points),
-                date_min=min((point.published_date for point in member_points if point.published_date), default=""),
-                date_max=max((point.published_date for point in member_points if point.published_date), default=""),
+                date_min=min(
+                    (point.published_date for point in member_points if point.published_date),
+                    default="",
+                ),
+                date_max=max(
+                    (point.published_date for point in member_points if point.published_date),
+                    default="",
+                ),
                 centroid_x=sum(point.x for point in member_points) / len(member_points),
                 centroid_y=sum(point.y for point in member_points) / len(member_points),
             )
@@ -198,7 +213,9 @@ def analyze_points(
             )
         )
 
-    unclustered = sorted(article_id for article_id in ordered_ids if article_id not in cluster_lookup)
+    unclustered = sorted(
+        article_id for article_id in ordered_ids if article_id not in cluster_lookup
+    )
     return SemanticAnalysisArtifact(
         points=analysis_points,
         clusters=clusters,
