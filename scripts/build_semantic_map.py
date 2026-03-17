@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 import sys
 from pathlib import Path
 
@@ -9,6 +10,7 @@ if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
 from src.persistence.db import create_postgres_engine, make_session, resolve_db_url  # noqa: E402
+from src.semantic.analyze import analyze_points  # noqa: E402
 from src.semantic.contracts import SemanticBuildConfig, SemanticMetrics  # noqa: E402
 from src.semantic.dbstore import (  # noqa: E402
     DEFAULT_NEIGHBOR_LIMIT,
@@ -17,6 +19,7 @@ from src.semantic.dbstore import (  # noqa: E402
     load_projected_points,
 )
 from src.semantic.export import (  # noqa: E402
+    write_analysis_json,
     write_embeddings_jsonl,
     write_metrics,
     write_points_json,
@@ -38,6 +41,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--dry-run", action="store_true")
     parser.add_argument("--emit-embeddings-only", action="store_true")
     parser.add_argument("--emit-points-only", action="store_true")
+    parser.add_argument("--print-analysis-summary", action="store_true")
     return parser.parse_args()
 
 
@@ -68,6 +72,11 @@ def main() -> int:
         embeddings = embeddings[: args.limit]
         points = points[: args.limit]
 
+    analysis = analyze_points(points)
+    analysis_by_id = {point.article_id: point for point in analysis.points}
+    for point in points:
+        point.analysis = analysis_by_id.get(point.article_id, point.analysis)
+
     if args.dry_run:
         metrics.finish()
         write_metrics(metrics, Path(metrics.artifacts["metrics_json"]))
@@ -75,6 +84,8 @@ def main() -> int:
             "dry_run "
             f"embeddings={len(embeddings)} "
             f"points={len(points)} "
+            f"clusters={len(analysis.clusters)} "
+            f"outliers={analysis.outlier_count} "
             f"projection_set={args.projection_set}"
         )
         return 0
@@ -87,18 +98,15 @@ def main() -> int:
         return 0
 
     write_points_json(points, Path(metrics.artifacts["points_json"]))
+    write_analysis_json(analysis, Path(metrics.artifacts["analysis_json"]))
     if not args.emit_points_only:
         write_semantic_map_html(points, Path(metrics.artifacts["map_html"]))
 
     metrics.finish()
     write_metrics(metrics, Path(metrics.artifacts["metrics_json"]))
-    print(
-        "semantic_map "
-        f"embeddings={len(embeddings)} "
-        f"points={len(points)} "
-        f"projection_set={args.projection_set} "
-        f"html={'yes' if not args.emit_points_only else 'no'}"
-    )
+    print(_summary_line(points, analysis, args.projection_set, html=not args.emit_points_only))
+    if args.print_analysis_summary:
+        print(json.dumps(analysis.model_dump(), ensure_ascii=False, indent=2))
     return 0
 
 
@@ -108,9 +116,23 @@ def _artifact_paths(config: SemanticBuildConfig) -> dict[str, str]:
     return {
         "embeddings_jsonl": str(out_dir / f"articles_embeddings_{config.stamp}.jsonl"),
         "points_json": str(out_dir / f"articles_points_{config.stamp}.json"),
+        "analysis_json": str(out_dir / f"semantic_analysis_{config.stamp}.json"),
         "map_html": str(out_dir / f"semantic_map_{config.stamp}.html"),
         "metrics_json": str(log_dir / f"semantic_{config.stamp}_metrics.json"),
     }
+
+
+def _summary_line(points, analysis, projection_set: str, *, html: bool) -> str:
+    largest_cluster = max((cluster.size for cluster in analysis.clusters), default=0)
+    return (
+        "semantic_map "
+        f"points={len(points)} "
+        f"clusters={len(analysis.clusters)} "
+        f"largest_cluster={largest_cluster} "
+        f"outliers={analysis.outlier_count} "
+        f"projection_set={projection_set} "
+        f"html={'yes' if html else 'no'}"
+    )
 
 
 if __name__ == "__main__":
