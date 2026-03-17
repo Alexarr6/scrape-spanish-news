@@ -8,3 +8,7 @@ var/
 data/
 logs/*.json
 logs/*.log
+AGENTS.md
+RESULTS.md
+STATUS.md
+TODO.md
