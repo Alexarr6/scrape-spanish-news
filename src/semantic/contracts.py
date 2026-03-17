@@ -57,6 +57,56 @@ class NeighborArtifact:
 
 
 @dataclass
+class PointAnalysisArtifact:
+    article_id: int
+    cluster_id: int | None = None
+    cluster_size: int = 0
+    is_outlier: bool = False
+    local_density_distance: float = 0.0
+    source_neighbor_diversity: int = 0
+    nearby_sources: list[str] = field(default_factory=list)
+
+    def model_dump(self) -> dict[str, Any]:
+        return asdict(self)
+
+
+@dataclass
+class ClusterArtifact:
+    cluster_id: int
+    size: int
+    article_ids: list[int] = field(default_factory=list)
+    representative_article_ids: list[int] = field(default_factory=list)
+    top_sources: dict[str, int] = field(default_factory=dict)
+    source_count: int = 0
+    source_dominance: float = 0.0
+    date_min: str = ""
+    date_max: str = ""
+    centroid_x: float = 0.0
+    centroid_y: float = 0.0
+
+    def model_dump(self) -> dict[str, Any]:
+        return asdict(self)
+
+
+@dataclass
+class SemanticAnalysisArtifact:
+    points: list[PointAnalysisArtifact] = field(default_factory=list)
+    clusters: list[ClusterArtifact] = field(default_factory=list)
+    unclustered_article_ids: list[int] = field(default_factory=list)
+    density_baseline: float = 0.0
+    outlier_count: int = 0
+
+    def model_dump(self) -> dict[str, Any]:
+        return {
+            "points": [point.model_dump() for point in self.points],
+            "clusters": [cluster.model_dump() for cluster in self.clusters],
+            "unclustered_article_ids": self.unclustered_article_ids,
+            "density_baseline": self.density_baseline,
+            "outlier_count": self.outlier_count,
+        }
+
+
+@dataclass
 class PointArtifact:
     article_id: int
     source: str
@@ -72,6 +122,7 @@ class PointArtifact:
     x: float = 0.0
     y: float = 0.0
     neighbors: list[NeighborArtifact] = field(default_factory=list)
+    analysis: PointAnalysisArtifact = field(default_factory=lambda: PointAnalysisArtifact(article_id=0))
 
     def model_dump(self) -> dict[str, Any]:
         return asdict(self)

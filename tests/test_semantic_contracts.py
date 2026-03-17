@@ -1,4 +1,12 @@
-from src.semantic.contracts import EmbeddingArtifact, NeighborArtifact, PointArtifact, SemanticArticle
+from src.semantic.contracts import (
+    ClusterArtifact,
+    EmbeddingArtifact,
+    NeighborArtifact,
+    PointAnalysisArtifact,
+    PointArtifact,
+    SemanticAnalysisArtifact,
+    SemanticArticle,
+)
 
 
 def test_semantic_article_text_length_tracks_article_text() -> None:
@@ -56,8 +64,37 @@ def test_artifact_model_dump_is_plain_dict() -> None:
         x=1.0,
         y=-1.0,
         neighbors=[neighbor],
+        analysis=PointAnalysisArtifact(
+            article_id=1,
+            cluster_id=4,
+            cluster_size=8,
+            is_outlier=False,
+            local_density_distance=0.42,
+            source_neighbor_diversity=3,
+            nearby_sources=["abc", "elpais", "elmundo"],
+        ),
+    )
+
+    analysis = SemanticAnalysisArtifact(
+        points=[point.analysis],
+        clusters=[
+            ClusterArtifact(
+                cluster_id=4,
+                size=8,
+                article_ids=[1, 2, 3],
+                representative_article_ids=[1, 2],
+                top_sources={"abc": 3, "elpais": 3, "elmundo": 2},
+                source_count=3,
+                source_dominance=0.375,
+            )
+        ],
+        unclustered_article_ids=[9],
+        density_baseline=0.5,
+        outlier_count=1,
     )
 
     assert embedding.model_dump()["embedding"] == [0.1, 0.2]
     assert point.model_dump()["x"] == 1.0
     assert point.model_dump()["neighbors"][0]["article_id"] == 2
+    assert point.model_dump()["analysis"]["cluster_id"] == 4
+    assert analysis.model_dump()["clusters"][0]["top_sources"]["abc"] == 3
