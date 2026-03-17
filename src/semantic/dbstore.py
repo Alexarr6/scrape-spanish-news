@@ -16,6 +16,7 @@ from src.persistence.orm_models import ArticleORM
 from src.semantic.contracts import (
     EmbeddingArtifact,
     NeighborArtifact,
+    PointAnalysisArtifact,
     PointArtifact,
     SemanticArticle,
 )
@@ -142,9 +143,7 @@ def embedding_dimensions_for_model(model: str) -> int:
 
 
 def render_init_sql(*, embedding_model: str) -> str:
-    return INIT_SQL_TEMPLATE.format(
-        embedding_dim=embedding_dimensions_for_model(embedding_model)
-    )
+    return INIT_SQL_TEMPLATE.format(embedding_dim=embedding_dimensions_for_model(embedding_model))
 
 
 def init_pgvector_schema(
@@ -612,7 +611,10 @@ def load_neighbors_for_articles(
     session: Session, *, article_ids: list[int], limit: int = DEFAULT_NEIGHBOR_LIMIT
 ) -> dict[int, list[NeighborArtifact]]:
     return {
-        article_id: [row.to_artifact() for row in nearest_neighbors(session, article_id=article_id, limit=limit)]
+        article_id: [
+            row.to_artifact()
+            for row in nearest_neighbors(session, article_id=article_id, limit=limit)
+        ]
         for article_id in article_ids
     }
 
@@ -640,3 +642,308 @@ def _split_sql(sql_blob: str) -> list[str]:
 
 def _utc_now() -> datetime:
     return datetime.now(timezone.utc)
+
+
+@dataclass
+class ExplorerFilters:
+    projection_set: str = DEFAULT_PROJECTION_SET
+    limit: int = 250
+    source: str | None = None
+    section: str | None = None
+    cluster_id: int | None = None
+    outlier_only: bool = False
+    date_from: str | None = None
+    date_to: str | None = None
+    search: str | None = None
+
+
+@dataclass
+class ExplorerPointsPage:
+    items: list[PointArtifact]
+    total: int
+    limit: int
+    projection_set: str
+    bounds: dict[str, float] | None
+    available_sources: list[str]
+    available_sections: list[str]
+    available_clusters: list[int]
+
+
+@dataclass
+class ExplorerArticleDetailRecord:
+    article: dict[str, Any]
+    projection_set: str
+    point: PointArtifact | None
+    neighbors: list[NeighborArtifact]
+
+
+def load_explorer_points_page(session: Session, *, filters: ExplorerFilters) -> ExplorerPointsPage:
+    where_sql, params = _build_explorer_where_clause(filters)
+    rows = session.execute(
+        text(
+            f"""
+            SELECT a.id AS article_id,
+                   a.source,
+                   a.title,
+                   a.url,
+                   COALESCE(a.published_at, '') AS published_at,
+                   COALESCE(substr(CAST(a.published_at AS TEXT), 1, 10), '') AS published_date,
+                   COALESCE(substr(CAST(a.published_at AS TEXT), 1, 10), '') AS display_date,
+                   COALESCE(a.section, '') AS section,
+                   COALESCE(e.summary_snippet, '') AS summary_snippet,
+                   p.x,
+                   p.y
+            FROM article_projections p
+            JOIN articles a ON a.id = p.article_id
+            JOIN article_embeddings e ON e.id = p.embedding_id
+            {where_sql}
+            ORDER BY a.published_at DESC, a.id DESC
+            LIMIT :limit
+            """
+        ),
+        {**params, "limit": filters.limit},
+    ).mappings().all()
+    items: list[PointArtifact] = []
+    for row in rows:
+        neighbors = _safe_neighbors(session, article_id=row["article_id"], limit=3)
+        items.append(
+            PointArtifact(
+                article_id=row["article_id"],
+                source=row["source"] or "",
+                title=row["title"] or "",
+                url=row["url"] or "",
+                published_at=str(row["published_at"] or ""),
+                published_date=str(row["published_date"] or ""),
+                display_date=str(row["display_date"] or ""),
+                section=row["section"] or "",
+                summary_snippet=row["summary_snippet"] or "",
+                x=float(row["x"]),
+                y=float(row["y"]),
+                analysis=_analysis_for_neighbors(row["article_id"], neighbors),
+            )
+        )
+    total = session.execute(
+        text(
+            f"""
+            SELECT COUNT(*)
+            FROM article_projections p
+            JOIN articles a ON a.id = p.article_id
+            JOIN article_embeddings e ON e.id = p.embedding_id
+            {where_sql}
+            """
+        ),
+        params,
+    ).scalar_one()
+    return ExplorerPointsPage(
+        items=items,
+        total=int(total),
+        limit=filters.limit,
+        projection_set=filters.projection_set,
+        bounds=_load_projection_bounds(session, projection_set=filters.projection_set),
+        available_sources=_load_filtered_distinct_values(
+            session,
+            column="a.source",
+            where_sql=where_sql,
+            params=params,
+        ),
+        available_sections=_load_filtered_distinct_values(
+            session,
+            column="a.section",
+            where_sql=where_sql,
+            params=params,
+        ),
+        available_clusters=[],
+    )
+
+
+def load_explorer_filter_options(session: Session, *, projection_set: str) -> dict[str, Any]:
+    return {
+        "projection_set": projection_set,
+        "available_sources": _load_distinct_values(
+            session, column="a.source", projection_set=projection_set
+        ),
+        "available_sections": _load_distinct_values(
+            session, column="a.section", projection_set=projection_set
+        ),
+        "available_clusters": [],
+    }
+
+
+def load_explorer_article_detail(
+    session: Session,
+    *,
+    article_id: int,
+    projection_set: str,
+) -> ExplorerArticleDetailRecord | None:
+    row = session.execute(
+        text(
+            """
+            SELECT a.id AS article_id,
+                   a.source,
+                   a.title,
+                   a.url,
+                   COALESCE(a.published_at, '') AS published_at,
+                   COALESCE(substr(CAST(a.published_at AS TEXT), 1, 10), '') AS published_date,
+                   COALESCE(substr(CAST(a.published_at AS TEXT), 1, 10), '') AS display_date,
+                   COALESCE(a.section, '') AS section,
+                   COALESCE(a.summary, '') AS summary,
+                   COALESCE(a.article_text, '') AS article_text,
+                   p.x,
+                   p.y,
+                   COALESCE(e.summary_snippet, '') AS summary_snippet
+            FROM articles a
+            LEFT JOIN article_embeddings e ON e.article_id = a.id
+            LEFT JOIN article_projections p
+              ON p.article_id = a.id
+             AND p.projection_set = :projection_set
+             AND p.projection_kind = :projection_kind
+            WHERE a.id = :article_id
+            """
+        ),
+        {
+            "article_id": article_id,
+            "projection_set": projection_set,
+            "projection_kind": DEFAULT_PROJECTION_KIND,
+        },
+    ).mappings().first()
+    if row is None:
+        return None
+    neighbors = _safe_neighbors(session, article_id=article_id, limit=5)
+    point = None
+    if row["x"] is not None and row["y"] is not None:
+        point = PointArtifact(
+            article_id=row["article_id"],
+            source=row["source"] or "",
+            title=row["title"] or "",
+            url=row["url"] or "",
+            published_at=str(row["published_at"] or ""),
+            published_date=str(row["published_date"] or ""),
+            display_date=str(row["display_date"] or ""),
+            section=row["section"] or "",
+            summary_snippet=row["summary_snippet"] or "",
+            x=float(row["x"]),
+            y=float(row["y"]),
+            analysis=_analysis_for_neighbors(row["article_id"], neighbors),
+        )
+    return ExplorerArticleDetailRecord(
+        article={
+            "article_id": row["article_id"],
+            "source": row["source"] or "",
+            "title": row["title"] or "",
+            "url": row["url"] or "",
+            "published_at": str(row["published_at"] or ""),
+            "published_date": str(row["published_date"] or ""),
+            "display_date": str(row["display_date"] or ""),
+            "section": row["section"] or "",
+            "summary": row["summary"] or "",
+            "article_text_excerpt": (row["article_text"] or "")[:400],
+        },
+        projection_set=projection_set,
+        point=point,
+        neighbors=neighbors,
+    )
+
+
+def _build_explorer_where_clause(filters: ExplorerFilters) -> tuple[str, dict[str, Any]]:
+    clauses = ["p.projection_set = :projection_set", "p.projection_kind = :projection_kind"]
+    params: dict[str, Any] = {
+        "projection_set": filters.projection_set,
+        "projection_kind": DEFAULT_PROJECTION_KIND,
+    }
+    if filters.source:
+        clauses.append("a.source = :source")
+        params["source"] = filters.source
+    if filters.section:
+        clauses.append("a.section = :section")
+        params["section"] = filters.section
+    if filters.date_from:
+        clauses.append("date(a.published_at) >= date(:date_from)")
+        params["date_from"] = filters.date_from
+    if filters.date_to:
+        clauses.append("date(a.published_at) <= date(:date_to)")
+        params["date_to"] = filters.date_to
+    if filters.search:
+        clauses.append("(lower(a.title) LIKE :search OR lower(a.summary) LIKE :search)")
+        params["search"] = f"%{filters.search.strip().lower()}%"
+    if filters.cluster_id is not None:
+        clauses.append("1 = 0")
+    if filters.outlier_only:
+        clauses.append("1 = 0")
+    return "WHERE " + " AND ".join(clauses), params
+
+
+def _load_projection_bounds(session: Session, *, projection_set: str) -> dict[str, float] | None:
+    row = session.execute(
+        text(
+            """
+            SELECT MIN(x) AS min_x, MAX(x) AS max_x, MIN(y) AS min_y, MAX(y) AS max_y
+            FROM article_projections
+            WHERE projection_set = :projection_set
+              AND projection_kind = :projection_kind
+            """
+        ),
+        {"projection_set": projection_set, "projection_kind": DEFAULT_PROJECTION_KIND},
+    ).mappings().first()
+    if row is None or row["min_x"] is None:
+        return None
+    return {key: float(row[key]) for key in ("min_x", "max_x", "min_y", "max_y")}
+
+
+def _load_distinct_values(session: Session, *, column: str, projection_set: str) -> list[str]:
+    return _load_filtered_distinct_values(
+        session,
+        column=column,
+        where_sql=(
+            "WHERE p.projection_set = :projection_set "
+            "AND p.projection_kind = :projection_kind"
+        ),
+        params={"projection_set": projection_set, "projection_kind": DEFAULT_PROJECTION_KIND},
+    )
+
+
+def _load_filtered_distinct_values(
+    session: Session,
+    *,
+    column: str,
+    where_sql: str,
+    params: dict[str, Any],
+) -> list[str]:
+    rows = session.execute(
+        text(
+            f"""
+            SELECT DISTINCT {column} AS value
+            FROM article_projections p
+            JOIN articles a ON a.id = p.article_id
+            JOIN article_embeddings e ON e.id = p.embedding_id
+            {where_sql}
+              AND {column} <> ''
+            ORDER BY value ASC
+            """
+        ),
+        params,
+    ).scalars().all()
+    return [str(value) for value in rows if value is not None]
+
+
+def _safe_neighbors(session: Session, *, article_id: int, limit: int) -> list[NeighborArtifact]:
+    try:
+        return [
+            row.to_artifact()
+            for row in nearest_neighbors(session, article_id=article_id, limit=limit)
+        ]
+    except Exception:
+        return []
+
+
+def _analysis_for_neighbors(
+    article_id: int,
+    neighbors: list[NeighborArtifact],
+) -> PointAnalysisArtifact:
+    return PointAnalysisArtifact(
+        article_id=article_id,
+        cluster_id=None,
+        cluster_size=0,
+        is_outlier=False,
+        source_neighbor_diversity=len({neighbor.source for neighbor in neighbors}),
+        nearby_sources=sorted({neighbor.source for neighbor in neighbors}),
+    )

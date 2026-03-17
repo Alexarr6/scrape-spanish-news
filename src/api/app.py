@@ -5,7 +5,7 @@ from collections.abc import Generator
 from fastapi import FastAPI
 from sqlalchemy.orm import Session
 
-from src.api.v1 import articles
+from src.api.v1 import articles, semantic
 from src.persistence.db import create_postgres_engine, init_schema, make_session, resolve_db_url
 
 
@@ -24,6 +24,7 @@ def create_app(db_url: str | None = None) -> FastAPI:
 
     app.dependency_overrides[articles.get_session] = _session_dep
     app.include_router(articles.router)
+    app.include_router(semantic.router)
     return app
 
 
