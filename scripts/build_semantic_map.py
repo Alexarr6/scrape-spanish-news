@@ -11,7 +11,12 @@ if str(REPO_ROOT) not in sys.path:
 
 from src.persistence.db import create_postgres_engine, make_session, resolve_db_url  # noqa: E402
 from src.semantic.analyze import analyze_points  # noqa: E402
-from src.semantic.contracts import SemanticBuildConfig, SemanticMetrics  # noqa: E402
+from src.semantic.contracts import (  # noqa: E402
+    EmbeddingArtifact,
+    PointArtifact,
+    SemanticBuildConfig,
+    SemanticMetrics,
+)
 from src.semantic.dbstore import (  # noqa: E402
     DEFAULT_NEIGHBOR_LIMIT,
     DEFAULT_PROJECTION_SET,
@@ -54,7 +59,7 @@ def main() -> int:
 
     engine = create_postgres_engine(database_url)
     with make_session(engine) as session:
-        embeddings = load_embedding_artifacts(session)
+        embeddings = load_embedding_artifacts(session, projection_set=args.projection_set)
         points = load_projected_points(
             session,
             projection_set=args.projection_set,
@@ -62,17 +67,20 @@ def main() -> int:
             neighbor_limit=args.neighbor_limit,
         )
 
+    embeddings, points = _canonicalize_semantic_records(
+        embeddings,
+        points,
+        limit=args.limit,
+        projection_set=args.projection_set,
+    )
+
     metrics.fetched_rows = len(embeddings)
     metrics.eligible_rows = len(embeddings)
     metrics.embedding_model = embeddings[0].embedding_model if embeddings else ""
     metrics.embedding_dimensions = len(embeddings[0].embedding) if embeddings else 0
     metrics.projection_method = "pca_2d"
 
-    if args.limit:
-        embeddings = embeddings[: args.limit]
-        points = points[: args.limit]
-
-    analysis = analyze_points(points)
+    analysis = analyze_points(points, embeddings)
     analysis_by_id = {point.article_id: point for point in analysis.points}
     for point in points:
         point.analysis = analysis_by_id.get(point.article_id, point.analysis)
@@ -108,6 +116,31 @@ def main() -> int:
     if args.print_analysis_summary:
         print(json.dumps(analysis.model_dump(), ensure_ascii=False, indent=2))
     return 0
+
+
+def _canonicalize_semantic_records(
+    embeddings: list[EmbeddingArtifact],
+    points: list[PointArtifact],
+    *,
+    limit: int,
+    projection_set: str,
+) -> tuple[list[EmbeddingArtifact], list[PointArtifact]]:
+    points_by_id = {point.article_id: point for point in points}
+    embeddings_by_id = {embedding.article_id: embedding for embedding in embeddings}
+    point_ids = set(points_by_id)
+    embedding_ids = set(embeddings_by_id)
+    if point_ids != embedding_ids:
+        raise RuntimeError(
+            "semantic build has drift between embeddings and projected points for "
+            f"projection_set={projection_set}: "
+            f"points_only={sorted(point_ids - embedding_ids)} "
+            f"embeddings_only={sorted(embedding_ids - point_ids)}"
+        )
+
+    canonical_ids = [point.article_id for point in points[:limit]] if limit else [point.article_id for point in points]
+    canonical_points = [points_by_id[article_id] for article_id in canonical_ids]
+    canonical_embeddings = [embeddings_by_id[article_id] for article_id in canonical_ids]
+    return canonical_embeddings, canonical_points
 
 
 def _artifact_paths(config: SemanticBuildConfig) -> dict[str, str]:

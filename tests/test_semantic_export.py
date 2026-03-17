@@ -1,6 +1,7 @@
 import json
 
 from src.semantic.contracts import (
+    AnalysisMetadataArtifact,
     ClusterArtifact,
     NeighborArtifact,
     PointAnalysisArtifact,
@@ -75,6 +76,12 @@ ANALYSIS = SemanticAnalysisArtifact(
     unclustered_article_ids=[99],
     density_baseline=0.42,
     outlier_count=0,
+    metadata=AnalysisMetadataArtifact(
+        article_ids=[1],
+        article_count=1,
+        config={"neighbor_k": 4},
+        thresholds={"density_baseline": 0.42, "core_distance": 0.5, "outlier_distance": 0.6},
+    ),
 )
 
 
@@ -90,7 +97,7 @@ def test_write_points_json_writes_expected_payload(tmp_path) -> None:
     assert payload[0]["analysis"]["cluster_id"] == 2
 
 
-def test_write_analysis_json_writes_cluster_summary(tmp_path) -> None:
+def test_write_analysis_json_writes_cluster_summary_and_metadata(tmp_path) -> None:
     out = tmp_path / "analysis.json"
     write_analysis_json(ANALYSIS, out)
 
@@ -98,6 +105,9 @@ def test_write_analysis_json_writes_cluster_summary(tmp_path) -> None:
     assert payload["clusters"][0]["cluster_id"] == 2
     assert payload["clusters"][0]["top_sources"]["elpais"] == 2
     assert payload["points"][0]["source_neighbor_diversity"] == 2
+    assert payload["metadata"]["distance_basis"] == "embedding_cosine_distance"
+    assert payload["metadata"]["config"]["neighbor_k"] == 4
+    assert payload["metadata"]["thresholds"]["outlier_distance"] == 0.6
 
 
 def test_write_metrics_writes_json(tmp_path) -> None:

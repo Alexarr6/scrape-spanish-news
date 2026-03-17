@@ -89,12 +89,25 @@ class ClusterArtifact:
 
 
 @dataclass
+class AnalysisMetadataArtifact:
+    distance_basis: str = "embedding_cosine_distance"
+    article_ids: list[int] = field(default_factory=list)
+    article_count: int = 0
+    config: dict[str, Any] = field(default_factory=dict)
+    thresholds: dict[str, float] = field(default_factory=dict)
+
+    def model_dump(self) -> dict[str, Any]:
+        return asdict(self)
+
+
+@dataclass
 class SemanticAnalysisArtifact:
     points: list[PointAnalysisArtifact] = field(default_factory=list)
     clusters: list[ClusterArtifact] = field(default_factory=list)
     unclustered_article_ids: list[int] = field(default_factory=list)
     density_baseline: float = 0.0
     outlier_count: int = 0
+    metadata: AnalysisMetadataArtifact = field(default_factory=AnalysisMetadataArtifact)
 
     def model_dump(self) -> dict[str, Any]:
         return {
@@ -103,6 +116,7 @@ class SemanticAnalysisArtifact:
             "unclustered_article_ids": self.unclustered_article_ids,
             "density_baseline": self.density_baseline,
             "outlier_count": self.outlier_count,
+            "metadata": self.metadata.model_dump(),
         }
 
 
@@ -122,7 +136,9 @@ class PointArtifact:
     x: float = 0.0
     y: float = 0.0
     neighbors: list[NeighborArtifact] = field(default_factory=list)
-    analysis: PointAnalysisArtifact = field(default_factory=lambda: PointAnalysisArtifact(article_id=0))
+    analysis: PointAnalysisArtifact = field(
+        default_factory=lambda: PointAnalysisArtifact(article_id=0)
+    )
 
     def model_dump(self) -> dict[str, Any]:
         return asdict(self)
