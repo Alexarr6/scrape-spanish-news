@@ -679,9 +679,10 @@ class ExplorerArticleDetailRecord:
 
 def load_explorer_points_page(session: Session, *, filters: ExplorerFilters) -> ExplorerPointsPage:
     where_sql, params = _build_explorer_where_clause(filters)
-    rows = session.execute(
-        text(
-            f"""
+    rows = (
+        session.execute(
+            text(
+                f"""
             SELECT a.id AS article_id,
                    a.source,
                    a.title,
@@ -700,9 +701,12 @@ def load_explorer_points_page(session: Session, *, filters: ExplorerFilters) -> 
             ORDER BY a.published_at DESC, a.id DESC
             LIMIT :limit
             """
-        ),
-        {**params, "limit": filters.limit},
-    ).mappings().all()
+            ),
+            {**params, "limit": filters.limit},
+        )
+        .mappings()
+        .all()
+    )
     items: list[PointArtifact] = []
     for row in rows:
         neighbors = _safe_neighbors(session, article_id=row["article_id"], limit=3)
@@ -775,9 +779,10 @@ def load_explorer_article_detail(
     article_id: int,
     projection_set: str,
 ) -> ExplorerArticleDetailRecord | None:
-    row = session.execute(
-        text(
-            """
+    row = (
+        session.execute(
+            text(
+                """
             SELECT a.id AS article_id,
                    a.source,
                    a.title,
@@ -799,13 +804,16 @@ def load_explorer_article_detail(
              AND p.projection_kind = :projection_kind
             WHERE a.id = :article_id
             """
-        ),
-        {
-            "article_id": article_id,
-            "projection_set": projection_set,
-            "projection_kind": DEFAULT_PROJECTION_KIND,
-        },
-    ).mappings().first()
+            ),
+            {
+                "article_id": article_id,
+                "projection_set": projection_set,
+                "projection_kind": DEFAULT_PROJECTION_KIND,
+            },
+        )
+        .mappings()
+        .first()
+    )
     if row is None:
         return None
     neighbors = _safe_neighbors(session, article_id=article_id, limit=5)
@@ -873,17 +881,21 @@ def _build_explorer_where_clause(filters: ExplorerFilters) -> tuple[str, dict[st
 
 
 def _load_projection_bounds(session: Session, *, projection_set: str) -> dict[str, float] | None:
-    row = session.execute(
-        text(
-            """
+    row = (
+        session.execute(
+            text(
+                """
             SELECT MIN(x) AS min_x, MAX(x) AS max_x, MIN(y) AS min_y, MAX(y) AS max_y
             FROM article_projections
             WHERE projection_set = :projection_set
               AND projection_kind = :projection_kind
             """
-        ),
-        {"projection_set": projection_set, "projection_kind": DEFAULT_PROJECTION_KIND},
-    ).mappings().first()
+            ),
+            {"projection_set": projection_set, "projection_kind": DEFAULT_PROJECTION_KIND},
+        )
+        .mappings()
+        .first()
+    )
     if row is None or row["min_x"] is None:
         return None
     return {key: float(row[key]) for key in ("min_x", "max_x", "min_y", "max_y")}
@@ -894,8 +906,7 @@ def _load_distinct_values(session: Session, *, column: str, projection_set: str)
         session,
         column=column,
         where_sql=(
-            "WHERE p.projection_set = :projection_set "
-            "AND p.projection_kind = :projection_kind"
+            "WHERE p.projection_set = :projection_set AND p.projection_kind = :projection_kind"
         ),
         params={"projection_set": projection_set, "projection_kind": DEFAULT_PROJECTION_KIND},
     )
@@ -908,9 +919,10 @@ def _load_filtered_distinct_values(
     where_sql: str,
     params: dict[str, Any],
 ) -> list[str]:
-    rows = session.execute(
-        text(
-            f"""
+    rows = (
+        session.execute(
+            text(
+                f"""
             SELECT DISTINCT {column} AS value
             FROM article_projections p
             JOIN articles a ON a.id = p.article_id
@@ -919,9 +931,12 @@ def _load_filtered_distinct_values(
               AND {column} <> ''
             ORDER BY value ASC
             """
-        ),
-        params,
-    ).scalars().all()
+            ),
+            params,
+        )
+        .scalars()
+        .all()
+    )
     return [str(value) for value in rows if value is not None]
 
 
