@@ -38,6 +38,16 @@ CLUSTER_COLORS = [
 ]
 OUTLIER_COLOR = "#111827"
 UNCLUSTERED_COLOR = "#94a3b8"
+HOVER_TEMPLATE = (
+    "<b>%{customdata[2]}</b><br>"
+    "source=%{customdata[1]}<br>"
+    "cluster=%{customdata[11]}<br>"
+    "outlier=%{customdata[13]}<br>"
+    "date=%{customdata[5]}<br>"
+    "section=%{customdata[6]}<br>"
+    "article_id=%{customdata[0]}<br>"
+    "%{customdata[7]}<extra></extra>"
+)
 
 
 def write_embeddings_jsonl(records: list[EmbeddingArtifact], out_path: Path) -> None:
@@ -76,25 +86,8 @@ def write_semantic_map_html(records: list[PointArtifact], out_path: Path) -> Non
                 name="articles",
                 customdata=[_point_payload(record) for record in records],
                 text=[record.title for record in records],
-                hovertemplate=(
-                    "<b>%{customdata[2]}</b><br>"
-                    "source=%{customdata[1]}<br>"
-                    "cluster=%{customdata[11]}<br>"
-                    "outlier=%{customdata[13]}<br>"
-                    "date=%{customdata[5]}<br>"
-                    "section=%{customdata[6]}<br>"
-                    "article_id=%{customdata[0]}<br>"
-                    "%{customdata[7]}<extra></extra>"
-                ),
-                marker={
-                    "size": [14 if record.analysis.is_outlier else 10 for record in records],
-                    "opacity": [0.95 if record.analysis.is_outlier else 0.82 for record in records],
-                    "color": [_marker_color(record) for record in records],
-                    "line": {
-                        "width": [1.6 if record.analysis.is_outlier else 0 for record in records],
-                        "color": "#0f172a",
-                    },
-                },
+                hovertemplate=HOVER_TEMPLATE,
+                marker=_marker_style(records),
             )
         ]
     )
@@ -116,6 +109,18 @@ def _marker_color(record: PointArtifact) -> str:
     if record.analysis.cluster_id is None:
         return UNCLUSTERED_COLOR
     return CLUSTER_COLORS[(record.analysis.cluster_id - 1) % len(CLUSTER_COLORS)]
+
+
+def _marker_style(records: list[PointArtifact]) -> dict[str, object]:
+    return {
+        "size": [14 if record.analysis.is_outlier else 10 for record in records],
+        "opacity": [0.95 if record.analysis.is_outlier else 0.82 for record in records],
+        "color": [_marker_color(record) for record in records],
+        "line": {
+            "width": [1.6 if record.analysis.is_outlier else 0 for record in records],
+            "color": "#0f172a",
+        },
+    }
 
 
 def _point_payload(record: PointArtifact) -> list[object]:
