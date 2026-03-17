@@ -1,31 +1,91 @@
-import type { ExplorerFiltersResponse } from '../lib/types'
+import type { ChangeEvent } from 'react'
+import type { ExplorerFiltersResponse, ExplorerQuery } from '../lib/types'
 
 type Props = {
   filters: ExplorerFiltersResponse | null
+  query: ExplorerQuery
+  onQueryChange: (patch: Partial<ExplorerQuery>) => void
+  onReset: () => void
+  disabled?: boolean
 }
 
-export function FilterBar({ filters }: Props) {
+export function FilterBar({ filters, query, onQueryChange, onReset, disabled = false }: Props) {
+  const onTextChange = (event: ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
+    const { name, value } = event.target
+    onQueryChange({ [name]: value })
+  }
+
   return (
-    <div>
-      <h2>Foundation wiring</h2>
-      <p>This phase only proves the API contract and UI structure.</p>
-      <div className="stack">
-        <div>
-          <strong>Sources</strong>
-          <ul>
-            {(filters?.available_sources ?? []).map((source) => (
-              <li key={source}>{source}</li>
-            ))}
-          </ul>
-        </div>
-        <div>
-          <strong>Sections</strong>
-          <ul>
-            {(filters?.available_sections ?? []).map((section) => (
-              <li key={section}>{section}</li>
-            ))}
-          </ul>
-        </div>
+    <div className="panel-section">
+      <div className="panel-header">
+        <h2>Filters</h2>
+        <button className="ghost-button" type="button" onClick={onReset}>
+          Clear all
+        </button>
+      </div>
+      <label className="field">
+        <span>Search title/summary</span>
+        <input
+          name="search"
+          value={query.search}
+          onChange={onTextChange}
+          placeholder="energy, election, housing…"
+          disabled={disabled}
+        />
+      </label>
+      <label className="field">
+        <span>Source</span>
+        <select name="source" value={query.source} onChange={onTextChange} disabled={disabled}>
+          <option value="">All sources</option>
+          {(filters?.available_sources ?? []).map((source) => (
+            <option key={source} value={source}>
+              {source}
+            </option>
+          ))}
+        </select>
+      </label>
+      <label className="field">
+        <span>Section</span>
+        <select name="section" value={query.section} onChange={onTextChange} disabled={disabled}>
+          <option value="">All sections</option>
+          {(filters?.available_sections ?? []).map((section) => (
+            <option key={section} value={section}>
+              {section}
+            </option>
+          ))}
+        </select>
+      </label>
+      <div className="field-row">
+        <label className="field">
+          <span>From</span>
+          <input type="date" name="dateFrom" value={query.dateFrom} onChange={onTextChange} disabled={disabled} />
+        </label>
+        <label className="field">
+          <span>To</span>
+          <input type="date" name="dateTo" value={query.dateTo} onChange={onTextChange} disabled={disabled} />
+        </label>
+      </div>
+      <label className="field">
+        <span>Point limit</span>
+        <select
+          name="limit"
+          value={String(query.limit)}
+          onChange={(event) => onQueryChange({ limit: Number(event.target.value) })}
+          disabled={disabled}
+        >
+          {[100, 250, 500].map((limit) => (
+            <option key={limit} value={limit}>
+              {limit}
+            </option>
+          ))}
+        </select>
+      </label>
+      <div className="note-card">
+        <strong>Boundaries</strong>
+        <p>
+          Cluster/outlier controls stay out for now because the canonical backend is not yet persisting
+          those filters cleanly. Pretending otherwise would be fake architecture.
+        </p>
       </div>
     </div>
   )

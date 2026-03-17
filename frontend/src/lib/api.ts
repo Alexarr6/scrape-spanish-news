@@ -1,4 +1,10 @@
-import type { ExplorerFiltersResponse, ExplorerPointsResponse } from './types'
+import { buildExplorerPointsQuery } from './query'
+import type {
+  ExplorerArticleDetail,
+  ExplorerFiltersResponse,
+  ExplorerPointsResponse,
+  ExplorerQuery,
+} from './types'
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL ?? ''
 
@@ -10,10 +16,14 @@ async function requestJson<T>(path: string): Promise<T> {
   return (await response.json()) as T
 }
 
-export function fetchExplorerPoints(): Promise<ExplorerPointsResponse> {
-  return requestJson('/api/v1/semantic/explorer/points')
+export function fetchExplorerPoints(query: ExplorerQuery): Promise<ExplorerPointsResponse> {
+  return requestJson(`/api/v1/semantic/explorer/points${buildExplorerPointsQuery(query)}`)
 }
 
 export function fetchExplorerFilters(): Promise<ExplorerFiltersResponse> {
   return requestJson('/api/v1/semantic/explorer/filters')
+}
+
+export function fetchExplorerArticleDetail(articleId: number): Promise<ExplorerArticleDetail> {
+  return requestJson(`/api/v1/semantic/explorer/articles/${articleId}`)
 }

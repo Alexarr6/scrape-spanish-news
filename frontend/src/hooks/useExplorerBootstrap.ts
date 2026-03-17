@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { fetchExplorerFilters, fetchExplorerPoints } from '../lib/api'
+import { DEFAULT_QUERY } from '../lib/types'
 import type { ExplorerFiltersResponse, ExplorerPointsResponse } from '../lib/types'
 
 type BootstrapState = {
@@ -22,7 +23,7 @@ export function useExplorerBootstrap(): BootstrapState {
     async function load() {
       try {
         const [points, filters] = await Promise.all([
-          fetchExplorerPoints(),
+          fetchExplorerPoints(DEFAULT_QUERY),
           fetchExplorerFilters(),
         ])
         if (!cancelled) {
