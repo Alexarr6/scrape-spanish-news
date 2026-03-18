@@ -1,107 +1,113 @@
 # RESULTS.md
 
 ## Resumen de entrega
-La fase siguiente ya no es solo postureo visual del explorer. Ahora el sistema calcula clustering semántico real sobre embeddings, lo persiste por `projection_set`, lo expone por API y lo usa en la UI para filtros y modos visuales sin reventar el alcance.
+Ya está hecho el arreglo que importaba de verdad: el pipeline semántico en DB ahora acepta ventanas temporales explícitas y el análisis dejó de construir la barbaridad de matriz NxN completa solo para densidad local y fuentes cercanas. En una Raspberry eso no es un detalle; es la diferencia entre funcionar y ponerse a arder con dignidad.
 
 ## Cambios realizados
 
-### Planner
-- Reemplacé `PLAN.md` por el plan de la nueva fase centrada en:
-  - framing/camera/focus refinado en 2D y 3D
-  - clustering semántico sobre embeddings con preferencia por HDBSCAN
-  - persistencia y exposición API de clusters
-  - visual modes como color-by-source / color-by-cluster
-  - mejoras UI acotadas para soportarlo
+### 1) Contrato temporal reutilizable
+Implementé el contrato común pedido en `src/semantic/dbstore.py`:
+- `SemanticWindow`
+- `resolve_semantic_window(days_back=..., date_from=..., date_to=...)`
+- validación centralizada para combinaciones inválidas
+- resolución de `--days-back` como ventana inclusiva UTC terminando hoy
 
-### Implementer #1 — backend / API
-- `src/semantic/analyze.py`
-  - Pasé a clustering HDBSCAN sobre embeddings normalizados.
-  - Dejé manejo sensato para datasets pequeños.
-  - Mantengo análisis por punto con `cluster_id`, `cluster_size`, `is_outlier`, densidad local y diversidad de fuentes cercanas.
-- `src/semantic/contracts.py`
-  - `ClusterArtifact` ahora incluye `centroid_z`.
-- `src/semantic/dbstore.py`
-  - Añadí tablas semánticas aditivas para persistir análisis por punto y resúmenes de cluster.
-  - `refresh_projection_set()` ahora recalcula y persiste análisis después de regenerar la proyección.
-  - `load_explorer_points_page()` y `load_explorer_article_detail()` ya consumen análisis persistido.
-  - `cluster_id` y `outlier_only` dejan de ser mentira en los filtros.
-- `src/api/contracts/semantic.py`
-  - Amplié contratos con `local_density_distance`, `nearby_sources` y `cluster_summaries`.
-- `src/api/v1/semantic.py`
-  - El meta del explorer ya devuelve resúmenes de cluster.
+Eso evita que cada script rehaga la misma aritmética de fechas de forma cutre.
 
-### Implementer #1 — frontend / explorer
-- `frontend/src/lib/types.ts`
-  - Nuevos tipos para cluster summaries, color mode y query con cluster/outlier.
-- `frontend/src/lib/query.ts`
-  - Querystring actualizado con `cluster_id` y `outlier_only`.
-- `frontend/src/hooks/useExplorerFilters.ts`
-  - Conteo de filtros activos ya contempla cluster y outlier.
-- `frontend/src/components/FilterBar.tsx`
-  - Añadí selector de cluster y toggle de outliers.
-- `frontend/src/components/MapPanel.tsx`
-  - Añadí modos visuales `neutral` / `source` / `cluster`.
-  - Mejoré reset y focus-selected para 2D y 3D.
-  - Los tooltips ya muestran contexto de cluster/outlier.
-- `frontend/src/components/StatusBar.tsx`
-  - Estado superior ahora refleja modo visual y recuento de clusters.
-- `frontend/src/components/InspectorPanel.tsx`
-  - El inspector ya muestra densidad local y fuentes cercanas.
-- `frontend/src/routes/ExplorerPage.tsx`
-  - Estado de `colorMode` integrado en la shell del explorer.
+### 2) Plumbing del window por la ruta DB existente
+Apliqué la ventana temporal a la ruta real, sin inventar workarounds paralelos:
 
-### Architect review
-- Dejé revisión directa en:
-  - `docs/reviews/ARCH_REVIEW_explorer_clustering_phase_2026-03-18.md`
-- Hallazgos principales:
-  - la dirección general es correcta
-  - quedaban defaults operativos viejos apuntando a `pca_2d_latest`
-  - había warning ruidoso de HDBSCAN
-  - `load_projected_points()` todavía no hidrataba análisis persistido
+- `select_embedding_candidates(...)`
+  - filtra por `articles.published_at` cuando se pasa ventana
+- `load_embedding_artifacts(...)`
+  - filtra embeddings unidos con `articles`
+- `refresh_projection_set(...)`
+  - acepta `window`
+  - en modo acotado borra y reconstruye el `projection_set` solicitado para esa ventana, manteniendo consistencia interna del set
+- `load_projected_points(...)`
+  - también acepta `window`, para que el build/export no derive en drift absurdo entre embeddings y puntos
 
-### Implementer #2 — follow-up tras architect review
-Apliqué solo mejoras inmediatas y de bajo riesgo:
-- `src/semantic/analyze.py`
-  - Fijé `copy=False` explícitamente en HDBSCAN para quitar el warning futuro.
-- `src/semantic/dbstore.py`
-  - `load_projected_points()` ahora también hidrata análisis persistido.
-- `Makefile`
-  - `semantic-project`, `semantic-build` y `semantic-smoke` pasan a usar `pca_3d_latest` por defecto.
-- `README.md`
-  - Actualicé el copy del explorer y la persistencia semántica.
-- `STATUS.md` / `RESULTS.md`
-  - Actualizados al estado real de esta fase.
+### 3) Flags CLI añadidos
+Wired end-to-end en:
+- `scripts/semantic_sync.py`
+- `scripts/semantic_project.py`
+- `scripts/build_semantic_map.py`
+
+Flags soportados:
+- `--days-back N`
+- `--date-from YYYY-MM-DD`
+- `--date-to YYYY-MM-DD`
+
+Comportamiento:
+- sin flags => historial completo, igual que antes
+- `--days-back` no se puede mezclar con fechas explícitas
+- `date_from` / `date_to` pueden usarse por separado o juntos
+
+### 4) Optimización de memoria pragmática
+En `src/semantic/analyze.py` quité el cuello de botella idiota:
+- antes: normalización + matriz completa de distancias NxN
+- ahora: normalización + `NearestNeighbors` para obtener vecinos cercanos por fila
+
+Se mantiene:
+- clustering HDBSCAN sobre embeddings normalizados
+
+Se calcula ahora vía vecinos cercanos:
+- `local_density_distance`
+- `nearby_sources`
+- `source_neighbor_diversity`
+
+Resultado: semántica prácticamente equivalente para ese contexto, pero sin el pico de memoria más tóxico.
+
+## Tests / cobertura añadida
+Añadí y ajusté cobertura para:
+- normalización y validación de ventanas temporales
+- aplicación de filtros temporales en candidate selection y projected-point SQL
+- aceptación de flags temporales en CLI build
+- regresión de la ruta nearest-neighbor para análisis
 
 ## Verificación ejecutada
 ```bash
-~/.local/bin/uv run pytest -q tests/test_semantic_analysis.py tests/test_semantic_dbstore.py tests/test_api_semantic_explorer.py
+~/.local/bin/uv run pytest -q tests/test_semantic_analysis.py tests/test_semantic_dbstore.py tests/test_semantic_build_cli.py tests/test_api_semantic_explorer.py
 ```
-- Resultado: `23 passed`
+Resultado:
+- `33 passed`
+
+## Commits atómicos creados
+1. `047b42f` — `Add temporal window support to semantic sync and projection dbstore flow`
+2. `e78f781` — `Reduce semantic analysis memory pressure and add regression coverage`
+
+## Comandos exactos para Raspberry
+Flujo con ventana reciente de 2 días:
 
 ```bash
-cd frontend && npm run build
+cd /home/node/.openclaw/workspace/repos/spain-news-bias-scraper
+export DATABASE_URL='postgresql+psycopg://user:pass@host:5432/dbname'
+export OPENAI_API_KEY='sk-...'
+
+make semantic-sync LIMIT=100 SEMANTIC_ARGS='--embedding-model text-embedding-3-small --days-back 2'
+make semantic-project PROJECTION_SET=pca_3d_latest SEMANTIC_ARGS='--days-back 2'
+make semantic-build LIMIT=100 PROJECTION_SET=pca_3d_latest SEMANTIC_ARGS='--days-back 2'
 ```
-- Resultado: build OK
-- Warnings restantes:
-  - warning de chunk grande de Vite
-  - warning de `@loaders.gl` / `__vite-browser-external`
-  - no rompen el build
 
-## Commits creados
-1. `a096336` — `Add persisted HDBSCAN semantic clustering for explorer API`
-2. `bdfcd70` — `Add cluster-aware explorer filters visual modes and focus controls`
+Flujo equivalente con fechas explícitas:
 
-## Cambios aplicados tras architect review
-Pendientes de quedar en commit final de follow-up:
-- review markdown en `docs/reviews/ARCH_REVIEW_explorer_clustering_phase_2026-03-18.md`
-- defaults 3D en `Makefile`
-- hidratación de análisis en `load_projected_points()`
-- explicit `copy=False` para HDBSCAN
-- docs/estado/resultados actualizados
+```bash
+cd /home/node/.openclaw/workspace/repos/spain-news-bias-scraper
+export DATABASE_URL='postgresql+psycopg://user:pass@host:5432/dbname'
+export OPENAI_API_KEY='sk-...'
+
+~/.local/bin/uv run python scripts/semantic_sync.py --db-url "$DATABASE_URL" --limit 100 --embedding-model text-embedding-3-small --date-from 2026-03-16 --date-to 2026-03-18
+~/.local/bin/uv run python scripts/semantic_project.py --db-url "$DATABASE_URL" --projection-set pca_3d_latest --date-from 2026-03-16 --date-to 2026-03-18
+~/.local/bin/uv run python scripts/build_semantic_map.py --db-url "$DATABASE_URL" --projection-set pca_3d_latest --limit 100 --date-from 2026-03-16 --date-to 2026-03-18
+```
+
+Verificación local rápida:
+
+```bash
+cd /home/node/.openclaw/workspace/repos/spain-news-bias-scraper
+~/.local/bin/uv run pytest -q tests/test_semantic_analysis.py tests/test_semantic_dbstore.py tests/test_semantic_build_cli.py tests/test_api_semantic_explorer.py
+```
 
 ## Caveats
-- No hice smoke manual end-to-end contra Postgres real en esta sesión porque no había un `DATABASE_URL` operativo suministrado para una corrida honesta.
-- La experiencia cluster-aware depende de que el projection set haya sido recalculado para persistir análisis:
-```bash
-make semantic-project PROJECTION_SET=pca_3d_latest DATABASE_URL='postgresql+psycopg://user:pass@host:5432/dbname'
-```
+- No hice smoke end-to-end contra una base Postgres real en esta sesión porque faltaba un `DATABASE_URL` operativo concreto.
+- Si reutilizas el mismo `projection_set` en modo bounded y luego quieres volver a historial completo, simplemente vuelve a correr `semantic-project` sin ventana para reconstruir el set completo.

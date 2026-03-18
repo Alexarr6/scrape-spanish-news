@@ -98,6 +98,37 @@ make semantic-project PROJECTION_SET=pca_3d_latest
 make semantic-smoke LIMIT=50
 ```
 
+### Temporal window contract
+
+The semantic DB flow now supports the same bounded window flags across sync / project / build:
+
+- `--days-back N`
+- `--date-from YYYY-MM-DD`
+- `--date-to YYYY-MM-DD`
+
+Rules:
+
+- pass nothing to keep the old full-history behavior
+- `--days-back N` means an inclusive UTC window ending today
+- `--days-back` cannot be combined with explicit `--date-from` / `--date-to`
+- explicit dates can be used independently or together
+
+Example bounded rebuild for a Raspberry-friendly recent slice:
+
+```bash
+make semantic-sync LIMIT=100 SEMANTIC_ARGS='--embedding-model text-embedding-3-small --days-back 2'
+make semantic-project PROJECTION_SET=pca_3d_latest SEMANTIC_ARGS='--days-back 2'
+make semantic-build LIMIT=100 PROJECTION_SET=pca_3d_latest SEMANTIC_ARGS='--days-back 2'
+```
+
+Equivalent explicit-date flow:
+
+```bash
+uv run python scripts/semantic_sync.py --db-url "$DATABASE_URL" --limit 100 --embedding-model text-embedding-3-small --date-from 2026-03-16 --date-to 2026-03-18
+uv run python scripts/semantic_project.py --db-url "$DATABASE_URL" --projection-set pca_3d_latest --date-from 2026-03-16 --date-to 2026-03-18
+uv run python scripts/build_semantic_map.py --db-url "$DATABASE_URL" --projection-set pca_3d_latest --limit 100 --date-from 2026-03-16 --date-to 2026-03-18
+```
+
 ### Direct commands
 
 ```bash
@@ -105,7 +136,7 @@ uv run python scripts/init_pgvector.py --db-url "$DATABASE_URL" --embedding-mode
 uv run python scripts/semantic_sync.py --db-url "$DATABASE_URL" --limit 50 --embedding-model text-embedding-3-small
 uv run python scripts/semantic_project.py --db-url "$DATABASE_URL" --projection-set pca_3d_latest
 uv run python scripts/semantic_neighbors.py --db-url "$DATABASE_URL" --article-id 123 --limit 5
-uv run python scripts/build_semantic_map.py --db-url "$DATABASE_URL" --projection-set pca_2d_latest --limit 50
+uv run python scripts/build_semantic_map.py --db-url "$DATABASE_URL" --projection-set pca_3d_latest --limit 50
 ```
 
 Artifacts land in:

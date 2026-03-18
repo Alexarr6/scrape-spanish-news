@@ -1,28 +1,34 @@
-- State: EXPLORER_CLUSTERING_PHASE_DONE
-- Current phase: Explorer UX refinement + semantic clustering
-- Last update: 2026-03-18 13:58 UTC
+- State: TEMPORAL_WINDOW_PHASE_DONE
+- Current phase: bounded semantic DB windowing + analysis memory optimization
+- Last update: 2026-03-18 14:55 UTC
 - Pending approvals: none
 
 ## Completed in this iteration
-- Replaced the old phase plan with the new bounded phase focused on explorer UX refinement and semantic clustering over embeddings.
-- Added real HDBSCAN-based semantic clustering over normalized embeddings, with deterministic handling for tiny datasets.
-- Persisted point-level semantic analysis and cluster summaries keyed by `projection_set` in additive semantic analysis tables.
-- Made explorer API cluster metadata real instead of decorative: `/points` and `/filters` now expose available clusters and cluster summaries, and `cluster_id` / `outlier_only` filtering now works.
-- Extended semantic summary payloads with local density and nearby-source context.
-- Updated the explorer UI with real cluster filtering, outlier-only filtering, color modes (`neutral` / `source` / `cluster`), and focus-selected / better reset behavior.
-- Added an architect review markdown file under `docs/reviews/`.
-- Applied the architect’s immediate in-scope fixes: explicit HDBSCAN `copy` config, persisted analysis hydration in generic projected-point loads, and 3D defaults in operator Makefile targets.
+- Replaced the ambiguous follow-up with the bounded temporal-window phase from `PLAN.md`.
+- Added a reusable semantic window contract in `src/semantic/dbstore.py` via `resolve_semantic_window()` and `SemanticWindow`.
+- Wired `--days-back`, `--date-from`, and `--date-to` through:
+  - `scripts/semantic_sync.py`
+  - `scripts/semantic_project.py`
+  - `scripts/build_semantic_map.py`
+- Applied the window contract to:
+  - semantic sync candidate selection
+  - embedding artifact loading
+  - projection-set rebuilds
+  - projected-point loads used by the build/export path
+- Kept no-window behavior backward-compatible: full history still runs when no window flags are passed.
+- Replaced the worst analysis-time O(N^2) memory spike in `src/semantic/analyze.py`:
+  - clustering still runs on normalized embeddings
+  - local density and nearby-source signals now come from nearest-neighbor queries instead of a full pairwise distance matrix
+- Added regression coverage for temporal window normalization / SQL plumbing and the nearest-neighbor analysis path.
 
 ## Verification run
-- `~/.local/bin/uv run pytest -q tests/test_semantic_analysis.py tests/test_semantic_dbstore.py tests/test_api_semantic_explorer.py`
-  - Result: `23 passed`
-- `cd frontend && npm run build`
-  - Result: success
-  - Note: Vite still emits the pre-existing large chunk warning and the loaders.gl browser-external warning during build, but the build completes successfully.
+- `~/.local/bin/uv run pytest -q tests/test_semantic_analysis.py tests/test_semantic_dbstore.py tests/test_semantic_build_cli.py tests/test_api_semantic_explorer.py`
+  - Result: `33 passed`
 
 ## Atomic commits created
-- `a096336` — `Add persisted HDBSCAN semantic clustering for explorer API`
-- `bdfcd70` — `Add cluster-aware explorer filters visual modes and focus controls`
+- `047b42f` — `Add temporal window support to semantic sync and projection dbstore flow`
+- `e78f781` — `Reduce semantic analysis memory pressure and add regression coverage`
 
-## Follow-up commit pending in working tree
-- architect-review follow-up + docs/status/results updates
+## Remaining caveats
+- No live Postgres smoke was executed in this session because no concrete `DATABASE_URL` for an honest Raspberry/remote run was provided here.
+- In bounded mode, `refresh_projection_set()` clears and rebuilds the named `projection_set` for the bounded slice so the set stays internally consistent instead of mixing old global rows with fresh windowed rows.
