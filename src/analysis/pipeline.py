@@ -11,6 +11,7 @@ from sqlalchemy.orm import Session
 
 from src.analysis.canonicalization import EntityCanonicalizer
 from src.analysis.contracts import (
+    ArticleAnalysisExtractedEntity,
     ArticleAnalysisRead,
     ArticleEnrichmentPayload,
     ClusterRebuildMetrics,
@@ -197,6 +198,9 @@ class AnalysisPipeline:
         self.session.execute(
             delete(EntityMentionORM).where(EntityMentionORM.article_id == article.id)
         )
+        merged_mentions: dict[
+            tuple[int, int, str], dict[str, int | float | str | None]
+        ] = {}
         for entity_payload in payload.entities[:12]:
             canonical = self.canonicalizer.canonicalize(entity_payload)
             entity_row = self.session.execute(
@@ -234,23 +238,58 @@ class AnalysisPipeline:
                     )
                 )
                 aliases.add(normalized_alias)
-            combined_text = " ".join([article.title, article.summary, article.article_text]).lower()
-            surface = entity_payload.canonical_name
-            mention_count = combined_text.count(surface.lower()) or 1
-            self.session.add(
-                EntityMentionORM(
-                    article_id=article.id,
-                    entity_id=entity_row.id,
-                    surface_form=surface,
-                    mention_text_normalized=normalize_lookup(surface),
-                    mention_count=mention_count,
-                    title_hits=article.title.lower().count(surface.lower()),
-                    summary_hits=article.summary.lower().count(surface.lower()),
-                    body_hits=article.article_text.lower().count(surface.lower()),
-                    relevance_score=entity_payload.relevance_score,
-                    role_hint=entity_payload.role_hint,
-                )
+
+            mention = self._build_entity_mention(
+                article=article,
+                entity_id=entity_row.id,
+                entity_payload=entity_payload,
             )
+            mention_key = (
+                mention["article_id"],
+                mention["entity_id"],
+                mention["mention_text_normalized"],
+            )
+            merged = merged_mentions.get(mention_key)
+            if merged is None:
+                merged_mentions[mention_key] = mention
+                continue
+            merged["mention_count"] += mention["mention_count"]
+            merged["title_hits"] += mention["title_hits"]
+            merged["summary_hits"] += mention["summary_hits"]
+            merged["body_hits"] += mention["body_hits"]
+            merged["relevance_score"] = max(merged["relevance_score"], mention["relevance_score"])
+            if not merged["role_hint"] and mention["role_hint"]:
+                merged["role_hint"] = mention["role_hint"]
+            if len(mention["surface_form"]) > len(merged["surface_form"]):
+                merged["surface_form"] = mention["surface_form"]
+
+        for mention in merged_mentions.values():
+            self.session.add(EntityMentionORM(**mention))
+
+    def _build_entity_mention(
+        self,
+        *,
+        article: ArticleRead,
+        entity_id: int,
+        entity_payload: ArticleAnalysisExtractedEntity,
+    ) -> dict[str, int | float | str | None]:
+        surface = entity_payload.canonical_name.strip()
+        article_title = article.title.lower()
+        article_summary = article.summary.lower()
+        article_body = article.article_text.lower()
+        combined_text = " ".join([article.title, article.summary, article.article_text]).lower()
+        return {
+            "article_id": article.id,
+            "entity_id": entity_id,
+            "surface_form": surface,
+            "mention_text_normalized": normalize_lookup(surface),
+            "mention_count": combined_text.count(surface.lower()) or 1,
+            "title_hits": article_title.count(surface.lower()),
+            "summary_hits": article_summary.count(surface.lower()),
+            "body_hits": article_body.count(surface.lower()),
+            "relevance_score": entity_payload.relevance_score,
+            "role_hint": entity_payload.role_hint,
+        }
 
     def _content_hash(self, article: ArticleRead) -> str:
         raw = "\n".join(
