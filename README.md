@@ -41,7 +41,7 @@ That gives you:
 - `/api/v1/semantic/explorer/*` from FastAPI as the canonical semantic data surface
 - optional built-app serving at `http://127.0.0.1:8000/explorer` after `make frontend-build`
 
-Phase 0 is foundation only: API contract, app workspace, build wiring, and a minimal deck.gl-backed shell that proves the frontend can load canonical explorer data without shoving browser logic into backend modules.
+The current explorer phase is now a bounded dual-view foundation: the backend serves canonical `x/y/z`, the frontend can flip between 2D and 3D deck.gl views, and the 2D framing is tuned to stop reading like an unreadable blob.
 
 ## Persistence/API behavior notes
 
@@ -72,7 +72,7 @@ The semantic workflow is still boring on purpose, but now the durable source of 
 
 - keeps scraped content in `articles`
 - stores OpenAI embeddings in `article_embeddings` via pgvector, with the vector width aligned to the selected embedding model
-- stores derived 2D PCA coordinates in a separate `article_projections` table
+- stores derived PCA coordinates in a separate `article_projections` table, including real `x/y/z` for the canonical 3D explorer set
 - supports bounded backfill / incremental sync for missing or changed articles
 - supports nearest-neighbor similarity queries in Postgres
 - still exports rebuildable JSON/HTML artifacts under `data/semantic/`
@@ -93,7 +93,7 @@ make sync
 make preflight
 make semantic-db-init SEMANTIC_ARGS="--embedding-model text-embedding-3-small"
 make semantic-sync LIMIT=50 SEMANTIC_ARGS="--embedding-model text-embedding-3-small"
-make semantic-project PROJECTION_SET=pca_2d_latest
+make semantic-project PROJECTION_SET=pca_3d_latest
 make semantic-smoke LIMIT=50
 ```
 
@@ -102,7 +102,7 @@ make semantic-smoke LIMIT=50
 ```bash
 uv run python scripts/init_pgvector.py --db-url "$DATABASE_URL" --embedding-model text-embedding-3-small
 uv run python scripts/semantic_sync.py --db-url "$DATABASE_URL" --limit 50 --embedding-model text-embedding-3-small
-uv run python scripts/semantic_project.py --db-url "$DATABASE_URL" --projection-set pca_2d_latest
+uv run python scripts/semantic_project.py --db-url "$DATABASE_URL" --projection-set pca_3d_latest
 uv run python scripts/semantic_neighbors.py --db-url "$DATABASE_URL" --article-id 123 --limit 5
 uv run python scripts/build_semantic_map.py --db-url "$DATABASE_URL" --projection-set pca_2d_latest --limit 50
 ```
