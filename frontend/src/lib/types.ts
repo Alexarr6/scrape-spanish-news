@@ -18,7 +18,17 @@ export type ExplorerPoint = {
   summary_snippet: string
   x: number
   y: number
+  z: number
   analysis: ExplorerSemanticSummary
+}
+
+export type ExplorerProjectionBounds = {
+  min_x: number
+  max_x: number
+  min_y: number
+  max_y: number
+  min_z: number
+  max_z: number
 }
 
 export type ExplorerMeta = {
@@ -26,7 +36,7 @@ export type ExplorerMeta = {
   returned: number
   limit: number
   projection_set: string
-  bounds: { min_x: number; max_x: number; min_y: number; max_y: number } | null
+  bounds: ExplorerProjectionBounds | null
   available_sources: string[]
   available_sections: string[]
   available_clusters: number[]
@@ -86,6 +96,8 @@ export type ExplorerQuery = {
   dateTo: string
   limit: number
 }
+
+export type ExplorerViewMode = '2d' | '3d'
 
 export const DEFAULT_QUERY: ExplorerQuery = {
   search: '',

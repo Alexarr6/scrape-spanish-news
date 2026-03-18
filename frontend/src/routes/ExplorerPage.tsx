@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { ExplorerLayout } from '../components/ExplorerLayout'
 import { FilterBar } from '../components/FilterBar'
 import { InspectorPanel } from '../components/InspectorPanel'
@@ -5,8 +6,10 @@ import { MapPanel } from '../components/MapPanel'
 import { StatusBar } from '../components/StatusBar'
 import { useExplorerData } from '../hooks/useExplorerData'
 import { useExplorerFilters } from '../hooks/useExplorerFilters'
+import type { ExplorerViewMode } from '../lib/types'
 
 export function ExplorerPage() {
+  const [viewMode, setViewMode] = useState<ExplorerViewMode>('2d')
   const { query, activeFilterCount, updateQuery, resetQuery } = useExplorerFilters()
   const {
     pointsState,
@@ -28,6 +31,7 @@ export function ExplorerPage() {
           meta={pointsState.data?.meta ?? null}
           activeFilterCount={activeFilterCount}
           selectedArticleId={selectedArticleId}
+          viewMode={viewMode}
           onResetFilters={resetQuery}
         />
       }
@@ -48,6 +52,8 @@ export function ExplorerPage() {
           selectedArticleId={selectedArticleId}
           hoveredArticleId={hoveredArticleId}
           neighborIds={neighborIds}
+          viewMode={viewMode}
+          onViewModeChange={setViewMode}
           onHoverArticle={setHoveredArticleId}
           onSelectArticle={setSelectedArticleId}
         />

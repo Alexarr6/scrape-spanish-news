@@ -44,15 +44,17 @@ button {
 .status-bar {
   grid-area: status;
   padding: 1rem 1.25rem;
-  border-bottom: 1px solid rgba(148, 163, 184, 0.25);
-  background: #111827;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.22);
+  background: linear-gradient(180deg, rgba(17, 24, 39, 0.98), rgba(15, 23, 42, 0.96));
+  backdrop-filter: blur(12px);
 }
 
 .status-bar-content,
 .panel-header,
 .status-chip-row,
 .action-row,
-.field-row {
+.field-row,
+.hint-row {
   display: flex;
   gap: 0.75rem;
 }
@@ -65,7 +67,8 @@ button {
 
 .status-chip-row,
 .action-row,
-.field-row {
+.field-row,
+.hint-row {
   flex-wrap: wrap;
   align-items: center;
 }
@@ -79,12 +82,12 @@ button {
 
 .filter-panel {
   grid-area: filters;
-  border-right: 1px solid rgba(148, 163, 184, 0.18);
+  border-right: 1px solid rgba(148, 163, 184, 0.16);
 }
 
 .inspector-panel {
   grid-area: inspector;
-  border-left: 1px solid rgba(148, 163, 184, 0.18);
+  border-left: 1px solid rgba(148, 163, 184, 0.16);
 }
 
 .map-panel {
@@ -96,7 +99,10 @@ button {
   position: relative;
   height: 100%;
   min-height: calc(100vh - 73px);
-  background: radial-gradient(circle at top, rgba(37, 99, 235, 0.38), #0b1220 65%);
+  background:
+    radial-gradient(circle at top, rgba(59, 130, 246, 0.26), transparent 34%),
+    radial-gradient(circle at bottom right, rgba(16, 185, 129, 0.1), transparent 28%),
+    #08111f;
 }
 
 .map-overlay,
@@ -104,10 +110,12 @@ button {
 .note-card,
 .article-card,
 .info-card,
-.empty-state {
-  border-radius: 0.75rem;
-  border: 1px solid rgba(148, 163, 184, 0.22);
-  background: rgba(15, 23, 42, 0.88);
+.empty-state,
+.segmented-control {
+  border-radius: 0.9rem;
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  background: rgba(15, 23, 42, 0.84);
+  box-shadow: 0 12px 36px rgba(2, 8, 23, 0.28);
 }
 
 .map-overlay,
@@ -119,8 +127,14 @@ button {
 .map-overlay {
   top: 1rem;
   left: 1rem;
-  max-width: 20rem;
-  padding: 0.875rem 1rem;
+  max-width: min(34rem, calc(100% - 2rem));
+  padding: 0.9rem 1rem;
+}
+
+.map-overlay-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 0.9rem;
 }
 
 .empty-state {
@@ -138,6 +152,11 @@ button {
   pointer-events: none;
 }
 
+.point-coords {
+  margin-top: 0.55rem;
+  font-size: 0.84rem;
+}
+
 .panel-section,
 .inspector-content {
   display: flex;
@@ -153,27 +172,50 @@ button {
 
 .field input,
 .field select,
-.ghost-button {
-  border-radius: 0.65rem;
-  border: 1px solid rgba(148, 163, 184, 0.25);
-  background: rgba(15, 23, 42, 0.9);
+.ghost-button,
+.segmented-button {
+  border-radius: 0.7rem;
+  border: 1px solid rgba(148, 163, 184, 0.24);
+  background: rgba(15, 23, 42, 0.92);
   color: inherit;
-  padding: 0.65rem 0.75rem;
+  padding: 0.68rem 0.8rem;
   text-decoration: none;
+  transition: background 120ms ease, border-color 120ms ease, transform 120ms ease;
 }
 
-.ghost-button:hover {
+.ghost-button:hover,
+.segmented-button:hover,
+.neighbor-button:hover {
   background: rgba(30, 41, 59, 0.98);
+  border-color: rgba(125, 211, 252, 0.3);
+}
+
+.segmented-control {
+  display: inline-flex;
+  gap: 0.3rem;
+  padding: 0.25rem;
+}
+
+.segmented-button {
+  min-width: 3.5rem;
+  background: transparent;
+}
+
+.segmented-button.active {
+  background: rgba(59, 130, 246, 0.22);
+  border-color: rgba(96, 165, 250, 0.55);
 }
 
 .status-chip {
-  padding: 0.25rem 0.6rem;
+  padding: 0.28rem 0.65rem;
   border-radius: 999px;
-  background: rgba(59, 130, 246, 0.18);
+  background: rgba(59, 130, 246, 0.16);
+  border: 1px solid rgba(59, 130, 246, 0.16);
 }
 
 .muted,
-.eyebrow {
+.eyebrow,
+.hint-row {
   color: #94a3b8;
 }
 
@@ -186,7 +228,7 @@ button {
 .article-card,
 .note-card,
 .info-card {
-  padding: 0.9rem 1rem;
+  padding: 0.95rem 1rem;
 }
 
 .info-grid {
@@ -247,7 +289,7 @@ p {
   .filter-panel,
   .inspector-panel {
     border: 0;
-    border-bottom: 1px solid rgba(148, 163, 184, 0.18);
+    border-bottom: 1px solid rgba(148, 163, 184, 0.16);
   }
 
   .map-canvas {

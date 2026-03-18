@@ -83,8 +83,8 @@ export function FilterBar({ filters, query, onQueryChange, onReset, disabled = f
       <div className="note-card">
         <strong>Boundaries</strong>
         <p>
-          Cluster/outlier controls stay out for now because the canonical backend is not yet persisting
-          those filters cleanly. Pretending otherwise would be fake architecture.
+          This phase is about a cleaner explorer and honest 2D/3D navigation. Cluster/outlier controls still stay out
+          until the backend supports them without hand-wavy nonsense.
         </p>
       </div>
     </div>

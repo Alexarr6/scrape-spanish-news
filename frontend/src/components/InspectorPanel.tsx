@@ -74,7 +74,7 @@ export function InspectorPanel({
         <Info label="Outlier" value={summary.is_outlier ? 'Yes' : 'No'} />
         <Info label="Neighbors" value={String(summary.neighbor_count)} />
         <Info label="Source diversity" value={String(summary.source_neighbor_diversity ?? 0)} />
-        <Info label="Point" value={`${selectedPoint.x.toFixed(2)}, ${selectedPoint.y.toFixed(2)}`} />
+        <Info label="Point" value={`${selectedPoint.x.toFixed(2)}, ${selectedPoint.y.toFixed(2)}, ${selectedPoint.z.toFixed(2)}`} />
       </div>
 
       <div>
