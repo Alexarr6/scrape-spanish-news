@@ -97,6 +97,7 @@ def _to_points_response(page: ExplorerPointsPage) -> ExplorerPointsResponse:
             available_sources=page.available_sources,
             available_sections=page.available_sections,
             available_clusters=page.available_clusters,
+            cluster_summaries=page.cluster_summaries,
         ),
     )
 

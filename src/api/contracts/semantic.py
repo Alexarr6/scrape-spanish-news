@@ -7,7 +7,9 @@ class ExplorerSemanticSummary(BaseModel):
     cluster_id: int | None = None
     cluster_size: int | None = None
     is_outlier: bool = False
+    local_density_distance: float | None = None
     source_neighbor_diversity: int | None = None
+    nearby_sources: list[str] = Field(default_factory=list)
     neighbor_count: int = 0
 
 
@@ -36,6 +38,24 @@ class ExplorerProjectionBounds(BaseModel):
     max_z: float
 
 
+class ExplorerClusterCentroid(BaseModel):
+    x: float
+    y: float
+    z: float
+
+
+class ExplorerClusterSummary(BaseModel):
+    cluster_id: int
+    size: int
+    top_sources: dict[str, int] = Field(default_factory=dict)
+    source_count: int = 0
+    source_dominance: float = 0.0
+    date_min: str = ""
+    date_max: str = ""
+    centroid: ExplorerClusterCentroid
+    representative_article_ids: list[int] = Field(default_factory=list)
+
+
 class ExplorerMeta(BaseModel):
     total: int
     returned: int
@@ -45,6 +65,7 @@ class ExplorerMeta(BaseModel):
     available_sources: list[str] = Field(default_factory=list)
     available_sections: list[str] = Field(default_factory=list)
     available_clusters: list[int] = Field(default_factory=list)
+    cluster_summaries: list[ExplorerClusterSummary] = Field(default_factory=list)
 
 
 class ExplorerPointsResponse(BaseModel):
@@ -57,6 +78,7 @@ class ExplorerFiltersResponse(BaseModel):
     available_sources: list[str] = Field(default_factory=list)
     available_sections: list[str] = Field(default_factory=list)
     available_clusters: list[int] = Field(default_factory=list)
+    cluster_summaries: list[ExplorerClusterSummary] = Field(default_factory=list)
 
 
 class ExplorerNeighbor(BaseModel):

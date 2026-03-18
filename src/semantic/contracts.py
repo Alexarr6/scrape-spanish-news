@@ -83,6 +83,7 @@ class ClusterArtifact:
     date_max: str = ""
     centroid_x: float = 0.0
     centroid_y: float = 0.0
+    centroid_z: float = 0.0
 
     def model_dump(self) -> dict[str, Any]:
         return asdict(self)

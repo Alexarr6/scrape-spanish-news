@@ -4,6 +4,7 @@ import hashlib
 import math
 import re
 from dataclasses import dataclass
+import json
 from datetime import datetime, timezone
 from typing import Any
 
@@ -13,7 +14,9 @@ from sqlalchemy.orm import Session
 
 from src.core.text_normalization import normalize_text
 from src.persistence.orm_models import ArticleORM
+from src.semantic.analyze import analyze_points
 from src.semantic.contracts import (
+    ClusterArtifact,
     EmbeddingArtifact,
     NeighborArtifact,
     PointAnalysisArtifact,
@@ -73,6 +76,47 @@ CREATE INDEX IF NOT EXISTS ix_article_projections_kind ON article_projections (p
 CREATE INDEX IF NOT EXISTS ix_article_projections_set ON article_projections (projection_set);
 CREATE INDEX IF NOT EXISTS ix_article_projections_embedding_id
   ON article_projections (embedding_id);
+
+CREATE TABLE IF NOT EXISTS semantic_point_analysis (
+  id BIGSERIAL PRIMARY KEY,
+  article_id BIGINT NOT NULL REFERENCES articles(id) ON DELETE CASCADE,
+  projection_set TEXT NOT NULL,
+  cluster_id INTEGER,
+  cluster_size INTEGER NOT NULL DEFAULT 0,
+  is_outlier BOOLEAN NOT NULL DEFAULT FALSE,
+  local_density_distance DOUBLE PRECISION NOT NULL DEFAULT 0,
+  source_neighbor_diversity INTEGER NOT NULL DEFAULT 0,
+  nearby_sources_json TEXT NOT NULL DEFAULT '[]',
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  CONSTRAINT uq_semantic_point_analysis_article_set UNIQUE (article_id, projection_set)
+);
+
+CREATE INDEX IF NOT EXISTS ix_semantic_point_analysis_projection_set
+  ON semantic_point_analysis (projection_set);
+CREATE INDEX IF NOT EXISTS ix_semantic_point_analysis_cluster_id
+  ON semantic_point_analysis (projection_set, cluster_id);
+
+CREATE TABLE IF NOT EXISTS semantic_clusters (
+  id BIGSERIAL PRIMARY KEY,
+  projection_set TEXT NOT NULL,
+  cluster_id INTEGER NOT NULL,
+  size INTEGER NOT NULL,
+  article_ids_json TEXT NOT NULL DEFAULT '[]',
+  representative_article_ids_json TEXT NOT NULL DEFAULT '[]',
+  top_sources_json TEXT NOT NULL DEFAULT '{{}}',
+  source_count INTEGER NOT NULL DEFAULT 0,
+  source_dominance DOUBLE PRECISION NOT NULL DEFAULT 0,
+  date_min TEXT NOT NULL DEFAULT '',
+  date_max TEXT NOT NULL DEFAULT '',
+  centroid_x DOUBLE PRECISION NOT NULL DEFAULT 0,
+  centroid_y DOUBLE PRECISION NOT NULL DEFAULT 0,
+  centroid_z DOUBLE PRECISION NOT NULL DEFAULT 0,
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  CONSTRAINT uq_semantic_clusters_projection_cluster UNIQUE (projection_set, cluster_id)
+);
+
+CREATE INDEX IF NOT EXISTS ix_semantic_clusters_projection_set
+  ON semantic_clusters (projection_set);
 """
 
 HNSW_INDEX_SQL = """
@@ -412,8 +456,9 @@ def refresh_projection_set(
     session: Session, *, projection_set: str, projection_version: str = DEFAULT_PROJECTION_VERSION
 ) -> int:
     projection_kind = projection_kind_for_set(projection_set)
+    embeddings = load_embedding_artifacts(session)
     points = project_embeddings(
-        load_embedding_artifacts(session),
+        embeddings,
         dimensions=3 if projection_kind == "pca_3d" else 2,
     )
     now = _utc_now()
@@ -457,6 +502,7 @@ def refresh_projection_set(
                 "updated_at": now,
             },
         )
+    _persist_projection_analysis(session, projection_set=projection_set, points=points, embeddings=embeddings)
     session.commit()
     return len(points)
 
@@ -681,6 +727,7 @@ class ExplorerPointsPage:
     available_sources: list[str]
     available_sections: list[str]
     available_clusters: list[int]
+    cluster_summaries: list[dict[str, Any]]
 
 
 @dataclass
@@ -732,10 +779,19 @@ def load_explorer_points_page(session: Session, *, filters: ExplorerFilters) -> 
                    COALESCE(e.summary_snippet, '') AS summary_snippet,
                    p.x,
                    p.y,
-                   COALESCE(p.z, 0.0) AS z
+                   COALESCE(p.z, 0.0) AS z,
+                   spa.cluster_id,
+                   COALESCE(spa.cluster_size, 0) AS cluster_size,
+                   COALESCE(spa.is_outlier, false) AS is_outlier,
+                   COALESCE(spa.local_density_distance, 0.0) AS local_density_distance,
+                   COALESCE(spa.source_neighbor_diversity, 0) AS source_neighbor_diversity,
+                   COALESCE(spa.nearby_sources_json, '[]') AS nearby_sources_json
             FROM article_projections p
             JOIN articles a ON a.id = p.article_id
             JOIN article_embeddings e ON e.id = p.embedding_id
+            LEFT JOIN semantic_point_analysis spa
+              ON spa.article_id = p.article_id
+             AND spa.projection_set = p.projection_set
             {where_sql}
             ORDER BY a.published_at DESC, a.id DESC
             LIMIT :limit
@@ -763,7 +819,7 @@ def load_explorer_points_page(session: Session, *, filters: ExplorerFilters) -> 
                 x=float(row["x"]),
                 y=float(row["y"]),
                 z=float(row["z"]),
-                analysis=_analysis_for_neighbors(row["article_id"], neighbors),
+                analysis=_analysis_for_row(row, neighbors=neighbors),
             )
         )
     total = session.execute(
@@ -773,6 +829,9 @@ def load_explorer_points_page(session: Session, *, filters: ExplorerFilters) -> 
             FROM article_projections p
             JOIN articles a ON a.id = p.article_id
             JOIN article_embeddings e ON e.id = p.embedding_id
+            LEFT JOIN semantic_point_analysis spa
+              ON spa.article_id = p.article_id
+             AND spa.projection_set = p.projection_set
             {where_sql}
             """
         ),
@@ -796,7 +855,8 @@ def load_explorer_points_page(session: Session, *, filters: ExplorerFilters) -> 
             where_sql=where_sql,
             params=params,
         ),
-        available_clusters=[],
+        available_clusters=_load_available_clusters(session, projection_set=filters.projection_set),
+        cluster_summaries=_load_cluster_summaries(session, projection_set=filters.projection_set),
     )
 
 
@@ -809,7 +869,8 @@ def load_explorer_filter_options(session: Session, *, projection_set: str) -> di
         "available_sections": _load_distinct_values(
             session, column="a.section", projection_set=projection_set
         ),
-        "available_clusters": [],
+        "available_clusters": _load_available_clusters(session, projection_set=projection_set),
+        "cluster_summaries": _load_cluster_summaries(session, projection_set=projection_set),
     }
 
 
@@ -836,13 +897,22 @@ def load_explorer_article_detail(
                    p.x,
                    p.y,
                    COALESCE(p.z, 0.0) AS z,
-                   COALESCE(e.summary_snippet, '') AS summary_snippet
+                   COALESCE(e.summary_snippet, '') AS summary_snippet,
+                   spa.cluster_id,
+                   COALESCE(spa.cluster_size, 0) AS cluster_size,
+                   COALESCE(spa.is_outlier, false) AS is_outlier,
+                   COALESCE(spa.local_density_distance, 0.0) AS local_density_distance,
+                   COALESCE(spa.source_neighbor_diversity, 0) AS source_neighbor_diversity,
+                   COALESCE(spa.nearby_sources_json, '[]') AS nearby_sources_json
             FROM articles a
             LEFT JOIN article_embeddings e ON e.article_id = a.id
             LEFT JOIN article_projections p
               ON p.article_id = a.id
              AND p.projection_set = :projection_set
              AND p.projection_kind = :projection_kind
+            LEFT JOIN semantic_point_analysis spa
+              ON spa.article_id = a.id
+             AND spa.projection_set = :projection_set
             WHERE a.id = :article_id
             """
             ),
@@ -873,7 +943,7 @@ def load_explorer_article_detail(
             x=float(row["x"]),
             y=float(row["y"]),
             z=float(row["z"]),
-            analysis=_analysis_for_neighbors(row["article_id"], neighbors),
+            analysis=_analysis_for_row(row, neighbors=neighbors),
         )
     return ExplorerArticleDetailRecord(
         article={
@@ -918,10 +988,15 @@ def _build_explorer_where_clause(
     if filters.search:
         clauses.append("(lower(a.title) LIKE :search OR lower(a.summary) LIKE :search)")
         params["search"] = f"%{filters.search.strip().lower()}%"
+    if filters.cluster_id is not None or filters.outlier_only:
+        clauses.append("spa.projection_set = :analysis_projection_set")
+        params["analysis_projection_set"] = filters.projection_set
     if filters.cluster_id is not None:
-        clauses.append("1 = 0")
+        clauses.append("spa.cluster_id = :cluster_id")
+        params["cluster_id"] = filters.cluster_id
     if filters.outlier_only:
-        clauses.append("1 = 0")
+        clauses.append("spa.is_outlier = :outlier_only")
+        params["outlier_only"] = True
     return "WHERE " + " AND ".join(clauses), params
 
 
@@ -981,6 +1056,9 @@ def _load_filtered_distinct_values(
             FROM article_projections p
             JOIN articles a ON a.id = p.article_id
             JOIN article_embeddings e ON e.id = p.embedding_id
+            LEFT JOIN semantic_point_analysis spa
+              ON spa.article_id = p.article_id
+             AND spa.projection_set = p.projection_set
             {where_sql}
               AND {column} <> ''
             ORDER BY value ASC
@@ -1004,15 +1082,128 @@ def _safe_neighbors(session: Session, *, article_id: int, limit: int) -> list[Ne
         return []
 
 
-def _analysis_for_neighbors(
-    article_id: int,
-    neighbors: list[NeighborArtifact],
-) -> PointAnalysisArtifact:
+
+def _persist_projection_analysis(
+    session: Session,
+    *,
+    projection_set: str,
+    points: list[PointArtifact],
+    embeddings: list[EmbeddingArtifact],
+) -> None:
+    analysis = analyze_points(points, embeddings)
+    analysis_by_id = {point.article_id: point for point in analysis.points}
+    now = _utc_now()
+    session.execute(text("DELETE FROM semantic_point_analysis WHERE projection_set = :projection_set"), {"projection_set": projection_set})
+    session.execute(text("DELETE FROM semantic_clusters WHERE projection_set = :projection_set"), {"projection_set": projection_set})
+    for point in points:
+        point.analysis = analysis_by_id.get(point.article_id, point.analysis)
+        session.execute(
+            text(
+                """
+                INSERT INTO semantic_point_analysis (
+                  article_id, projection_set, cluster_id, cluster_size, is_outlier,
+                  local_density_distance, source_neighbor_diversity, nearby_sources_json, updated_at
+                ) VALUES (
+                  :article_id, :projection_set, :cluster_id, :cluster_size, :is_outlier,
+                  :local_density_distance, :source_neighbor_diversity, :nearby_sources_json, :updated_at
+                )
+                """
+            ),
+            {
+                "article_id": point.article_id,
+                "projection_set": projection_set,
+                "cluster_id": point.analysis.cluster_id,
+                "cluster_size": point.analysis.cluster_size,
+                "is_outlier": point.analysis.is_outlier,
+                "local_density_distance": point.analysis.local_density_distance,
+                "source_neighbor_diversity": point.analysis.source_neighbor_diversity,
+                "nearby_sources_json": json.dumps(point.analysis.nearby_sources),
+                "updated_at": now,
+            },
+        )
+    for cluster in analysis.clusters:
+        session.execute(
+            text(
+                """
+                INSERT INTO semantic_clusters (
+                  projection_set, cluster_id, size, article_ids_json, representative_article_ids_json,
+                  top_sources_json, source_count, source_dominance, date_min, date_max,
+                  centroid_x, centroid_y, centroid_z, updated_at
+                ) VALUES (
+                  :projection_set, :cluster_id, :size, :article_ids_json, :representative_article_ids_json,
+                  :top_sources_json, :source_count, :source_dominance, :date_min, :date_max,
+                  :centroid_x, :centroid_y, :centroid_z, :updated_at
+                )
+                """
+            ),
+            {
+                "projection_set": projection_set,
+                "cluster_id": cluster.cluster_id,
+                "size": cluster.size,
+                "article_ids_json": json.dumps(cluster.article_ids),
+                "representative_article_ids_json": json.dumps(cluster.representative_article_ids),
+                "top_sources_json": json.dumps(cluster.top_sources),
+                "source_count": cluster.source_count,
+                "source_dominance": cluster.source_dominance,
+                "date_min": cluster.date_min,
+                "date_max": cluster.date_max,
+                "centroid_x": cluster.centroid_x,
+                "centroid_y": cluster.centroid_y,
+                "centroid_z": cluster.centroid_z,
+                "updated_at": now,
+            },
+        )
+
+
+def _load_available_clusters(session: Session, *, projection_set: str) -> list[int]:
+    rows = session.execute(
+        text("SELECT cluster_id FROM semantic_clusters WHERE projection_set = :projection_set ORDER BY cluster_id ASC"),
+        {"projection_set": projection_set},
+    ).scalars().all()
+    return [int(value) for value in rows if value is not None]
+
+
+def _load_cluster_summaries(session: Session, *, projection_set: str) -> list[dict[str, Any]]:
+    rows = session.execute(
+        text(
+            """
+            SELECT cluster_id, size, top_sources_json, source_count, source_dominance,
+                   date_min, date_max, centroid_x, centroid_y, centroid_z,
+                   representative_article_ids_json
+            FROM semantic_clusters
+            WHERE projection_set = :projection_set
+            ORDER BY size DESC, cluster_id ASC
+            """
+        ),
+        {"projection_set": projection_set},
+    ).mappings().all()
+    return [
+        {
+            "cluster_id": int(row["cluster_id"]),
+            "size": int(row["size"]),
+            "top_sources": json.loads(row["top_sources_json"] or "{}"),
+            "source_count": int(row["source_count"] or 0),
+            "source_dominance": float(row["source_dominance"] or 0.0),
+            "date_min": row["date_min"] or "",
+            "date_max": row["date_max"] or "",
+            "centroid": {
+                "x": float(row["centroid_x"] or 0.0),
+                "y": float(row["centroid_y"] or 0.0),
+                "z": float(row["centroid_z"] or 0.0),
+            },
+            "representative_article_ids": json.loads(row["representative_article_ids_json"] or "[]"),
+        }
+        for row in rows
+    ]
+
+
+def _analysis_for_row(row: Any, *, neighbors: list[NeighborArtifact]) -> PointAnalysisArtifact:
     return PointAnalysisArtifact(
-        article_id=article_id,
-        cluster_id=None,
-        cluster_size=0,
-        is_outlier=False,
-        source_neighbor_diversity=len({neighbor.source for neighbor in neighbors}),
-        nearby_sources=sorted({neighbor.source for neighbor in neighbors}),
+        article_id=row["article_id"],
+        cluster_id=row.get("cluster_id"),
+        cluster_size=int(row.get("cluster_size") or 0),
+        is_outlier=bool(row.get("is_outlier")),
+        local_density_distance=float(row.get("local_density_distance") or 0.0),
+        source_neighbor_diversity=int(row.get("source_neighbor_diversity") or len({neighbor.source for neighbor in neighbors})),
+        nearby_sources=sorted(set(json.loads(row.get("nearby_sources_json") or "[]") or []) | {neighbor.source for neighbor in neighbors}),
     )
