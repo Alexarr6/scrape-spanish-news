@@ -13,6 +13,7 @@ from src.semantic.contracts import SemanticBuildConfig, SemanticMetrics  # noqa:
 from src.semantic.dbstore import (  # noqa: E402
     DEFAULT_EMBEDDING_MODEL,
     ensure_vector_index,
+    resolve_semantic_window,
     select_embedding_candidates,
     upsert_embeddings,
 )
@@ -28,12 +29,20 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--batch-size", type=int, default=20)
     parser.add_argument("--embedding-model", default=DEFAULT_EMBEDDING_MODEL)
     parser.add_argument("--max-chars", type=int, default=12000)
+    parser.add_argument("--days-back", type=int, default=None)
+    parser.add_argument("--date-from", default="")
+    parser.add_argument("--date-to", default="")
     parser.add_argument("--ensure-ann-index", action="store_true")
     return parser.parse_args()
 
 
 def main() -> int:
     args = parse_args()
+    window = resolve_semantic_window(
+        days_back=args.days_back,
+        date_from=args.date_from or None,
+        date_to=args.date_to or None,
+    )
     engine = create_postgres_engine(resolve_db_url(args.db_url))
     config = SemanticBuildConfig(
         database_url=resolve_db_url(args.db_url),
@@ -49,6 +58,7 @@ def main() -> int:
             limit=args.limit,
             max_chars=args.max_chars,
             embedding_model=args.embedding_model,
+            window=window,
         )
         metrics.fetched_rows = len(candidates)
         if not candidates:

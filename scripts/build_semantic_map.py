@@ -23,6 +23,7 @@ from src.semantic.dbstore import (  # noqa: E402
     load_embedding_artifacts,
     load_projected_points,
     projection_kind_for_set,
+    resolve_semantic_window,
 )
 from src.semantic.export import (  # noqa: E402
     write_analysis_json,
@@ -44,6 +45,9 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--stamp", default="")
     parser.add_argument("--projection-set", default=DEFAULT_PROJECTION_SET)
     parser.add_argument("--neighbor-limit", type=int, default=DEFAULT_NEIGHBOR_LIMIT)
+    parser.add_argument("--days-back", type=int, default=None)
+    parser.add_argument("--date-from", default="")
+    parser.add_argument("--date-to", default="")
     parser.add_argument("--dry-run", action="store_true")
     parser.add_argument("--emit-embeddings-only", action="store_true")
     parser.add_argument("--emit-points-only", action="store_true")
@@ -54,18 +58,28 @@ def parse_args() -> argparse.Namespace:
 def main() -> int:
     args = parse_args()
     database_url = resolve_db_url(args.db_url)
+    window = resolve_semantic_window(
+        days_back=args.days_back,
+        date_from=args.date_from or None,
+        date_to=args.date_to or None,
+    )
     config = SemanticBuildConfig(database_url=database_url, limit=args.limit, stamp=args.stamp)
     metrics = SemanticMetrics(article_limit=config.limit)
     metrics.artifacts = _artifact_paths(config)
 
     engine = create_postgres_engine(database_url)
     with make_session(engine) as session:
-        embeddings = load_embedding_artifacts(session, projection_set=args.projection_set)
+        embeddings = load_embedding_artifacts(
+            session,
+            projection_set=args.projection_set,
+            window=window,
+        )
         points = load_projected_points(
             session,
             projection_set=args.projection_set,
             include_neighbors=not args.emit_points_only,
             neighbor_limit=args.neighbor_limit,
+            window=window,
         )
 
     embeddings, points = _canonicalize_semantic_records(

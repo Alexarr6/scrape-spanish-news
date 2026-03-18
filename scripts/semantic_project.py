@@ -13,6 +13,7 @@ from src.semantic.dbstore import (  # noqa: E402
     DEFAULT_PROJECTION_SET,
     load_projected_points,
     refresh_projection_set,
+    resolve_semantic_window,
 )
 from src.semantic.export import write_points_json, write_semantic_map_html  # noqa: E402
 
@@ -25,14 +26,26 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--projection-set", default=DEFAULT_PROJECTION_SET)
     parser.add_argument("--out-json", default="")
     parser.add_argument("--out-html", default="")
+    parser.add_argument("--days-back", type=int, default=None)
+    parser.add_argument("--date-from", default="")
+    parser.add_argument("--date-to", default="")
     return parser.parse_args()
 
 
 def main() -> int:
     args = parse_args()
+    window = resolve_semantic_window(
+        days_back=args.days_back,
+        date_from=args.date_from or None,
+        date_to=args.date_to or None,
+    )
     engine = create_postgres_engine(resolve_db_url(args.db_url))
     with make_session(engine) as session:
-        total = refresh_projection_set(session, projection_set=args.projection_set)
+        total = refresh_projection_set(
+            session,
+            projection_set=args.projection_set,
+            window=window,
+        )
         points = load_projected_points(session, projection_set=args.projection_set)
     if args.out_json:
         write_points_json(points, Path(args.out_json))

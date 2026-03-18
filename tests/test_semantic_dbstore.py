@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import date
 from types import SimpleNamespace
 
 import pytest
@@ -9,6 +10,7 @@ from src.semantic.contracts import EmbeddingArtifact, SemanticArticle
 from src.semantic.dbstore import (
     MIN_TEXT_LENGTH,
     ExplorerFilters,
+    SemanticWindow,
     assemble_article_text,
     content_hash_for_text,
     embedding_dimensions_for_model,
@@ -16,9 +18,11 @@ from src.semantic.dbstore import (
     load_explorer_article_detail,
     load_explorer_points_page,
     load_neighbors_for_articles,
+    load_projected_points,
     parse_vector_text,
     projection_kind_for_set,
     render_init_sql,
+    resolve_semantic_window,
     select_embedding_candidates,
     summary_snippet,
     upsert_embeddings,
@@ -54,7 +58,9 @@ class _Row:
 
 
 class _FakeQuery:
-    def __init__(self, rows): self._rows = rows
+    def __init__(self, rows): self._rows = rows; self.filters = []; self.params_seen = []
+    def filter(self, *args, **_kwargs): self.filters.extend(args); return self
+    def params(self, **kwargs): self.params_seen.append(kwargs); return self
     def order_by(self, *_args, **_kwargs): return self
     def limit(self, _value): return self
     def all(self): return self._rows
@@ -73,8 +79,8 @@ class _ScalarResult:
 
 
 class _SelectSession:
-    def __init__(self, rows, existing_by_article_id): self._rows = rows; self._existing_by_article_id = existing_by_article_id
-    def query(self, _model): return _FakeQuery(self._rows)
+    def __init__(self, rows, existing_by_article_id): self._rows = rows; self._existing_by_article_id = existing_by_article_id; self.last_query = None
+    def query(self, _model): self.last_query = _FakeQuery(self._rows); return self.last_query
     def execute(self, _statement, params=None): return _ExistingResult(self._existing_by_article_id.get(params['article_id']))
 
 
@@ -105,12 +111,13 @@ class _ExplorerQueryResult:
 
 
 class _ExplorerSession:
-    def __init__(self): self.sql = []
+    def __init__(self): self.sql = []; self.params = []
     def execute(self, statement, params=None):
         sql = str(statement)
         self.sql.append(sql)
-        if 'FROM article_projections p' in sql and 'LIMIT :limit' in sql: return _ExplorerQueryResult(rows=[])
+        self.params.append(params or {})
         if 'SELECT COUNT(*)' in sql: return _ExplorerQueryResult(scalar=0)
+        if 'FROM article_projections p' in sql: return _ExplorerQueryResult(rows=[])
         if 'FROM articles a' in sql and 'WHERE a.id = :article_id' in sql: return _ExplorerQueryResult(first_row=None)
         if 'SELECT MIN(x) AS min_x' in sql: return _ExplorerQueryResult(first_row={'min_x': None, 'max_x': None, 'min_y': None, 'max_y': None, 'min_z': None, 'max_z': None})
         if 'SELECT DISTINCT' in sql: return _ExplorerQueryResult(rows=[])
@@ -198,6 +205,57 @@ def test_load_explorer_article_detail_formats_published_at_as_text_sql() -> None
     load_explorer_article_detail(session, article_id=1, projection_set='pca_2d_latest')
     sql = next(sql for sql in session.sql if 'FROM articles a' in sql)
     assert 'to_char(a.published_at AT TIME ZONE' in sql or 'CAST(a.published_at AS TEXT)' in sql
+
+
+def test_resolve_semantic_window_supports_days_back_and_explicit_dates() -> None:
+    assert resolve_semantic_window(days_back=3, today=date(2026, 3, 18)) == SemanticWindow(
+        date_from='2026-03-16',
+        date_to='2026-03-18',
+    )
+    assert resolve_semantic_window(date_from='2026-03-01', date_to='2026-03-05') == SemanticWindow(
+        date_from='2026-03-01',
+        date_to='2026-03-05',
+    )
+
+
+def test_resolve_semantic_window_rejects_invalid_combinations() -> None:
+    with pytest.raises(ValueError, match='cannot be combined'):
+        resolve_semantic_window(days_back=2, date_from='2026-03-01')
+    with pytest.raises(ValueError, match='cannot be after'):
+        resolve_semantic_window(date_from='2026-03-05', date_to='2026-03-01')
+
+
+def test_select_embedding_candidates_applies_window_filters() -> None:
+    row = _Row(id=1)
+    session = _SelectSession([row], existing_by_article_id={})
+
+    candidates = select_embedding_candidates(
+        session,
+        limit=10,
+        max_chars=500,
+        window=SemanticWindow(date_from='2026-03-10', date_to='2026-03-12'),
+    )
+
+    assert [candidate.article.article_id for candidate in candidates] == [1]
+    assert any('window_date_from' in params for params in session.last_query.params_seen)
+    assert any('window_date_to' in params for params in session.last_query.params_seen)
+
+
+def test_load_projected_points_applies_window_filters_to_sql() -> None:
+    session = _ExplorerSession()
+
+    load_projected_points(
+        session,
+        projection_set='pca_3d_latest',
+        window=SemanticWindow(date_from='2026-03-10', date_to='2026-03-12'),
+    )
+
+    sql = next(sql for sql in session.sql if 'FROM article_projections p' in sql and 'LIMIT :limit' not in sql)
+    assert 'date(a.published_at) >= date(:window_date_from)' in sql
+    assert 'date(a.published_at) <= date(:window_date_to)' in sql
+    params = next(params for params in session.params if params.get('projection_set') == 'pca_3d_latest')
+    assert params['window_date_from'] == '2026-03-10'
+    assert params['window_date_to'] == '2026-03-12'
 
 
 def test_projection_kind_for_set_distinguishes_2d_and_3d_sets() -> None:

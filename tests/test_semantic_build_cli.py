@@ -1,9 +1,12 @@
+import sys
+
 import pytest
 
 from scripts.build_semantic_map import (
     _artifact_paths,
     _canonicalize_semantic_records,
     _summary_line,
+    parse_args,
 )
 from src.semantic.contracts import (
     AnalysisMetadataArtifact,
@@ -114,3 +117,25 @@ def test_canonicalize_semantic_records_rejects_drift() -> None:
             limit=10,
             projection_set="pca_2d_latest",
         )
+
+
+def test_parse_args_accepts_temporal_window_flags(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "build_semantic_map.py",
+            "--days-back",
+            "2",
+            "--date-from",
+            "2026-03-10",
+            "--date-to",
+            "2026-03-12",
+        ],
+    )
+
+    args = parse_args()
+
+    assert args.days_back == 2
+    assert args.date_from == "2026-03-10"
+    assert args.date_to == "2026-03-12"

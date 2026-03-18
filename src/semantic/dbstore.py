@@ -5,7 +5,7 @@ import math
 import re
 from dataclasses import dataclass
 import json
-from datetime import datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from typing import Any
 
 from sqlalchemy import text
@@ -31,6 +31,49 @@ DEFAULT_PROJECTION_SET = "pca_3d_latest"
 DEFAULT_PROJECTION_VERSION = "v1"
 DEFAULT_NEIGHBOR_LIMIT = 5
 MIN_TEXT_LENGTH = 40
+
+@dataclass(frozen=True)
+class SemanticWindow:
+    date_from: str | None = None
+    date_to: str | None = None
+
+
+def resolve_semantic_window(
+    *,
+    days_back: int | None = None,
+    date_from: str | None = None,
+    date_to: str | None = None,
+    today: date | None = None,
+) -> SemanticWindow | None:
+    if days_back is not None and days_back < 1:
+        raise ValueError("days_back must be >= 1")
+    if days_back is not None and (date_from or date_to):
+        raise ValueError("days_back cannot be combined with explicit date_from/date_to")
+    today = today or datetime.now(timezone.utc).date()
+    if days_back is not None:
+        date_to = today.isoformat()
+        date_from = (today - timedelta(days=days_back - 1)).isoformat()
+    if date_from:
+        date.fromisoformat(date_from)
+    if date_to:
+        date.fromisoformat(date_to)
+    if date_from and date_to and date_from > date_to:
+        raise ValueError("date_from cannot be after date_to")
+    if not date_from and not date_to:
+        return None
+    return SemanticWindow(date_from=date_from, date_to=date_to)
+
+
+def _apply_article_date_window(clauses: list[str], params: dict[str, Any], *, window: SemanticWindow | None) -> None:
+    if window is None:
+        return
+    if window.date_from:
+        clauses.append("date(a.published_at) >= date(:window_date_from)")
+        params["window_date_from"] = window.date_from
+    if window.date_to:
+        clauses.append("date(a.published_at) <= date(:window_date_to)")
+        params["window_date_to"] = window.date_to
+
 
 EMBEDDING_MODEL_DIMENSIONS = {
     "text-embedding-3-small": 1536,
@@ -300,11 +343,20 @@ def summary_snippet(article: SemanticArticle, *, max_chars: int = 240) -> str:
 
 
 def select_embedding_candidates(
-    session: Session, *, limit: int, max_chars: int, embedding_model: str = DEFAULT_EMBEDDING_MODEL
+    session: Session,
+    *,
+    limit: int,
+    max_chars: int,
+    embedding_model: str = DEFAULT_EMBEDDING_MODEL,
+    window: SemanticWindow | None = None,
 ) -> list[SemanticCandidate]:
+    query = session.query(ArticleORM)
+    if window and window.date_from:
+        query = query.filter(text("date(published_at) >= date(:window_date_from)")).params(window_date_from=window.date_from)
+    if window and window.date_to:
+        query = query.filter(text("date(published_at) <= date(:window_date_to)")).params(window_date_to=window.date_to)
     rows = (
-        session.query(ArticleORM)
-        .order_by(ArticleORM.published_at.desc().nullslast(), ArticleORM.id.desc())
+        query.order_by(ArticleORM.published_at.desc().nullslast(), ArticleORM.id.desc())
         .limit(limit * 4)
         .all()
     )
@@ -410,7 +462,10 @@ def upsert_embeddings(
 
 
 def load_embedding_artifacts(
-    session: Session, *, projection_set: str | None = None
+    session: Session,
+    *,
+    projection_set: str | None = None,
+    window: SemanticWindow | None = None,
 ) -> list[EmbeddingArtifact]:
     sql = """
     SELECT a.id AS article_id, a.source, a.title, a.url,
@@ -424,6 +479,7 @@ def load_embedding_artifacts(
     JOIN articles a ON a.id = e.article_id
     """
     params: dict[str, Any] = {}
+    clauses: list[str] = []
     if projection_set:
         sql += (
             " JOIN article_projections p"
@@ -431,6 +487,9 @@ def load_embedding_artifacts(
             " AND p.projection_set = :projection_set"
         )
         params["projection_set"] = projection_set
+    _apply_article_date_window(clauses, params, window=window)
+    if clauses:
+        sql += " WHERE " + " AND ".join(clauses)
     sql += " ORDER BY a.published_at DESC NULLS LAST, a.id DESC"
     rows = session.execute(text(sql), params).mappings().all()
     artifacts: list[EmbeddingArtifact] = []
@@ -453,15 +512,22 @@ def load_embedding_artifacts(
 
 
 def refresh_projection_set(
-    session: Session, *, projection_set: str, projection_version: str = DEFAULT_PROJECTION_VERSION
+    session: Session,
+    *,
+    projection_set: str,
+    projection_version: str = DEFAULT_PROJECTION_VERSION,
+    window: SemanticWindow | None = None,
 ) -> int:
     projection_kind = projection_kind_for_set(projection_set)
-    embeddings = load_embedding_artifacts(session)
+    embeddings = load_embedding_artifacts(session, window=window)
     points = project_embeddings(
         embeddings,
         dimensions=3 if projection_kind == "pca_3d" else 2,
     )
     now = _utc_now()
+    session.execute(text("DELETE FROM article_projections WHERE projection_set = :projection_set"), {"projection_set": projection_set})
+    session.execute(text("DELETE FROM semantic_point_analysis WHERE projection_set = :projection_set"), {"projection_set": projection_set})
+    session.execute(text("DELETE FROM semantic_clusters WHERE projection_set = :projection_set"), {"projection_set": projection_set})
     for point in points:
         embedding_id = session.execute(
             text("SELECT id FROM article_embeddings WHERE article_id = :article_id"),
@@ -521,12 +587,10 @@ def load_projected_points(
     projection_set: str,
     include_neighbors: bool = False,
     neighbor_limit: int = DEFAULT_NEIGHBOR_LIMIT,
+    window: SemanticWindow | None = None,
 ) -> list[PointArtifact]:
     projection_kind = projection_kind_for_set(projection_set)
-    rows = (
-        session.execute(
-            text(
-                """
+    sql = """
             SELECT a.id AS article_id, a.source, a.title, a.url,
                    COALESCE(
                      to_char(a.published_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SSOF'),
@@ -550,16 +614,16 @@ def load_projected_points(
             LEFT JOIN semantic_point_analysis spa
               ON spa.article_id = p.article_id
              AND spa.projection_set = p.projection_set
-            WHERE p.projection_set = :projection_set
-              AND p.projection_kind = :projection_kind
-            ORDER BY a.published_at DESC NULLS LAST, a.id DESC
-            """
-            ),
-            {"projection_set": projection_set, "projection_kind": projection_kind},
-        )
-        .mappings()
-        .all()
-    )
+    """
+    params = {"projection_set": projection_set, "projection_kind": projection_kind}
+    clauses = [
+        "p.projection_set = :projection_set",
+        "p.projection_kind = :projection_kind",
+    ]
+    _apply_article_date_window(clauses, params, window=window)
+    sql += " WHERE " + " AND ".join(clauses)
+    sql += " ORDER BY a.published_at DESC NULLS LAST, a.id DESC"
+    rows = session.execute(text(sql), params).mappings().all()
     points = [
         PointArtifact(
             article_id=row["article_id"],
