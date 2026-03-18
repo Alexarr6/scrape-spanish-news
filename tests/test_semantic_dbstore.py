@@ -15,6 +15,7 @@ from src.semantic.dbstore import (
     content_hash_for_text,
     embedding_dimensions_for_model,
     get_embedding_vector_dimensions,
+    init_pgvector_schema,
     load_explorer_article_detail,
     load_explorer_points_page,
     load_neighbors_for_articles,
@@ -110,6 +111,39 @@ class _ExplorerQueryResult:
     def scalar_one(self): return self._scalar
 
 
+class _SchemaResult:
+    def __init__(self, *, scalar=None, scalar_or_none=None): self._scalar = scalar; self._scalar_or_none = scalar_or_none
+    def scalar_one(self): return self._scalar
+    def scalar_one_or_none(self): return self._scalar_or_none
+
+
+class _SchemaConn:
+    def __init__(self, *, current_dim, row_count=0):
+        self.current_dim = current_dim
+        self.row_count = row_count
+        self.executed_sql = []
+    def execute(self, statement, params=None):
+        sql = str(statement)
+        self.executed_sql.append((sql, params))
+        if 'format_type(a.atttypid, a.atttypmod) AS vector_type' in sql:
+            value = None if self.current_dim is None else f'vector({self.current_dim})'
+            return _SchemaResult(scalar_or_none=value)
+        if 'SELECT COUNT(*) FROM article_embeddings' in sql:
+            return _SchemaResult(scalar=self.row_count)
+        return SimpleNamespace()
+
+
+class _SchemaBegin:
+    def __init__(self, conn): self.conn = conn
+    def __enter__(self): return self.conn
+    def __exit__(self, exc_type, exc, tb): return False
+
+
+class _SchemaEngine:
+    def __init__(self, conn): self.conn = conn
+    def begin(self): return _SchemaBegin(self.conn)
+
+
 class _ExplorerSession:
     def __init__(self): self.sql = []; self.params = []
     def execute(self, statement, params=None):
@@ -182,6 +216,32 @@ def test_upsert_embeddings_rejects_schema_dimension_mismatch() -> None:
     record = EmbeddingArtifact(article_id=1, source='elpais', title='Titular', url='https://example.com/1', published_at='', section='espana', summary_snippet='Resumen corto', text_length=50, embedding_model='text-embedding-3-large', embedding=[0.0] * 3072)
     with pytest.raises(RuntimeError, match=r'VECTOR\(1536\).*3072 dimensions'):
         upsert_embeddings(session, [record], content_hashes={1: 'hash'}, source_text_chars={1: 50})
+
+
+def test_init_pgvector_schema_reinit_executes_additive_semantic_schema_sql() -> None:
+    conn = _SchemaConn(current_dim=1536)
+    engine = _SchemaEngine(conn)
+
+    init_pgvector_schema(engine, embedding_model='text-embedding-3-small')
+
+    executed_sql = '\n'.join(sql for sql, _params in conn.executed_sql)
+    assert 'CREATE TABLE IF NOT EXISTS semantic_point_analysis' in executed_sql
+    assert 'CREATE TABLE IF NOT EXISTS semantic_clusters' in executed_sql
+    assert 'CREATE INDEX IF NOT EXISTS ix_semantic_point_analysis_cluster_id' in executed_sql
+    assert 'CREATE INDEX IF NOT EXISTS ix_semantic_clusters_projection_set' in executed_sql
+    assert 'ALTER TABLE article_embeddings ALTER COLUMN embedding TYPE VECTOR(1536)' not in executed_sql
+
+
+def test_init_pgvector_schema_preserves_dimension_mismatch_protection_on_reinit() -> None:
+    conn = _SchemaConn(current_dim=1536, row_count=2)
+    engine = _SchemaEngine(conn)
+
+    with pytest.raises(RuntimeError, match=r'VECTOR\(1536\).*requires VECTOR\(3072\)'):
+        init_pgvector_schema(engine, embedding_model='text-embedding-3-large')
+
+    executed_sql = '\n'.join(sql for sql, _params in conn.executed_sql)
+    assert 'CREATE TABLE IF NOT EXISTS semantic_point_analysis' not in executed_sql
+    assert 'CREATE TABLE IF NOT EXISTS semantic_clusters' not in executed_sql
 
 
 def test_load_neighbors_for_articles_returns_enriched_neighbor_artifacts() -> None:

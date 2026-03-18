@@ -167,6 +167,88 @@ CREATE INDEX IF NOT EXISTS ix_article_embeddings_embedding_cosine_hnsw
 ON article_embeddings USING hnsw (embedding vector_cosine_ops);
 """
 
+ADDITIVE_SCHEMA_SQL = """
+CREATE EXTENSION IF NOT EXISTS vector;
+
+CREATE TABLE IF NOT EXISTS article_embeddings (
+  id BIGSERIAL PRIMARY KEY,
+  article_id BIGINT NOT NULL REFERENCES articles(id) ON DELETE CASCADE,
+  embedding_model TEXT NOT NULL,
+  embedding_dim INTEGER NOT NULL,
+  embedding VECTOR({embedding_dim}) NOT NULL,
+  content_hash TEXT NOT NULL,
+  source_text_chars INTEGER NOT NULL,
+  summary_snippet TEXT NOT NULL DEFAULT '',
+  embedded_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  CONSTRAINT uq_article_embeddings_article_id UNIQUE (article_id)
+);
+
+CREATE INDEX IF NOT EXISTS ix_article_embeddings_model ON article_embeddings (embedding_model);
+CREATE INDEX IF NOT EXISTS ix_article_embeddings_updated_at ON article_embeddings (updated_at);
+
+CREATE TABLE IF NOT EXISTS article_projections (
+  id BIGSERIAL PRIMARY KEY,
+  article_id BIGINT NOT NULL REFERENCES articles(id) ON DELETE CASCADE,
+  embedding_id BIGINT NOT NULL REFERENCES article_embeddings(id) ON DELETE CASCADE,
+  projection_set TEXT NOT NULL,
+  projection_kind TEXT NOT NULL,
+  projection_version TEXT NOT NULL,
+  x DOUBLE PRECISION NOT NULL,
+  y DOUBLE PRECISION NOT NULL,
+  z DOUBLE PRECISION,
+  projected_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  CONSTRAINT uq_article_projections_article_set UNIQUE (article_id, projection_set)
+);
+
+CREATE INDEX IF NOT EXISTS ix_article_projections_kind ON article_projections (projection_kind);
+CREATE INDEX IF NOT EXISTS ix_article_projections_set ON article_projections (projection_set);
+CREATE INDEX IF NOT EXISTS ix_article_projections_embedding_id
+  ON article_projections (embedding_id);
+
+CREATE TABLE IF NOT EXISTS semantic_point_analysis (
+  id BIGSERIAL PRIMARY KEY,
+  article_id BIGINT NOT NULL REFERENCES articles(id) ON DELETE CASCADE,
+  projection_set TEXT NOT NULL,
+  cluster_id INTEGER,
+  cluster_size INTEGER NOT NULL DEFAULT 0,
+  is_outlier BOOLEAN NOT NULL DEFAULT FALSE,
+  local_density_distance DOUBLE PRECISION NOT NULL DEFAULT 0,
+  source_neighbor_diversity INTEGER NOT NULL DEFAULT 0,
+  nearby_sources_json TEXT NOT NULL DEFAULT '[]',
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  CONSTRAINT uq_semantic_point_analysis_article_set UNIQUE (article_id, projection_set)
+);
+
+CREATE INDEX IF NOT EXISTS ix_semantic_point_analysis_projection_set
+  ON semantic_point_analysis (projection_set);
+CREATE INDEX IF NOT EXISTS ix_semantic_point_analysis_cluster_id
+  ON semantic_point_analysis (projection_set, cluster_id);
+
+CREATE TABLE IF NOT EXISTS semantic_clusters (
+  id BIGSERIAL PRIMARY KEY,
+  projection_set TEXT NOT NULL,
+  cluster_id INTEGER NOT NULL,
+  size INTEGER NOT NULL,
+  article_ids_json TEXT NOT NULL DEFAULT '[]',
+  representative_article_ids_json TEXT NOT NULL DEFAULT '[]',
+  top_sources_json TEXT NOT NULL DEFAULT '{{}}',
+  source_count INTEGER NOT NULL DEFAULT 0,
+  source_dominance DOUBLE PRECISION NOT NULL DEFAULT 0,
+  date_min TEXT NOT NULL DEFAULT '',
+  date_max TEXT NOT NULL DEFAULT '',
+  centroid_x DOUBLE PRECISION NOT NULL DEFAULT 0,
+  centroid_y DOUBLE PRECISION NOT NULL DEFAULT 0,
+  centroid_z DOUBLE PRECISION NOT NULL DEFAULT 0,
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  CONSTRAINT uq_semantic_clusters_projection_cluster UNIQUE (projection_set, cluster_id)
+);
+
+CREATE INDEX IF NOT EXISTS ix_semantic_clusters_projection_set
+  ON semantic_clusters (projection_set);
+"""
+
 VECTOR_TYPE_PATTERN = re.compile(r"^vector\((?P<dim>\d+)\)$")
 
 
@@ -233,6 +315,10 @@ def render_init_sql(*, embedding_model: str) -> str:
     return INIT_SQL_TEMPLATE.format(embedding_dim=embedding_dimensions_for_model(embedding_model))
 
 
+def render_additive_schema_sql(*, embedding_model: str) -> str:
+    return ADDITIVE_SCHEMA_SQL.format(embedding_dim=embedding_dimensions_for_model(embedding_model))
+
+
 def init_pgvector_schema(
     engine: Engine,
     *,
@@ -245,21 +331,24 @@ def init_pgvector_schema(
         if current_dim is None:
             for statement in _split_sql(render_init_sql(embedding_model=embedding_model)):
                 conn.execute(text(statement))
-        elif current_dim != required_dim:
-            row_count = conn.execute(text("SELECT COUNT(*) FROM article_embeddings")).scalar_one()
-            if row_count:
-                raise RuntimeError(
-                    "article_embeddings.embedding uses "
-                    f"VECTOR({current_dim}) but model {embedding_model!r} "
-                    f"requires VECTOR({required_dim}). "
-                    "Rebuild or clear semantic embeddings before switching embedding models."
+        else:
+            if current_dim != required_dim:
+                row_count = conn.execute(text("SELECT COUNT(*) FROM article_embeddings")).scalar_one()
+                if row_count:
+                    raise RuntimeError(
+                        "article_embeddings.embedding uses "
+                        f"VECTOR({current_dim}) but model {embedding_model!r} "
+                        f"requires VECTOR({required_dim}). "
+                        "Rebuild or clear semantic embeddings before switching embedding models."
+                    )
+                conn.execute(
+                    text(
+                        "ALTER TABLE article_embeddings "
+                        f"ALTER COLUMN embedding TYPE VECTOR({required_dim})"
+                    )
                 )
-            conn.execute(
-                text(
-                    "ALTER TABLE article_embeddings "
-                    f"ALTER COLUMN embedding TYPE VECTOR({required_dim})"
-                )
-            )
+            for statement in _split_sql(render_additive_schema_sql(embedding_model=embedding_model)):
+                conn.execute(text(statement))
         if ensure_ann_index:
             conn.execute(text(HNSW_INDEX_SQL))
 
