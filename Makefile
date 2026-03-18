@@ -36,7 +36,7 @@ LOCAL_DB_USER ?= spain_news
 LOCAL_DB_PASSWORD ?= spain_news_dev
 LOCAL_DATABASE_URL := postgresql+psycopg://$(LOCAL_DB_USER):$(LOCAL_DB_PASSWORD)@$(LOCAL_DB_HOST):$(LOCAL_DB_PORT)/$(LOCAL_DB_NAME)
 
-.PHONY: help print-app-root preflight sync pre-commit lint check test smoke run-source run-source-persist run-all run-all-persist api semantic-db-init semantic-sync semantic-project semantic-neighbors semantic-build semantic-smoke scheduler-once scheduler-dry-run status tail-log verify-output verify-db db-url db-up db-down db-logs db-psql db-check clean-state
+.PHONY: help print-app-root preflight sync pre-commit lint check test smoke run-source run-source-persist run-all run-all-persist api analysis-db-init enrich-articles build-story-clusters story-cluster-report semantic-db-init semantic-sync semantic-project semantic-neighbors semantic-build semantic-smoke scheduler-once scheduler-dry-run status tail-log verify-output verify-db db-url db-up db-down db-logs db-psql db-check clean-state
 
 help:
 	@printf '%s\n' \
@@ -57,6 +57,10 @@ help:
 	  '  make run-all                  Run all sources sequentially without persistence' \
 	  '  make run-all-persist          Run all sources sequentially with persistence' \
 	  '  make api DATABASE_URL=...     Run FastAPI app via uvicorn' \
+	  '  make analysis-db-init DATABASE_URL=...           Create analysis/enrichment tables + seed taxonomy' \
+	  '  make enrich-articles DATABASE_URL=...            Enrich recent persisted articles (OpenRouter optional)' \
+	  '  make build-story-clusters DATABASE_URL=...       Rebuild bounded same-story clusters' \
+	  '  make story-cluster-report DATABASE_URL=...       Print recent cluster summaries' \
 	  '  make semantic-db-init DATABASE_URL=...           Create pgvector extension + semantic tables' \
 	  '  make semantic-sync DATABASE_URL=... LIMIT=100    Backfill/sync missing or changed embeddings' \
 	  '  make semantic-project DATABASE_URL=...           Rebuild the named explorer projection set (defaults to pca_3d_latest)' \
@@ -158,6 +162,26 @@ run-all-persist: preflight
 api: preflight
 	@[[ -n "$(DATABASE_URL)" ]] || { echo 'DATABASE_URL is required for api'; exit 1; }
 	@cd "$(APP_ROOT)" && PYTHONPATH="$(APP_ROOT):$${PYTHONPATH:-}" $(PYTHON) -m uvicorn src.api.app:create_app --factory --host "$(API_HOST)" --port "$(API_PORT)"
+
+analysis-db-init: preflight
+	@set -euo pipefail; \
+	[[ -n "$(DATABASE_URL)" ]] || { echo 'DATABASE_URL is required for analysis-db-init'; exit 1; }; \
+	cd "$(APP_ROOT)" && PYTHONPATH="$(APP_ROOT):$${PYTHONPATH:-}" $(PYTHON) scripts/init_analysis_schema.py --db-url "$(DATABASE_URL)"
+
+enrich-articles: preflight
+	@set -euo pipefail; \
+	[[ -n "$(DATABASE_URL)" ]] || { echo 'DATABASE_URL is required for enrich-articles'; exit 1; }; \
+	cd "$(APP_ROOT)" && PYTHONPATH="$(APP_ROOT):$${PYTHONPATH:-}" $(PYTHON) scripts/enrich_articles.py --db-url "$(DATABASE_URL)" --days-back "$${DAYS_BACK:-2}" --limit "$${LIMIT:-150}"
+
+build-story-clusters: preflight
+	@set -euo pipefail; \
+	[[ -n "$(DATABASE_URL)" ]] || { echo 'DATABASE_URL is required for build-story-clusters'; exit 1; }; \
+	cd "$(APP_ROOT)" && PYTHONPATH="$(APP_ROOT):$${PYTHONPATH:-}" $(PYTHON) scripts/build_story_clusters.py --db-url "$(DATABASE_URL)" --days-back "$${DAYS_BACK:-3}" --limit "$${LIMIT:-200}" --score-threshold "$${SCORE_THRESHOLD:-0.68}"
+
+story-cluster-report: preflight
+	@set -euo pipefail; \
+	[[ -n "$(DATABASE_URL)" ]] || { echo 'DATABASE_URL is required for story-cluster-report'; exit 1; }; \
+	cd "$(APP_ROOT)" && PYTHONPATH="$(APP_ROOT):$${PYTHONPATH:-}" $(PYTHON) scripts/story_cluster_report.py --db-url "$(DATABASE_URL)" --limit "$${LIMIT:-20}"
 
 semantic-db-init: preflight
 	@set -euo pipefail; \

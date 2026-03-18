@@ -1,0 +1,526 @@
+from __future__ import annotations
+
+import hashlib
+import json
+from collections import Counter, defaultdict
+from dataclasses import dataclass
+from datetime import UTC, datetime, timedelta
+
+from sqlalchemy import delete, select
+from sqlalchemy.orm import Session
+
+from src.analysis.canonicalization import EntityCanonicalizer
+from src.analysis.contracts import (
+    ArticleAnalysisRead,
+    ArticleEnrichmentPayload,
+    ClusterRebuildMetrics,
+    EnrichmentRunMetrics,
+    PairScoreArtifact,
+    StoryClusterMemberReason,
+)
+from src.analysis.heuristics import heuristic_enrichment, title_similarity
+from src.analysis.llm_client import (
+    OpenRouterClient,
+    OpenRouterSettings,
+    build_prompt,
+    enrichment_json_schema,
+)
+from src.analysis.normalization import jaccard_similarity, normalize_lookup, slugify
+from src.analysis.orm_models import (
+    ArticleAnalysisORM,
+    ArticleEnrichmentRunORM,
+    ArticleTagORM,
+    ClusterEntityORM,
+    ClusterMemberORM,
+    EntityAliasORM,
+    EntityMentionORM,
+    EntityORM,
+    StoryClusterORM,
+    TagORM,
+)
+from src.analysis.taxonomy import CANONICAL_TAGS
+from src.persistence.contracts import ArticleRead
+from src.persistence.orm_models import ArticleORM
+
+
+@dataclass
+class EnrichedArticle:
+    article: ArticleRead
+    analysis: ArticleAnalysisRead
+    tag_codes: list[str]
+    entity_slugs: list[str]
+    key_phrases: list[str]
+
+
+class AnalysisPipeline:
+    def __init__(self, session: Session, *, llm_settings: OpenRouterSettings | None = None) -> None:
+        self.session = session
+        self.llm = OpenRouterClient(llm_settings) if llm_settings else None
+        self.canonicalizer = EntityCanonicalizer()
+
+    def seed_tags(self) -> None:
+        existing = {row.tag_code: row for row in self.session.execute(select(TagORM)).scalars()}
+        for tag in CANONICAL_TAGS:
+            row = existing.get(tag.code)
+            if row is None:
+                self.session.add(
+                    TagORM(
+                        tag_code=tag.code,
+                        display_name=tag.display_name,
+                        tag_group=tag.group,
+                        description=tag.description,
+                        sort_order=tag.sort_order,
+                    )
+                )
+            else:
+                row.display_name = tag.display_name
+                row.tag_group = tag.group
+                row.description = tag.description
+                row.sort_order = tag.sort_order
+                row.is_active = True
+        self.session.commit()
+
+    def enrich_articles(self, *, days_back: int = 2, limit: int = 150) -> EnrichmentRunMetrics:
+        self.seed_tags()
+        started_at = datetime.now(UTC)
+        settings = self.llm.settings if self.llm else None
+        run = ArticleEnrichmentRunORM(
+            started_at=started_at,
+            window_date_from=(started_at - timedelta(days=days_back - 1)).date(),
+            window_date_to=started_at.date(),
+            provider="openrouter" if settings else "heuristic",
+            model=settings.model if settings else "heuristic-only",
+            prompt_version=settings.prompt_version if settings else "v0",
+        )
+        self.session.add(run)
+        self.session.flush()
+        metrics = EnrichmentRunMetrics(article_count=0, started_at=started_at)
+        cutoff = started_at - timedelta(days=days_back)
+        stmt = (
+            select(ArticleORM)
+            .where(ArticleORM.published_at.is_not(None), ArticleORM.published_at >= cutoff)
+            .order_by(ArticleORM.published_at.desc())
+            .limit(limit)
+        )
+        rows = self.session.execute(stmt).scalars().all()
+        metrics.article_count = len(rows)
+        tag_by_code = {
+            row.tag_code: row.id for row in self.session.execute(select(TagORM)).scalars()
+        }
+        for row in rows:
+            article = ArticleRead.model_validate(row)
+            content_hash = self._content_hash(article)
+            existing = self.session.execute(
+                select(ArticleAnalysisORM).where(ArticleAnalysisORM.article_id == article.id)
+            ).scalar_one_or_none()
+            if existing and existing.content_hash == content_hash:
+                metrics.skipped_count += 1
+                continue
+            payload = heuristic_enrichment(article)
+            if self.llm:
+                candidate_entities = [entity.model_dump(mode="json") for entity in payload.entities]
+                allowed_tags = [
+                    {"tag_code": code, "display_name": tag.display_name}
+                    for code, tag in (
+                        (tag.tag_code, tag)
+                        for tag in self.session.execute(select(TagORM)).scalars()
+                    )
+                ]
+                prompt = build_prompt(
+                    article_title=article.title,
+                    article_summary=article.summary,
+                    article_text=article.article_text,
+                    candidate_entities=candidate_entities,
+                    allowed_tags=allowed_tags,
+                )
+                try:
+                    payload, usage = self.llm.enrich_article(
+                        article_prompt=prompt, schema=enrichment_json_schema()
+                    )
+                    metrics.request_count += 1
+                    run.request_count += 1
+                    run.estimated_input_tokens += usage.prompt_tokens
+                    run.estimated_output_tokens += usage.completion_tokens
+                except Exception:
+                    metrics.invalid_schema_count += 1
+            self._persist_article_analysis(
+                article=article, payload=payload, tag_by_code=tag_by_code, content_hash=content_hash
+            )
+            metrics.enriched_count += 1
+        run.article_count = metrics.article_count
+        run.status = "completed"
+        run.finished_at = datetime.now(UTC)
+        self.session.commit()
+        metrics.finished_at = run.finished_at
+        return metrics
+
+    def _persist_article_analysis(
+        self,
+        *,
+        article: ArticleRead,
+        payload: ArticleEnrichmentPayload,
+        tag_by_code: dict[str, int],
+        content_hash: str,
+    ) -> None:
+        analysis = self.session.execute(
+            select(ArticleAnalysisORM).where(ArticleAnalysisORM.article_id == article.id)
+        ).scalar_one_or_none()
+        if analysis is None:
+            analysis = ArticleAnalysisORM(article_id=article.id)
+            self.session.add(analysis)
+        analysis.article_type = payload.article_type
+        analysis.article_type_confidence = payload.article_type_confidence
+        analysis.is_event_coverage = payload.is_event_coverage
+        analysis.language = payload.language
+        analysis.primary_topic_tag_id = (
+            tag_by_code.get(payload.primary_tag_code) if payload.primary_tag_code else None
+        )
+        analysis.key_phrases_json = json.dumps(payload.key_phrases, ensure_ascii=False)
+        analysis.claims_json = json.dumps(payload.claims, ensure_ascii=False)
+        analysis.extraction_version = "v1"
+        analysis.content_hash = content_hash
+        self.session.flush()
+        self.session.execute(delete(ArticleTagORM).where(ArticleTagORM.article_id == article.id))
+        all_tag_codes = [
+            code for code in [payload.primary_tag_code, *payload.secondary_tag_codes] if code
+        ]
+        for idx, code in enumerate(all_tag_codes):
+            self.session.add(
+                ArticleTagORM(
+                    article_id=article.id,
+                    tag_id=tag_by_code[code],
+                    assignment_source="llm" if self.llm else "hybrid",
+                    confidence=payload.article_type_confidence,
+                    is_primary=idx == 0,
+                )
+            )
+        self.session.execute(
+            delete(EntityMentionORM).where(EntityMentionORM.article_id == article.id)
+        )
+        for entity_payload in payload.entities[:12]:
+            canonical = self.canonicalizer.canonicalize(entity_payload)
+            entity_row = self.session.execute(
+                select(EntityORM).where(
+                    EntityORM.entity_type == canonical.entity_type,
+                    EntityORM.normalized_name == canonical.normalized_name,
+                )
+            ).scalar_one_or_none()
+            if entity_row is None:
+                entity_row = EntityORM(
+                    entity_type=canonical.entity_type,
+                    canonical_name=canonical.canonical_name,
+                    normalized_name=canonical.normalized_name,
+                    slug=canonical.slug,
+                    canonical_source=canonical.canonical_source,
+                )
+                self.session.add(entity_row)
+                self.session.flush()
+            aliases = {
+                alias.normalized_alias
+                for alias in self.session.execute(
+                    select(EntityAliasORM).where(EntityAliasORM.entity_id == entity_row.id)
+                ).scalars()
+            }
+            for alias in canonical.aliases + (entity_payload.canonical_name,):
+                normalized_alias = normalize_lookup(alias)
+                if not normalized_alias or normalized_alias in aliases:
+                    continue
+                self.session.add(
+                    EntityAliasORM(
+                        entity_id=entity_row.id,
+                        alias=alias,
+                        normalized_alias=normalized_alias,
+                        alias_type="surface",
+                    )
+                )
+                aliases.add(normalized_alias)
+            combined_text = " ".join([article.title, article.summary, article.article_text]).lower()
+            surface = entity_payload.canonical_name
+            mention_count = combined_text.count(surface.lower()) or 1
+            self.session.add(
+                EntityMentionORM(
+                    article_id=article.id,
+                    entity_id=entity_row.id,
+                    surface_form=surface,
+                    mention_text_normalized=normalize_lookup(surface),
+                    mention_count=mention_count,
+                    title_hits=article.title.lower().count(surface.lower()),
+                    summary_hits=article.summary.lower().count(surface.lower()),
+                    body_hits=article.article_text.lower().count(surface.lower()),
+                    relevance_score=entity_payload.relevance_score,
+                    role_hint=entity_payload.role_hint,
+                )
+            )
+
+    def _content_hash(self, article: ArticleRead) -> str:
+        raw = "\n".join(
+            [article.title, article.summary, article.article_text, article.section, article.tags]
+        )
+        return hashlib.sha256(raw.encode("utf-8")).hexdigest()
+
+
+class ClusterPipeline:
+    def __init__(self, session: Session) -> None:
+        self.session = session
+
+    def build_clusters(
+        self, *, days_back: int = 3, limit: int = 200, score_threshold: float = 0.68
+    ) -> tuple[ClusterRebuildMetrics, list[PairScoreArtifact]]:
+        started = datetime.now(UTC)
+        articles = self._load_enriched_articles(days_back=days_back, limit=limit)
+        metrics = ClusterRebuildMetrics(article_count=len(articles), started_at=started)
+        artifacts: list[PairScoreArtifact] = []
+        accepted_edges: list[tuple[int, int, StoryClusterMemberReason]] = []
+        for idx, left in enumerate(articles):
+            for right in articles[idx + 1 :]:
+                if abs((left.article.published_at - right.article.published_at).days) > 7:
+                    continue
+                metrics.candidate_pair_count += 1
+                reason = self.score_pair(left, right)
+                accepted = reason.hard_block is None and reason.score >= score_threshold
+                artifacts.append(
+                    PairScoreArtifact(
+                        left_article_id=left.article.id,
+                        right_article_id=right.article.id,
+                        accepted=accepted,
+                        reason=reason,
+                    )
+                )
+                if accepted:
+                    metrics.accepted_pair_count += 1
+                    accepted_edges.append((left.article.id, right.article.id, reason))
+                else:
+                    metrics.rejected_pair_count += 1
+        components = self._connected_components(
+            [article.article.id for article in articles], accepted_edges
+        )
+        self._persist_clusters(articles, components, accepted_edges)
+        metrics.cluster_count = len(components)
+        metrics.finished_at = datetime.now(UTC)
+        self.session.commit()
+        return metrics, artifacts
+
+    def _load_enriched_articles(self, *, days_back: int, limit: int) -> list[EnrichedArticle]:
+        cutoff = datetime.now(UTC) - timedelta(days=days_back)
+        stmt = (
+            select(ArticleORM, ArticleAnalysisORM)
+            .join(ArticleAnalysisORM, ArticleAnalysisORM.article_id == ArticleORM.id)
+            .where(ArticleORM.published_at.is_not(None), ArticleORM.published_at >= cutoff)
+            .order_by(ArticleORM.published_at.desc())
+            .limit(limit)
+        )
+        rows = self.session.execute(stmt).all()
+        tag_lookup = {
+            row.id: row.tag_code for row in self.session.execute(select(TagORM)).scalars()
+        }
+        result: list[EnrichedArticle] = []
+        for article_row, analysis_row in rows:
+            article = ArticleRead.model_validate(article_row)
+            analysis = ArticleAnalysisRead.model_validate(analysis_row)
+            article_tags = (
+                self.session.execute(
+                    select(ArticleTagORM).where(ArticleTagORM.article_id == article.id)
+                )
+                .scalars()
+                .all()
+            )
+            tag_codes = [tag_lookup[tag.tag_id] for tag in article_tags if tag.tag_id in tag_lookup]
+            mentions = self.session.execute(
+                select(EntityMentionORM, EntityORM.slug)
+                .join(EntityORM, EntityORM.id == EntityMentionORM.entity_id)
+                .where(EntityMentionORM.article_id == article.id)
+            ).all()
+            entity_slugs = [slug for _, slug in mentions]
+            key_phrases = json.loads(analysis.key_phrases_json)
+            result.append(
+                EnrichedArticle(
+                    article=article,
+                    analysis=analysis,
+                    tag_codes=tag_codes,
+                    entity_slugs=entity_slugs,
+                    key_phrases=key_phrases,
+                )
+            )
+        return result
+
+    def score_pair(self, left: EnrichedArticle, right: EnrichedArticle) -> StoryClusterMemberReason:
+        semantic_similarity = (
+            1.0
+            if jaccard_similarity(left.key_phrases, right.key_phrases) > 0.8
+            else jaccard_similarity(
+                left.key_phrases + left.entity_slugs, right.key_phrases + right.entity_slugs
+            )
+        )
+        title_sim = title_similarity(left.article.title, right.article.title)
+        shared_entity_score = jaccard_similarity(left.entity_slugs, right.entity_slugs)
+        tag_overlap_score = jaccard_similarity(left.tag_codes, right.tag_codes)
+        keyphrase_overlap_score = jaccard_similarity(
+            [normalize_lookup(v) for v in left.key_phrases],
+            [normalize_lookup(v) for v in right.key_phrases],
+        )
+        days_delta = abs((left.article.published_at - right.article.published_at).days)
+        temporal_proximity_score = max(0.0, 1 - (days_delta / 7))
+        penalties: list[str] = []
+        hard_block = None
+        if {left.analysis.article_type, right.analysis.article_type} & {"opinion", "editorial"}:
+            if left.analysis.article_type != right.analysis.article_type or {
+                left.analysis.article_type,
+                right.analysis.article_type,
+            } != {"opinion"}:
+                hard_block = "opinion_editorial_excluded_from_primary_clusters"
+        if (
+            "analysis" in {left.analysis.article_type, right.analysis.article_type}
+            and title_sim < 0.55
+        ):
+            penalties.append("analysis_pair_penalty")
+        if days_delta >= 3 and title_sim < 0.6:
+            penalties.append("followup_penalty")
+        score = (
+            semantic_similarity * 0.30
+            + title_sim * 0.20
+            + shared_entity_score * 0.25
+            + tag_overlap_score * 0.10
+            + keyphrase_overlap_score * 0.10
+            + temporal_proximity_score * 0.05
+        )
+        if "analysis_pair_penalty" in penalties:
+            score -= 0.15
+        if "followup_penalty" in penalties:
+            score -= 0.12
+        return StoryClusterMemberReason(
+            score=max(0.0, round(score, 4)),
+            semantic_similarity=round(semantic_similarity, 4),
+            title_similarity=round(title_sim, 4),
+            shared_entity_score=round(shared_entity_score, 4),
+            tag_overlap_score=round(tag_overlap_score, 4),
+            keyphrase_overlap_score=round(keyphrase_overlap_score, 4),
+            temporal_proximity_score=round(temporal_proximity_score, 4),
+            hard_block=hard_block,
+            penalties=penalties,
+        )
+
+    def _connected_components(
+        self,
+        article_ids: list[int],
+        accepted_edges: list[tuple[int, int, StoryClusterMemberReason]],
+    ) -> list[list[int]]:
+        parent = {article_id: article_id for article_id in article_ids}
+
+        def find(node: int) -> int:
+            while parent[node] != node:
+                parent[node] = parent[parent[node]]
+                node = parent[node]
+            return node
+
+        def union(left: int, right: int) -> None:
+            root_left = find(left)
+            root_right = find(right)
+            if root_left != root_right:
+                parent[root_right] = root_left
+
+        for left, right, _ in accepted_edges:
+            union(left, right)
+        grouped: dict[int, list[int]] = defaultdict(list)
+        for article_id in article_ids:
+            grouped[find(article_id)].append(article_id)
+        return sorted((sorted(members) for members in grouped.values()), key=len, reverse=True)
+
+    def _persist_clusters(
+        self,
+        articles: list[EnrichedArticle],
+        components: list[list[int]],
+        accepted_edges: list[tuple[int, int, StoryClusterMemberReason]],
+    ) -> None:
+        edge_map = {
+            (min(left, right), max(left, right)): reason for left, right, reason in accepted_edges
+        }
+        article_by_id = {item.article.id: item for item in articles}
+        self.session.execute(delete(ClusterEntityORM))
+        self.session.execute(delete(ClusterMemberORM))
+        self.session.execute(delete(StoryClusterORM))
+        self.session.flush()
+        for index, members in enumerate(components, start=1):
+            member_articles = [article_by_id[article_id] for article_id in members]
+            ordered = sorted(
+                member_articles, key=lambda item: item.article.published_at or datetime.now(UTC)
+            )
+            primary_tags = [tag for item in member_articles for tag in item.tag_codes]
+            tag_code = Counter(primary_tags).most_common(1)[0][0] if primary_tags else None
+            primary_tag_row = (
+                self.session.execute(
+                    select(TagORM).where(TagORM.tag_code == tag_code)
+                ).scalar_one_or_none()
+                if tag_code
+                else None
+            )
+            representative = ordered[0]
+            cluster = StoryClusterORM(
+                cluster_key=f"story-{representative.article.published_at.date().isoformat()}-{slugify(representative.article.title)[:48]}-{index}",
+                status="active",
+                event_date_start=ordered[0].article.published_at.date()
+                if ordered[0].article.published_at
+                else None,
+                event_date_end=ordered[-1].article.published_at.date()
+                if ordered[-1].article.published_at
+                else None,
+                first_article_published_at=ordered[0].article.published_at,
+                last_article_published_at=ordered[-1].article.published_at,
+                cluster_type="breaking_event",
+                summary_headline=representative.article.title,
+                summary_text=" | ".join(
+                    dict.fromkeys(
+                        item.article.summary.strip()
+                        for item in ordered
+                        if item.article.summary.strip()
+                    )
+                )[:1000],
+                primary_tag_id=primary_tag_row.id if primary_tag_row else None,
+                article_count=len(members),
+                source_count=len({item.article.source for item in member_articles}),
+                clustering_version="v1",
+            )
+            self.session.add(cluster)
+            self.session.flush()
+            entity_counts: dict[int, tuple[int, int, float]] = defaultdict(lambda: (0, 0, 0.0))
+            for article_id in members:
+                pair_scores = [
+                    reason.score
+                    for (left_id, right_id), reason in edge_map.items()
+                    if article_id in {left_id, right_id}
+                ]
+                membership_score = sum(pair_scores) / len(pair_scores) if pair_scores else 1.0
+                reason_payload = {"edge_scores": pair_scores}
+                self.session.add(
+                    ClusterMemberORM(
+                        cluster_id=cluster.id,
+                        article_id=article_id,
+                        membership_score=membership_score,
+                        membership_reason_json=json.dumps(reason_payload),
+                    )
+                )
+                mentions = (
+                    self.session.execute(
+                        select(EntityMentionORM).where(EntityMentionORM.article_id == article_id)
+                    )
+                    .scalars()
+                    .all()
+                )
+                seen_entities: set[int] = set()
+                for mention in mentions:
+                    coverage, mention_count, relevance = entity_counts[mention.entity_id]
+                    entity_counts[mention.entity_id] = (
+                        coverage + (0 if mention.entity_id in seen_entities else 1),
+                        mention_count + mention.mention_count,
+                        relevance + mention.relevance_score,
+                    )
+                    seen_entities.add(mention.entity_id)
+            for entity_id, (coverage, mention_count, relevance) in entity_counts.items():
+                self.session.add(
+                    ClusterEntityORM(
+                        cluster_id=cluster.id,
+                        entity_id=entity_id,
+                        article_coverage_count=coverage,
+                        mention_count=mention_count,
+                        aggregate_relevance_score=round(relevance, 4),
+                    )
+                )

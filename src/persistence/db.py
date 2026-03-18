@@ -5,6 +5,7 @@ import os
 from sqlalchemy import Engine, create_engine
 from sqlalchemy.orm import Session
 
+from src.analysis import orm_models as _analysis_orm_models  # noqa: F401
 from src.persistence.orm_models import Base
 
 
