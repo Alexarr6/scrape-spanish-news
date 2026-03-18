@@ -1,6 +1,7 @@
 import pytest
 
 from src.semantic.analyze import analyze_points
+from src.semantic.analyze import _nearest_neighbor_graph
 from src.semantic.contracts import EmbeddingArtifact, PointArtifact
 
 POINTS = [
@@ -69,3 +70,21 @@ def test_analyze_points_handles_single_point_as_outlier() -> None:
     assert analysis.outlier_count == 1
     assert analysis.points[0].is_outlier is True
     assert analysis.clusters == []
+
+
+def test_nearest_neighbor_graph_returns_trimmed_neighbor_arrays() -> None:
+    import numpy as np
+
+    normalized = np.array(
+        [
+            [1.0, 0.0],
+            [0.99, 0.01],
+            [0.0, 1.0],
+        ],
+        dtype=float,
+    )
+    distances, indices = _nearest_neighbor_graph(normalized, neighbor_k=1)
+
+    assert distances.shape == (3, 1)
+    assert indices.shape == (3, 1)
+    assert indices[0, 0] == 1

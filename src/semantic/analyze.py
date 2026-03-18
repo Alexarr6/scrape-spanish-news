@@ -5,6 +5,7 @@ from dataclasses import asdict, dataclass
 
 import numpy as np
 from sklearn.cluster import HDBSCAN
+from sklearn.neighbors import NearestNeighbors
 
 from src.semantic.contracts import (
     AnalysisMetadataArtifact,
@@ -58,15 +59,18 @@ def analyze_points(
     if matrix.ndim != 2:
         raise ValueError("semantic analysis requires a 2D embedding matrix")
     normalized = _normalize_rows(matrix)
-    distance_matrix = _pairwise_distance_matrix(normalized)
-    local_density = _local_density_scores(distance_matrix, neighbor_k=min(config.neighbor_k, max(len(points) - 1, 1)))
+    neighbor_k = min(config.neighbor_k, max(len(points) - 1, 1))
+    neighbor_distances, neighbor_indices = _nearest_neighbor_graph(
+        normalized,
+        neighbor_k=neighbor_k,
+    )
+    local_density = _local_density_scores(neighbor_distances)
     nearby_sources = {
         article_id: _nearby_sources_for_index(
             index=index,
             ordered_ids=ordered_ids,
             points_by_id=points_by_id,
-            distance_matrix=distance_matrix,
-            neighbor_k=min(config.neighbor_k, max(len(points) - 1, 1)),
+            neighbor_indices=neighbor_indices,
         )
         for index, article_id in enumerate(ordered_ids)
     }
@@ -178,20 +182,26 @@ def _normalize_rows(matrix: np.ndarray) -> np.ndarray:
     return matrix / norms
 
 
-def _pairwise_distance_matrix(normalized_embeddings: np.ndarray) -> np.ndarray:
-    diff = normalized_embeddings[:, None, :] - normalized_embeddings[None, :, :]
-    return np.sqrt(np.sum(diff * diff, axis=2))
+def _nearest_neighbor_graph(
+    normalized_embeddings: np.ndarray,
+    *,
+    neighbor_k: int,
+) -> tuple[np.ndarray, np.ndarray]:
+    if len(normalized_embeddings) <= 1:
+        return np.zeros((len(normalized_embeddings), 0), dtype=float), np.zeros(
+            (len(normalized_embeddings), 0),
+            dtype=int,
+        )
+    estimator = NearestNeighbors(n_neighbors=min(neighbor_k + 1, len(normalized_embeddings)), metric="euclidean")
+    estimator.fit(normalized_embeddings)
+    distances, indices = estimator.kneighbors(normalized_embeddings)
+    return distances[:, 1:], indices[:, 1:]
 
 
-def _local_density_scores(distance_matrix: np.ndarray, *, neighbor_k: int) -> np.ndarray:
-    if len(distance_matrix) <= 1:
-        return np.zeros(len(distance_matrix), dtype=float)
-    scores = []
-    for index in range(len(distance_matrix)):
-        row = np.delete(distance_matrix[index], index)
-        nearest = np.sort(row)[:neighbor_k]
-        scores.append(float(np.mean(nearest)))
-    return np.array(scores, dtype=float)
+def _local_density_scores(neighbor_distances: np.ndarray) -> np.ndarray:
+    if len(neighbor_distances) <= 1:
+        return np.zeros(len(neighbor_distances), dtype=float)
+    return np.mean(neighbor_distances, axis=1, dtype=float)
 
 
 def _nearby_sources_for_index(
@@ -199,17 +209,11 @@ def _nearby_sources_for_index(
     index: int,
     ordered_ids: list[int],
     points_by_id: dict[int, PointArtifact],
-    distance_matrix: np.ndarray,
-    neighbor_k: int,
+    neighbor_indices: np.ndarray,
 ) -> list[str]:
     if len(ordered_ids) == 1:
         return [points_by_id[ordered_ids[0]].source]
-    distances = [
-        (distance_matrix[index, candidate_index], ordered_ids[candidate_index])
-        for candidate_index in range(len(ordered_ids))
-        if candidate_index != index
-    ]
-    nearest_ids = [article_id for _distance, article_id in sorted(distances)[:neighbor_k]]
+    nearest_ids = [ordered_ids[candidate_index] for candidate_index in neighbor_indices[index]]
     sources = {points_by_id[ordered_ids[index]].source}
     sources.update(points_by_id[article_id].source for article_id in nearest_ids)
     return sorted(sources)
