@@ -10,8 +10,10 @@ export function useExplorerFilters() {
     if (query.search.trim()) count += 1
     if (query.source) count += 1
     if (query.section) count += 1
+    if (query.clusterId) count += 1
     if (query.dateFrom) count += 1
     if (query.dateTo) count += 1
+    if (query.outlierOnly) count += 1
     if (query.limit !== DEFAULT_QUERY.limit) count += 1
     return count
   }, [query])

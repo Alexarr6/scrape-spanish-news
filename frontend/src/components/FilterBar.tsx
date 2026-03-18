@@ -55,6 +55,26 @@ export function FilterBar({ filters, query, onQueryChange, onReset, disabled = f
           ))}
         </select>
       </label>
+      <label className="field">
+        <span>Semantic cluster</span>
+        <select name="clusterId" value={query.clusterId} onChange={onTextChange} disabled={disabled}>
+          <option value="">All clusters</option>
+          {(filters?.cluster_summaries ?? []).map((cluster) => (
+            <option key={cluster.cluster_id} value={String(cluster.cluster_id)}>
+              Cluster {cluster.cluster_id} · {cluster.size} articles
+            </option>
+          ))}
+        </select>
+      </label>
+      <label className="checkbox-row">
+        <input
+          type="checkbox"
+          checked={query.outlierOnly}
+          onChange={(event) => onQueryChange({ outlierOnly: event.target.checked })}
+          disabled={disabled}
+        />
+        <span>Show only outliers</span>
+      </label>
       <div className="field-row">
         <label className="field">
           <span>From</span>
@@ -81,10 +101,9 @@ export function FilterBar({ filters, query, onQueryChange, onReset, disabled = f
         </select>
       </label>
       <div className="note-card">
-        <strong>Boundaries</strong>
+        <strong>Cluster controls are real now</strong>
         <p>
-          This phase is about a cleaner explorer and honest 2D/3D navigation. Cluster/outlier controls still stay out
-          until the backend supports them without hand-wavy nonsense.
+          Cluster and outlier filters now come from persisted semantic analysis on embeddings, not from hand-wavy UI fiction.
         </p>
       </div>
     </div>

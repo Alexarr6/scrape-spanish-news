@@ -5,8 +5,10 @@ export function buildExplorerPointsQuery(query: ExplorerQuery): string {
   if (query.search.trim()) params.set('search', query.search.trim())
   if (query.source) params.set('source', query.source)
   if (query.section) params.set('section', query.section)
+  if (query.clusterId) params.set('cluster_id', query.clusterId)
   if (query.dateFrom) params.set('date_from', query.dateFrom)
   if (query.dateTo) params.set('date_to', query.dateTo)
+  if (query.outlierOnly) params.set('outlier_only', 'true')
   params.set('limit', String(query.limit))
   const text = params.toString()
   return text ? `?${text}` : ''

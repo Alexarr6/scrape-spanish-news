@@ -6,10 +6,11 @@ import { MapPanel } from '../components/MapPanel'
 import { StatusBar } from '../components/StatusBar'
 import { useExplorerData } from '../hooks/useExplorerData'
 import { useExplorerFilters } from '../hooks/useExplorerFilters'
-import type { ExplorerViewMode } from '../lib/types'
+import type { ExplorerColorMode, ExplorerViewMode } from '../lib/types'
 
 export function ExplorerPage() {
   const [viewMode, setViewMode] = useState<ExplorerViewMode>('2d')
+  const [colorMode, setColorMode] = useState<ExplorerColorMode>('neutral')
   const { query, activeFilterCount, updateQuery, resetQuery } = useExplorerFilters()
   const {
     pointsState,
@@ -32,6 +33,7 @@ export function ExplorerPage() {
           activeFilterCount={activeFilterCount}
           selectedArticleId={selectedArticleId}
           viewMode={viewMode}
+          colorMode={colorMode}
           onResetFilters={resetQuery}
         />
       }
@@ -53,7 +55,9 @@ export function ExplorerPage() {
           hoveredArticleId={hoveredArticleId}
           neighborIds={neighborIds}
           viewMode={viewMode}
+          colorMode={colorMode}
           onViewModeChange={setViewMode}
+          onColorModeChange={setColorMode}
           onHoverArticle={setHoveredArticleId}
           onSelectArticle={setSelectedArticleId}
         />
