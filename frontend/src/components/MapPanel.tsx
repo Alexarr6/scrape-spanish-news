@@ -126,6 +126,23 @@ export function MapPanel({
     setViewState(buildInitialViewState(points))
   }, [bounds?.min_x, bounds?.max_x, bounds?.min_y, bounds?.max_y, bounds?.min_z, bounds?.max_z, points?.meta.projection_set])
 
+  useEffect(() => {
+    if (!selectedPoint) return
+    setViewState((current) => ({
+      ...current,
+      'semantic-2d': {
+        ...current['semantic-2d'],
+        target: [selectedPoint.x, selectedPoint.y, 0],
+        zoom: Math.max(current['semantic-2d'].zoom, 3.5),
+      },
+      'semantic-3d': {
+        ...current['semantic-3d'],
+        target: [selectedPoint.x, selectedPoint.y, selectedPoint.z],
+        zoom: Math.max(current['semantic-3d'].zoom, 3.2),
+      },
+    }))
+  }, [selectedPoint?.article_id])
+
   const layers = useMemo(() => {
     const items = points?.items ?? []
     const is3d = viewMode === '3d'

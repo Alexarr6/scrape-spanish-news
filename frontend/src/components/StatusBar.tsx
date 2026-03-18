@@ -1,3 +1,4 @@
+import { buildClusterBrowserHref } from '../lib/navigation'
 import type { ExplorerColorMode, ExplorerMeta, ExplorerViewMode } from '../lib/types'
 
 type Props = {
@@ -32,6 +33,9 @@ export function StatusBar({
         <span className="status-chip">Clusters: {clusterCount}</span>
         <span className="status-chip">{activeFilterCount} active filters</span>
         <span className="status-chip">{selectedArticleId ? `Selected #${selectedArticleId}` : 'No selection'}</span>
+        <a className="ghost-button" href={buildClusterBrowserHref()}>
+          Back to cluster browser
+        </a>
         <button className="ghost-button" type="button" onClick={onResetFilters}>
           Reset filters
         </button>

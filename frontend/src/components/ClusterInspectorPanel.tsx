@@ -1,4 +1,5 @@
 import { clampText, formatDate, formatSimilarity } from '../lib/format'
+import { buildSemanticExplorerHref } from '../lib/navigation'
 import type { ExplorerArticleDetail, StoryClusterDetail, StoryClusterMemberItem } from '../lib/types'
 
 type Props = {
@@ -46,6 +47,11 @@ export function ClusterInspectorPanel({
           <span className="status-chip">{detail.cluster.article_count} articles</span>
           <span className="status-chip">{detail.cluster.source_count} sources</span>
           {detail.cluster.primary_tag ? <span className="status-chip subtle">{detail.cluster.primary_tag.display_name}</span> : null}
+        </div>
+        <div className="action-row">
+          <a className="ghost-button" href={buildSemanticExplorerHref({ detail, articleId: selectedArticleId })}>
+            Open this story in semantic explorer
+          </a>
         </div>
         {detail.cluster.top_entities.length > 0 ? (
           <div className="status-chip-row compact-row">
@@ -106,6 +112,9 @@ export function ClusterInspectorPanel({
           <p>{clampText(article.article.summary, article.article.article_text_excerpt || 'No article excerpt available.')}</p>
           <div className="action-row">
             <a className="ghost-button" href={article.article.url} target="_blank" rel="noreferrer">Open article</a>
+            <a className="ghost-button" href={buildSemanticExplorerHref({ detail, article, articleId: article.article.article_id })}>
+              Open article in semantic explorer
+            </a>
           </div>
           <div className="status-chip-row compact-row">
             <span className="status-chip">Cluster {article.semantic_summary.cluster_id ?? '—'}</span>

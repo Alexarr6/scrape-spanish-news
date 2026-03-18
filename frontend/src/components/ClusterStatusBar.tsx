@@ -1,4 +1,5 @@
 import { formatCount } from '../lib/format'
+import { buildSemanticExplorerHref } from '../lib/navigation'
 import type { StoryClusterListItem, StoryClusterListResponse } from '../lib/types'
 
 type Props = {
@@ -30,6 +31,9 @@ export function ClusterStatusBar({
         <span className="status-chip">{formatCount(selectedCluster?.source_count, 'sources')}</span>
         <span className="status-chip">{activeFilterCount} active filters</span>
         <span className="status-chip">{selectedArticleId ? `Article #${selectedArticleId}` : 'No article selected'}</span>
+        <a className="ghost-button" href={buildSemanticExplorerHref({ cluster: selectedCluster, articleId: selectedArticleId })}>
+          Open semantic explorer
+        </a>
         <button className="ghost-button" type="button" onClick={onResetFilters}>
           Reset filters
         </button>

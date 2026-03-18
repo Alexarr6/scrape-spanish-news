@@ -1,4 +1,5 @@
 import { clampText, formatDate, formatSimilarity } from '../lib/format'
+import { buildClusterBrowserHref } from '../lib/navigation'
 import type { ExplorerArticleDetail, ExplorerPoint } from '../lib/types'
 
 type Props = {
@@ -64,6 +65,9 @@ export function InspectorPanel({
         <div className="action-row">
           <a className="ghost-button" href={detail.article.url} target="_blank" rel="noreferrer">
             Open article
+          </a>
+          <a className="ghost-button" href={buildClusterBrowserHref()}>
+            Back to cluster browser
           </a>
         </div>
       </div>

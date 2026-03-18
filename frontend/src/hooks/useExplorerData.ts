@@ -13,7 +13,11 @@ import type {
   LoadState,
 } from '../lib/types'
 
-export function useExplorerData(query: ExplorerQuery) {
+export function useExplorerData(
+  query: ExplorerQuery,
+  selectedArticleId: number | null,
+  setSelectedArticleId: (articleId: number | null) => void,
+) {
   const [pointsState, setPointsState] = useState<LoadState<ExplorerPointsResponse>>({
     data: null,
     loading: true,
@@ -24,7 +28,6 @@ export function useExplorerData(query: ExplorerQuery) {
     loading: true,
     error: null,
   })
-  const [selectedArticleId, setSelectedArticleId] = useState<number | null>(null)
   const [hoveredArticleId, setHoveredArticleId] = useState<number | null>(null)
   const [detailState, setDetailState] = useState<LoadState<ExplorerArticleDetail>>({
     data: null,
@@ -120,7 +123,6 @@ export function useExplorerData(query: ExplorerQuery) {
     pointsState,
     filtersState,
     detailState,
-    selectedArticleId,
     selectedPoint,
     hoveredArticleId,
     neighborIds,

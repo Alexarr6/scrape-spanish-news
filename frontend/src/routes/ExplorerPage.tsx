@@ -5,25 +5,23 @@ import { InspectorPanel } from '../components/InspectorPanel'
 import { MapPanel } from '../components/MapPanel'
 import { StatusBar } from '../components/StatusBar'
 import { useExplorerData } from '../hooks/useExplorerData'
-import { useExplorerFilters } from '../hooks/useExplorerFilters'
+import { useExplorerUrlState } from '../hooks/useExplorerUrlState'
 import type { ExplorerColorMode, ExplorerViewMode } from '../lib/types'
 
 export function ExplorerPage() {
   const [viewMode, setViewMode] = useState<ExplorerViewMode>('2d')
   const [colorMode, setColorMode] = useState<ExplorerColorMode>('neutral')
-  const { query, activeFilterCount, updateQuery, resetQuery } = useExplorerFilters()
+  const { query, selectedArticleId, activeFilterCount, updateQuery, resetQuery, setSelectedArticleId } = useExplorerUrlState()
   const {
     pointsState,
     filtersState,
     detailState,
-    selectedArticleId,
     selectedPoint,
     hoveredArticleId,
     neighborIds,
-    setSelectedArticleId,
     clearSelectedArticle,
     setHoveredArticleId,
-  } = useExplorerData(query)
+  } = useExplorerData(query, selectedArticleId, setSelectedArticleId)
 
   return (
     <ExplorerLayout
