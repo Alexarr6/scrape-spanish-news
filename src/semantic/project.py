@@ -28,6 +28,11 @@ def project_embeddings(
         coords = np.zeros((len(records), dimensions), dtype=float)
         coords[:, :component_count] = projected
 
+    if len(records) > 0:
+        centered = coords - coords.mean(axis=0, keepdims=True)
+        max_abs = float(np.max(np.abs(centered)))
+        coords = centered if max_abs <= 0 else centered / max_abs
+
     points: list[PointArtifact] = []
     for record, values in zip(records, coords, strict=True):
         x, y = float(values[0]), float(values[1])
