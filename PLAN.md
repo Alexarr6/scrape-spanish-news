@@ -1,264 +1,392 @@
-## Resumen
-- El fallo de `article_text` está brutalmente concentrado en **El Mundo**: `data/sched_elmundo_2026-03-16.json` tiene **17 artículos / 14 vacíos (82.4%)**; la evidencia histórica del repo es peor: `tests/fixtures/evidence/.../canon2_elmundo_2026-03-13.json` y `reg2_elmundo_2026-03-13.json` tienen **25/25 vacíos**.
-- Otras fuentes del mismo día salen sanas o casi sanas: `abc 0/56`, `20minutos 0/10`, `eldiario 0/6`, `lavanguardia 0/9`, `elpais 3/70`.
-- `src/adapters/elmundo.py` no tiene lógica propia; hereda de `GenericRSSAdapter`.
-- La extracción común actual en `src/adapters/rss_adapter.py` solo intenta `articleBody` desde `application/ld+json` con `json.loads()`. Si el JSON-LD viene roto, se abandona y `article_text` queda vacío.
-- Ya hay evidencia previa de que, en El Mundo, muchas páginas contienen `articleBody` pero el bloque JSON-LD se rompe por comillas sin escapar dentro del texto. A la vez, el HTML visible del cuerpo sí existe bajo markup tipo `ue-c-article__body` / `ue-c-article__paragraph`.
-- Conclusión de planning: **sí hay que evaluar varias rutas**, pero la mejor primera implementación no es “arreglar JSON roto globalmente” sino una solución **acotada, verificable y con poco radio de explosión**.
+# PLAN.md — Phase 1: real 2D semantic explorer app shell
 
-## Qué hay hoy en el código y tests
-- `src/adapters/rss_adapter.py`
-  - `GenericRSSAdapter.normalize()` rellena `article_text` con `_read_article_text(page)`.
-  - `_read_article_text()` solo recorre `_extract_json_ld_values(page, "articleBody")`.
-  - `_extract_json_ld_values()` parsea cada script JSON-LD con `json.loads()` y descarta cualquier bloque con `JSONDecodeError`.
-- `src/adapters/elmundo.py`
-  - No añade fallback ni selectores propios.
-- `tests/test_rss_adapter_extraction.py`
-  - Cubre caso feliz de JSON-LD válido y ausencia de datos.
-  - No cubre JSON-LD malformado, ni fallback HTML, ni comportamiento específico de El Mundo.
+## Phase boundary
+Phase 0 is done enough to stand on:
+- FastAPI semantic explorer endpoints exist
+- typed API contracts exist
+- Vite/React/deck.gl frontend workspace exists
+- the app shell layout exists
+- the current UI is mostly placeholders
 
-## Hipótesis priorizadas
-1. **Hipótesis principal — fragilidad del parser JSON-LD en El Mundo**
-   - El medio publica `articleBody` en JSON-LD, pero una fracción relevante de páginas mete comillas dobles sin escapar dentro del string.
-   - `json.loads()` falla, el extractor común descarta el bloque entero y se pierde texto válido.
-   - Esto explica por qué el fallo es específico de fuente y no general del pipeline.
+So Phase 1 is not “set up deck.gl” or “invent the API.” That part is already on the table.
 
-2. **Hipótesis secundaria — HTML del cuerpo está disponible y es recuperable con selectores acotados**
-   - El Mundo expone el cuerpo en el HTML ya descargado por el scraper, así que no hace falta browser automation ni inventarse bypasses.
-   - El riesgo real no es “no hay texto”; el riesgo es extraer demasiado ruido si se hace un fallback HTML chapucero.
+**Phase 1 goal:** turn the current foundation into a genuinely usable **2D semantic explorer app shell** with bounded interaction, inspection, filtering, and selection behavior.
 
-3. **Hipótesis menor — puede existir una mejora común útil, pero solo si va muy acotada**
-   - Alguna recuperación común de JSON-LD o helper HTML reutilizable podría tener sentido.
-   - Pero meter heurísticas globales agresivas por un bug localizado sería una idea bastante mala: más blast radius, más falsos positivos, más mantenimiento.
+This phase must:
+1. keep the existing semantic backend as the canonical source of truth
+2. build on the existing explorer API instead of bypassing it
+3. deliver one serious 2D interaction loop around the semantic map
+4. stay small and sharp
+5. use **atomic git commits per logical completed task**
 
-## Alternativas de implementación evaluadas
+Not in this phase: 3D, backend redesign, scraper changes, platform work, timeline/product sprawl, or a frontend rewrite because someone got bored.
 
-### Opción 1 — Fallback HTML específico en `ElMundoAdapter`
-**Idea**
-- Mantener la ruta actual como primera opción.
-- Si `_read_article_text(page)` devuelve vacío en El Mundo, extraer desde el cuerpo HTML usando selectores de esa fuente (`ue-c-article__body`, `ue-c-article__paragraph`, o equivalente realmente observado en fixture real).
+## What exists now (repo reality after Phase 0)
 
-**Dónde tocar**
-- `src/adapters/elmundo.py`
-- Posiblemente factorizar un helper mínimo en `src/adapters/rss_adapter.py` o helper privado local si hace falta limpieza/unión de párrafos.
-- Nuevos tests específicos de El Mundo y/o ampliación de `tests/test_rss_adapter_extraction.py`.
+### Backend/API already present
+Relevant files already in place:
+- `src/api/v1/semantic.py`
+- `src/api/contracts/semantic.py`
+- `src/semantic/dbstore.py`
+- `tests/test_api_semantic_explorer.py`
 
-**Correctness**
-- Alta para el caso objetivo si los selectores se basan en HTML real.
-- Respeta la prioridad actual: si JSON-LD válido existe, se sigue usando.
+Current API surface already gives us the basic contract we need:
+- `GET /api/v1/semantic/explorer/points`
+- `GET /api/v1/semantic/explorer/filters`
+- `GET /api/v1/semantic/explorer/articles/{article_id}`
 
-**Blast radius**
-- Bajo. Solo afecta a El Mundo.
+### Frontend foundation already present
+Relevant files already in place:
+- `frontend/src/App.tsx`
+- `frontend/src/routes/ExplorerPage.tsx`
+- `frontend/src/components/ExplorerLayout.tsx`
+- `frontend/src/components/StatusBar.tsx`
+- `frontend/src/components/FilterBar.tsx`
+- `frontend/src/components/MapPanel.tsx`
+- `frontend/src/components/InspectorPanel.tsx`
+- `frontend/src/hooks/useExplorerBootstrap.ts`
+- `frontend/src/lib/api.ts`
+- `frontend/src/lib/types.ts`
 
-**Mantenimiento**
-- Moderado-bajo. Si El Mundo cambia clases CSS, rompe solo este adapter, no todo el scraper.
+Current frontend state is basically a scaffold:
+- it loads bootstrap data
+- it renders the app layout
+- deck.gl is wired but renders no actual semantic point layer
+- filters are read-only lists
+- inspector is a placeholder
+- no real selection/highlight/query loop exists yet
 
-**Testabilidad**
-- Alta. Se puede fixturear HTML real recortado y comprobar exactamente cuándo entra el fallback.
+That is exactly the right point to start Phase 1.
 
-**Riesgo de falsos positivos / texto ruidoso**
-- Medio, pero controlable con selectores estrictos y exclusión de contenedores no editoriales.
-- Riesgos concretos: captions, módulos relacionados, promos, duplicados si se mezcla contenedor + párrafos sin cuidado.
+## Product outcome for Phase 1
+After Phase 1, a human should be able to:
+- open the explorer and see the semantic point cloud rendered as an actual 2D deck.gl view
+- pan/zoom the map and understand what they are looking at
+- hover a point for quick context
+- click a point to select it and open a real inspector
+- use bounded filters/search to narrow the dataset
+- see selection/highlight behavior that makes semantic neighborhood exploration practical
+- click neighbors in the inspector to move through the semantic graph
 
-**Veredicto**
-- **Recomendada como primera implementación.** Es la opción más segura y con mejor relación cobertura/riesgo.
+If the result still feels like a demo skeleton, Phase 1 failed.
 
----
+## Chosen UX for this phase
 
-### Opción 2 — Estrategia común más segura para recuperar `articleBody` desde JSON-LD
-**Idea**
-- Mejorar `_extract_json_ld_values()` para tolerar ciertos fallos sin hacer regex satánicas.
-- Ejemplos aceptables de alcance:
-  - recorrer múltiples blobs y registrar si un script falló;
-  - intentar parsear listas/objetos ya válidos más robustamente;
-  - añadir una recuperación muy acotada solo para `articleBody` si el script tiene estructura reconocible y delimitable con seguridad.
+### Single-screen explorer
+Keep one screen with three areas:
+1. **Status/header bar** — title, dataset counts, projection set, reset action
+2. **Main 2D map panel** — deck.gl scatterplot interaction surface
+3. **Inspector/filter side panels** — controls plus selected article detail
 
-**Dónde tocar**
-- `src/adapters/rss_adapter.py`
-- Tests comunes en `tests/test_rss_adapter_extraction.py`
+No extra routes unless a tiny `/ -> /explorer` redirect is already in place or nearly free.
 
-**Correctness**
-- Variable. Puede recuperar texto sin depender de CSS, lo cual mola.
-- Pero cuando el problema es JSON malformado con comillas internas en texto largo, arreglarlo genéricamente sin tragarte basura es difícil.
+### 2D map interaction
+Bounded interaction model:
+- render semantic points via `ScatterplotLayer`
+- orthographic 2D view only
+- pan + zoom enabled
+- hover tooltip with: title, source, section/date, cluster/outlier hint
+- click selects a point
+- selected point gets clear visual emphasis
+- optional neighbor highlighting is allowed **only** for the selected article’s nearest neighbors and only if it stays simple
 
-**Blast radius**
-- Medio-alto. Cambia comportamiento compartido por todas las fuentes.
+No 3D. No pitch. No bearings. No basemap theater.
 
-**Mantenimiento**
-- Medio-alto. Las heurísticas para “JSON casi válido” envejecen fatal.
+### Inspector/sidebar behavior
+Inspector should answer: “what is this article, and why is it near these others?”
 
-**Testabilidad**
-- Media. Se puede testear, sí, pero cuesta demostrar que no rompe otros casos raros.
+When nothing is selected:
+- show concise instructions and current dataset summary
 
-**Riesgo de falsos positivos / texto ruidoso**
-- Medio-alto. Un parser de rescate demasiado listo puede capturar strings truncados, trozos mal delimitados o JSON parcialmente corrupto.
+When a point is selected:
+- article title, source, date, section
+- summary or excerpt
+- semantic summary block:
+  - cluster id
+  - cluster size
+  - outlier flag
+  - neighbor count
+  - source neighbor diversity if available
+- nearest neighbors list with similarity
+- actions:
+  - open source article
+  - clear selection
+  - click neighbor -> select that neighbor
 
-**Veredicto**
-- **No recomendada como primer fix.** Solo merece una segunda iteración si, tras arreglar El Mundo de forma local, aparece el mismo patrón en más fuentes y con suficiente evidencia.
+No tabs. No mega-inspector. No report builder.
 
----
+### Filters/search behavior
+Bounded filter set for Phase 1:
+- search text
+- source select
+- section select
+- cluster select
+- outlier-only toggle
+- date from / date to
+- reset all
 
-### Opción 3 — Fallback en parser/helper común pero con alcance fuertemente acotado
-**Idea**
-- Añadir una capacidad común de extracción HTML, pero no activarla globalmente “porque sí”.
-- Ejemplos sensatos:
-  - helper compartido de limpieza/unión de párrafos HTML;
-  - función común que recibe selectores explícitos por fuente;
-  - fallback HTML invocado solo por adapters que lo pidan.
+Behavior rules:
+- filter changes should trigger backend-backed refetch of points
+- filters should be visible and editable, not just displayed as metadata
+- active filters should be easy to clear
+- empty results state must be explicit and useful
 
-**Dónde tocar**
-- `src/adapters/rss_adapter.py` para helper reutilizable pequeño, o nuevo helper privado común.
-- `src/adapters/elmundo.py` seguiría decidiendo cuándo usarlo.
+### Selection/highlight behavior
+Keep it dead simple:
+- one selected article at a time
+- one hovered article at a time
+- selected article persists across pan/zoom
+- if filters remove the selected article from the current result set, clear selection and reset the inspector to empty state
+- selected point uses stronger radius/stroke/opactity treatment than the rest
+- hover should never visually compete with selection
+- if neighbor highlighting is implemented, it should be a subtle secondary emphasis, not a rainbow mess
 
-**Correctness**
-- Alta si el helper es tonto en el buen sentido: extraer nodos dados, limpiar y unir.
+## Backend/API plan for Phase 1
+The backend is mostly in place. Extend it only where the current contract is too thin for the real UI.
 
-**Blast radius**
-- Bajo-medio, según diseño. Si el helper es pasivo y no se autoactiva, el riesgo es bajo.
+### Primary backend goal
+Keep the backend as the sole owner of semantic truth and query shaping. The frontend should only own view state.
 
-**Mantenimiento**
-- Bueno. Evita duplicar utilidades si más adelante otra fuente necesita fallback HTML parecido.
+### Likely backend changes
+Files likely to change:
+- `src/api/v1/semantic.py`
+- `src/api/contracts/semantic.py`
+- `src/semantic/dbstore.py`
+- `tests/test_api_semantic_explorer.py`
+- maybe `tests/test_semantic_dbstore.py` if lower-level query coverage is cleaner there
 
-**Testabilidad**
-- Alta. Se puede cubrir helper + integración específica.
+### Backend work items
+1. **Harden the points query contract for real filter usage**
+   - confirm all intended Phase 1 filters work end-to-end: `source`, `section`, `cluster_id`, `outlier_only`, `date_from`, `date_to`, `search`, `limit`
+   - ensure metadata remains coherent when filters are applied
 
-**Riesgo de falsos positivos / texto ruidoso**
-- Bajo-medio si la activación sigue siendo source-specific.
+2. **Ensure article detail is sufficient for the inspector**
+   - confirm detail payload includes everything the inspector needs without additional hacks
+   - if needed, add only small contract fields, not a giant detail object
 
-**Veredicto**
-- **Buena compañera de la opción 1, no sustituta.** Si al implementar El Mundo aparece duplicación fea de limpieza de párrafos, factorizar helper pequeño sí tiene sentido.
+3. **Optionally support selected-neighbor highlighting cleanly**
+   - if the current detail response already includes enough neighbor ids, reuse it
+   - do not add a separate graph API in this phase
 
-## Comparativa resumida
-- **Correctness inmediata para El Mundo:** Opción 1 > Opción 3 > Opción 2
-- **Menor blast radius:** Opción 1 ≈ Opción 3 > Opción 2
-- **Mantenimiento a corto plazo:** Opción 1 ≈ Opción 3 > Opción 2
-- **Testabilidad:** Opción 1 ≈ Opción 3 > Opción 2
-- **Menor riesgo de ruido/falsos positivos:** Opción 1 con selectores estrictos / Opción 3 bien diseñada > Opción 2
+### Backend non-goals
+- no new persistence layer
+- no semantic recomputation endpoint circus
+- no backend redesign around frontend whims
 
-## Recomendación
-**Implementar Opción 1 como cambio principal, con Opción 3 solo si ayuda a no duplicar limpieza trivial.**
+## Frontend implementation plan for Phase 1
 
-En cristiano:
-- No tocar el parser común para “reparar” JSON-LD roto de forma global en esta iteración.
-- Sí añadir un fallback HTML específico para El Mundo cuando la ruta actual devuelva vacío.
-- Si hace falta reutilización, factorizar un helper pequeño y pasivo para limpiar/concatenar párrafos HTML, pero la decisión de usarlo debe quedarse en `ElMundoAdapter`.
+### State/data flow shape
+Replace the current one-shot bootstrap mentality with a real explorer state flow.
 
-## Diseño recomendado para el implementer
-Orden de extracción propuesto:
-1. Mantener `GenericRSSAdapter` tal como está para todas las fuentes.
-2. En `ElMundoAdapter.normalize()`:
-   - llamar a la normalización base;
-   - si `article.article_text` ya viene no vacío, devolverlo tal cual;
-   - si viene vacío, ejecutar fallback HTML específico de El Mundo sobre `raw["html"]`;
-   - solo sobrescribir `article_text` si el fallback devuelve texto razonable tras normalización.
-3. El fallback HTML debe:
-   - priorizar párrafos del cuerpo editorial real;
-   - preservar orden;
-   - normalizar espacios/entidades;
-   - evitar capturar texto de widgets, bloques relacionados, captions o promos;
-   - poder devolver `""` si no encuentra un cuerpo fiable.
+Recommended owned frontend state:
+- `filters`
+- `selectedArticleId`
+- `hoveredArticleId`
+- `viewState`
+- `colorMode` only if one bounded toggle is added
 
-## Verificación requerida
-### Unit tests / fixtures
-Añadir cobertura mínima de estos casos:
-1. **JSON-LD válido** → El Mundo sigue usando la ruta actual y no cambia el resultado.
-2. **JSON-LD inválido + cuerpo HTML real presente** → recupera `article_text` desde HTML.
-3. **JSON-LD inválido + no hay contenedor fiable** → devuelve vacío, no rellena basura.
-4. **HTML con ruido no editorial cercano** → no captura bloques relacionados/promocionales obvios.
-5. **No regresión común** → `tests/test_rss_adapter_extraction.py` sigue verde para comportamiento genérico.
+Recommended async data split:
+- points query tied to current filters
+- article detail query tied to `selectedArticleId`
+- filter options query loaded once or reused from bootstrap
 
-### Evidencia de datos
-Repetir y comparar:
+### Likely frontend file/module changes
+Existing files likely to change heavily:
+- `frontend/src/routes/ExplorerPage.tsx`
+- `frontend/src/components/StatusBar.tsx`
+- `frontend/src/components/FilterBar.tsx`
+- `frontend/src/components/MapPanel.tsx`
+- `frontend/src/components/InspectorPanel.tsx`
+- `frontend/src/lib/api.ts`
+- `frontend/src/lib/types.ts`
+- `frontend/src/styles.css`
+
+Likely new files/modules:
+- `frontend/src/hooks/useExplorerPoints.ts`
+- `frontend/src/hooks/useArticleDetail.ts`
+- `frontend/src/lib/query.ts` or equivalent query-string helper
+- `frontend/src/lib/format.ts` for date/label formatting
+- `frontend/src/state/explorerState.ts` or `frontend/src/hooks/useExplorerState.ts`
+- optional `frontend/src/components/Tooltip.tsx` if keeping tooltip rendering separate stays cleaner
+
+### Task 1 — replace bootstrap-only loading with real explorer state and query flow
+Work:
+- separate filters/options/points/detail fetching concerns
+- add typed query building for points endpoint
+- make selection and filters first-class UI state
+- keep state local and boring; no state-management cosplay unless clearly needed
+
+Done when:
+- filters drive point queries
+- selecting a point drives detail queries
+- loading/error state is specific and understandable
+
+### Task 2 — turn `MapPanel` into a real 2D semantic map
+Work:
+- add `ScatterplotLayer` backed by actual point data
+- compute stable view state from bounds
+- implement hover + click handlers
+- encode selected vs unselected points clearly
+- add tooltip rendering with bounded article context
+
+Done when:
+- the map is the real product surface, not a “deck.gl wired” badge of shame
+
+### Task 3 — implement real filter/search controls
+Work:
+- make `FilterBar` interactive instead of informational
+- wire controls to backend query params
+- include reset-all action
+- show active filter summary or obvious applied-state affordances
+
+Done when:
+- filtering materially changes the dataset and is pleasant enough to use twice in a row
+
+### Task 4 — implement the real inspector workflow
+Work:
+- fetch selected article detail on click
+- render selected article metadata and semantic summary
+- render neighbors list and neighbor click-to-select behavior
+- support clear selection and open source article action
+- show honest empty/loading/error states
+
+Done when:
+- the inspector explains the selected point instead of apologizing for not existing yet
+
+### Task 5 — shell polish and practical UX cleanup
+Work:
+- improve `StatusBar` so it reflects active dataset state, selection count, and reset affordance
+- make layout resilient for typical laptop screen widths
+- ensure empty/error/loading states do not destroy the page structure
+- keep styling clean and functional, not ornate
+
+Done when:
+- the app feels like a tool, not a pile of independently working widgets
+
+## Verification plan
+
+### 1) Existing repo gate
 ```bash
-python3 - <<'PY'
-import json,glob,os,statistics
-for path in sorted(glob.glob('data/sched_*_2026-03-16.json')):
-    data=json.load(open(path))
-    arts=data if isinstance(data,list) else data.get('articles',[])
-    total=len(arts)
-    empty=sum(1 for a in arts if not (a.get('article_text') or '').strip())
-    lengths=[len((a.get('article_text') or '').strip()) for a in arts if (a.get('article_text') or '').strip()]
-    print(os.path.basename(path), total, empty, round(empty/total, 4) if total else None, statistics.median(lengths) if lengths else None)
-PY
+make check
 ```
+Expected:
+- existing backend/test gate remains green
 
-### Muestreo manual
-- Revisar 3-5 artículos de El Mundo que antes estaban vacíos.
-- Confirmar que el texto recuperado es cuerpo editorial real, no sumario/caption/basura.
-- Mirar al menos una noticia por sección distinta si es posible.
-
-## Métricas de éxito
-- Principal: bajar El Mundo desde **14/17 vacíos (82.4%)** a **<= 10-15%** en la muestra local del día.
-- Secundaria: mantener otras fuentes sin regresión observable.
-- Calidad:
-  - longitud mediana no absurda;
-  - muestreo manual sin ruido editorial serio;
-  - cero cambios inesperados en tests comunes.
-
-## Commit boundaries propuestas
-### Commit 1 — Reproducción y pruebas
-- Añadir fixture(s) HTML recortadas de El Mundo.
-- Añadir tests rojos para:
-  - JSON-LD válido,
-  - JSON-LD inválido con fallback HTML,
-  - ausencia de cuerpo fiable.
-
-### Commit 2 — Implementación acotada
-- Añadir fallback HTML específico en `src/adapters/elmundo.py`.
-- Factorizar helper mínimo solo si evita duplicación trivial.
-- Poner todos los tests en verde.
-
-### Commit 3 — Verificación y documentación ligera
-- Ejecutar tests focalizados.
-- Registrar before/after de ratio de vacíos y notas de muestreo.
-- Si el repo lo usa, actualizar doc/changelog/status de implementación.
-
-## Riesgos y guardarraíles
-- **Cambio de markup en El Mundo:** usar selectores lo bastante específicos para calidad, pero no una telaraña de CSS imposible de mantener.
-- **Ruido editorial:** excluir o evitar bloques de relacionados, promos, captions, newsletters.
-- **Duplicado de párrafos:** no mezclar indiscriminadamente texto del contenedor completo y de sus párrafos hijos.
-- **Fix demasiado listo en común:** no meter heurísticas globales de “JSON casi válido” en esta iteración.
-- **Premium/paywall:** extraer solo lo que ya está en el HTML recibido; nada de bypass raro.
-
-## Handoff inequívoco para implementer
-Haz esto y no te líes:
-1. **Primero tests.** Crea fixture recortada de El Mundo con:
-   - un caso de JSON-LD válido;
-   - un caso de JSON-LD malformado por comillas internas sin escapar;
-   - cuerpo HTML real bajo markup editorial de El Mundo.
-2. Añade test(s) que dejen claro:
-   - genérico sigue igual;
-   - El Mundo recupera texto por HTML solo cuando JSON-LD falla o viene vacío;
-   - sin cuerpo fiable, se mantiene vacío.
-3. Implementa el fallback en `src/adapters/elmundo.py`, no como parche global mágico en `rss_adapter.py`.
-4. Si necesitas reutilizar limpieza HTML, factoriza helper pequeño y pasivo; no cambies el comportamiento común por defecto.
-5. Valida con tests focalizados y revisa muestras recuperadas para asegurar que no metiste porquería.
-
-## Comandos de validación propuestos
+### 2) Semantic explorer API tests
 ```bash
-# Tests del extractor común
-PYTHONPATH=. .venv/bin/python -m pytest -q tests/test_rss_adapter_extraction.py
-
-# Si se añade test específico de El Mundo
-PYTHONPATH=. .venv/bin/python -m pytest -q tests/test_elmundo_extraction.py
-
-# Suite de adapters si procede
-PYTHONPATH=. .venv/bin/python -m pytest -q tests/test_*adapter*.py
-
-# Ratios por fuente / longitud mediana
-python3 - <<'PY'
-import json,glob,os,statistics
-for path in sorted(glob.glob('data/sched_*_2026-03-16.json')):
-    data=json.load(open(path))
-    arts=data if isinstance(data,list) else data.get('articles',[])
-    total=len(arts)
-    empty=sum(1 for a in arts if not (a.get('article_text') or '').strip())
-    lengths=[len((a.get('article_text') or '').strip()) for a in arts if (a.get('article_text') or '').strip()]
-    print(os.path.basename(path), 'total=', total, 'empty=', empty, 'ratio=', round(empty/total, 4) if total else None, 'median_len=', statistics.median(lengths) if lengths else None)
-PY
+uv run python -m pytest -q tests/test_api_semantic_explorer.py tests/test_semantic_dbstore.py
 ```
+Expected:
+- points endpoint supports the actual Phase 1 filter set
+- detail endpoint supports inspector needs
+- selection-related contract assumptions are covered
 
-## Decisiones humanas pendientes
-- Aprobación para implementar el fallback HTML **específico de El Mundo**.
-- Aprobación para introducir fixtures HTML recortadas basadas en páginas reales.
-- Si durante la implementación aparece que varias fuentes sufren el mismo JSON-LD roto, reevaluar una mejora común en una iteración separada; no mezclarlo en este cambio.
+### 3) Frontend type/build check
+```bash
+cd frontend
+npm install
+npm run build
+```
+Expected:
+- clean build
+- no type errors
+
+### 4) Practical app smoke check
+Run backend + frontend locally and verify manually:
+- explorer page loads
+- semantic points render as real scatterplot points
+- hover tooltip works
+- click selection updates highlight and inspector
+- filters refetch and narrow points
+- clearing filters works
+- neighbor click changes selection
+- empty results state is clear
+- network/API failures produce sane UI feedback
+
+### 5) Canonical-backend sanity check
+Verify that:
+- the map point count reflects backend-filtered results, not client-side fakery
+- inspector content matches the canonical backend response
+- neighbor list comes from existing semantic neighbor logic/path
+
+### 6) Commit granularity check
+```bash
+git log --oneline --decorate -n 15
+```
+Expected:
+- atomic commits per logical completed task
+- no giant “phase1 ui” landfill commit
+
+## Required git discipline for the later implementer
+This is mandatory, not aspirational.
+
+The implementer must use **atomic git commits per logical completed task**.
+
+Minimum expected commit boundaries:
+1. explorer state/query-flow refactor
+2. real deck.gl map rendering + hover/select behavior
+3. interactive filters/search wired to backend
+4. real inspector + neighbor navigation
+5. shell polish, docs, and verification updates
+
+Rules:
+- each commit must leave the repo coherent
+- each commit should correspond to one completed logical step
+- do not bury unrelated backend and frontend work together if they are not part of the same finished task
+- no “misc fixes” garbage truck commit at the end
+
+If the commit history looks like one panic dump, the implementer ignored the contract.
+
+## Risks and mitigations
+
+### Risk: Phase 1 bloats into a frontend architecture project
+Mitigation:
+- reuse the existing scaffold
+- keep one route, one map, one inspector, one filter set
+- avoid adding framework furniture unless a real problem forces it
+
+### Risk: frontend starts inventing semantic behavior client-side
+Mitigation:
+- backend owns semantic truth and query shaping
+- frontend owns only view state and presentation
+- no client-side neighbor/clustering reinvention
+
+### Risk: map interaction is technically present but ergonomically useless
+Mitigation:
+- prioritize hover/select/tooltip/highlight quality over decorative extras
+- ship fewer controls, but make them actually work
+
+### Risk: inspector becomes a dumping ground
+Mitigation:
+- keep it article-centric
+- only include fields that explain the selected point and its nearest neighbors
+
+### Risk: filter/query flow becomes brittle
+Mitigation:
+- centralize query param construction
+- keep filter state explicit and typed
+- test the real supported filter set, not just happy-path bootstrap
+
+## Explicit deferred items
+Absolutely not part of Phase 1:
+- 3D explorer modes
+- timeline animation/playback
+- compare-two-articles or compare-two-clusters workflows
+- advanced full-text search system
+- cross-source comparison dashboards
+- saved views/share links/annotations
+- auth or multi-user features
+- deployment/platform work
+- backend semantic redesign
+- scraper/provider redesign
+- frontend platform rewrite
+
+## Recommended implementation order
+1. refactor explorer state and API query flow around real filters + selection
+2. implement real deck.gl scatterplot rendering and interaction
+3. implement interactive filters/search
+4. implement inspector + neighbor navigation
+5. polish shell, verify behavior, document run/smoke steps
+
+## Bottom line
+Phase 0 proved the wiring. Phase 1 needs to prove the product. Build one bounded, actually usable 2D semantic explorer on top of the current backend truth. No 3D clownery, no backend detour, no frontend philosophy retreat. Just make the thing properly usable, and commit it atomically like an adult.

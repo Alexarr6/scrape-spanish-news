@@ -25,3 +25,11 @@
 - Scheduling:
 - Retries/backoff:
 - Gestión de fallos:
+
+## Baseline Python (si aplica)
+- Gestor de entorno/dependencias: `uv`
+- Configuración canónica: `pyproject.toml`
+- Lint/format: `ruff`
+- Hooks de higiene: `pre-commit` con `ruff-check` y `ruff-format`
+- Tests/linters/runs vía `uv run ...`
+- Evitar dependencia de paquetes Python globales del host

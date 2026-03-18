@@ -1,52 +1,66 @@
 # PROJECT_BRIEF.md
 
-## 1) Nombre del proyecto
-Spain News Bias Scraper — análisis de cobertura vacía de `article_text` en El Mundo
+## 1) Project name
+Spain News Bias Scraper — semantic explorer app foundation (Phase 0 + Phase 1)
 
-## 2) Objetivo (1-2 frases)
-Analizar por qué una gran parte de los artículos de **El Mundo** están llegando con `article_text` vacío en la salida y persistencia del scraper. Diseñar un plan técnico concreto para diagnosticar la causa raíz y proponer una solución verificable y segura.
+## 2) Objective (1-2 sentences)
+Plan and implement the first serious application phase for the semantic explorer, moving from the current static HTML export to a proper 2D app foundation using deck.gl. This cycle should establish the frontend architecture, data flow, and an initial usable app shell without expanding into 3D yet.
 
-## 3) Contexto técnico
+## 3) Technical context
 - Repo/path: `/home/node/.openclaw/workspace/repos/spain-news-bias-scraper`
-- Stack principal: Python 3 + scraper multi-fuente + persistencia/API
-- Evidencia inicial observada en datos locales del repo: `data/sched_elmundo_2026-03-16.json` muestra ~82% de artículos con `article_text` vacío, mientras otras fuentes del mismo día salen casi completas.
-- Restricción operativa: en este host no hay Docker disponible; el análisis debe apoyarse en código, fixtures, tests y fetches HTTP normales si hacen falta.
+- The project already has:
+  - Postgres + pgvector semantic persistence
+  - embeddings and projections persisted
+  - semantic neighbors
+  - a static 2D semantic explorer HTML
+  - bounded semantic analysis and explorer usability improvements
+- The current static HTML is useful but clearly reaching ergonomic limits
+- The chosen direction is a more serious frontend based on **deck.gl**
+- Multiple pages/views are allowed if justified, but avoid unnecessary product sprawl
+- This project will now iterate phase-by-phase with the loop:
+  - planner -> human gate -> implementer
+- Each implementation phase must keep tests green and use atomic git commits
 
 ## 4) Inputs / Outputs
-- Inputs: adapter de El Mundo, estrategia de extracción de texto actual, tests existentes, outputs JSON recientes, y cualquier patrón anti-bot / lazy-load / JSON-LD / paywall / rendering detectado.
-- Outputs: diagnóstico de causa raíz, hipótesis priorizadas, plan por fases, verificación reproducible y recomendación de implementación.
+- Inputs: existing semantic backend/pipeline, current static explorer behavior, current semantic artifacts and query capabilities, and the decision to use deck.gl
+- Outputs: a bounded architecture plan plus the first implementation pass for an app shell and core 2D explorer foundation
 
 ## 5) In scope
-- [x] Medir y describir el fallo en El Mundo con evidencia concreta
-- [x] Revisar el adapter y pipeline de extracción de `article_text`
-- [x] Comparar El Mundo con una o dos fuentes que sí funcionan
-- [x] Proponer solución técnica y estrategia de validación
-- [x] Definir riesgos (paywall, HTML dinámico, bloques anti-bot, cambios de markup)
+- [x] Define the application architecture for the semantic explorer app
+- [x] Choose the practical frontend/backend integration shape for the first app phase
+- [x] Build the first usable app shell around a 2D deck.gl-based explorer
+- [x] Define or implement a clean data-loading path for the app using the current semantic backend as source of truth
+- [x] Include a basic but serious inspector/filter interaction model for the initial app shell
+- [x] Allow multiple pages/views only if they clearly help and remain bounded
+- [x] Require atomic git commits during implementation
 
 ## 6) Out of scope (do-not)
-- [x] No implementar aún cambios de producción sin aprobación humana
-- [x] No rehacer todos los adapters si el problema está concentrado en El Mundo
-- [x] No meter browser automation pesada salvo justificación brutal
-- [x] No tocar la base de datos en producción ni hacer cambios destructivos
+- [x] Do not implement 3D in this cycle
+- [x] Do not rewrite the scraper or semantic backend architecture
+- [x] Do not broaden into auth, deployment platform work, or multi-user systems
+- [x] Do not turn this into a giant frontend framework migration beyond what is needed for the app shell
+- [x] Do not add speculative roadmap work from later phases into this implementation pass
 
-## 7) Criterios de aceptación
-- [x] El análisis identifica causa raíz o reduce el problema a 1-2 hipótesis fuertes con evidencia
-- [x] El plan propone una solución concreta y incremental
-- [x] La verificación define cómo medir mejora en porcentaje de `article_text` no vacío
-- [x] El handoff deja claro qué tocar, cómo probarlo y qué riesgos vigilar
+## 7) Acceptance criteria
+- [x] The planner defines a clear app architecture and first-phase implementation plan
+- [x] The implementation delivers a usable 2D app shell that is a meaningful step up from the static HTML
+- [x] The app is grounded in the existing semantic source of truth and does not invent a parallel semantic system
+- [x] Filters/selection/inspection are present at a basic but serious level
+- [x] Existing tests remain green and new behavior is verified
+- [x] Implementation uses atomic commits per logical completed task
 
-## 8) Tests / verificaciones requeridas
-- [x] Revisar outputs recientes (`data/*.json`) para cuantificar el problema
-- [x] Revisar adapter/tests de El Mundo y extracción común
-- [x] Comparar con una fuente sana (por ejemplo ABC o El País)
-- [x] Dejar comandos verificables para una futura implementación
+## 8) Required tests / verification planning
+- [x] Existing repo gate remains green (`make check`)
+- [x] New frontend/app behavior has practical smoke validation
+- [x] Data loading path is verified against current semantic backend outputs/state
+- [x] Commit history reflects atomic logical progress
 
-## 9) Entrega esperada
-- Formato: actualización de `PLAN.md` + `STATUS.md` con diagnóstico y plan
-- Evidencias mínimas: ratio de vacíos por fuente, posibles causas, estrategia de fix, pruebas propuestas
+## 9) Expected delivery
+- Format: updated `PLAN.md`, then bounded implementation of the first app foundation phase
+- Contents: architecture choice, file/module plan, verification plan, deferred items, and a clean implementation handoff
 
-## 10) Riesgos / restricciones
-- Seguridad: no añadir scraping agresivo ni bypasss dudosos
-- Datos: evitar falsos positivos rellenando `article_text` con basura o resúmenes incompletos
-- Operación: el markup del medio puede variar por secciones o por presencia de paywall
-- Calidad: un fix debe mejorar cobertura sin degradar otras fuentes
+## 10) Risks / constraints
+- Avoid replacing a simple working tool with an overengineered frontend toy
+- Keep current semantic data model as the source of truth
+- Preserve boring operational behavior while improving product ergonomics
+- Keep this cycle focused on architecture + 2D app foundation only

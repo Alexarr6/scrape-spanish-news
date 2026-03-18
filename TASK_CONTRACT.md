@@ -1,57 +1,52 @@
 # TASK_CONTRACT.md
 
 ## Objective
-Diagnosticar por qué El Mundo produce un porcentaje muy alto de `article_text` vacío y dejar un plan técnico accionable para corregirlo sin romper el resto del scraper.
+Plan and implement the first serious semantic explorer app phase for `spain-news-bias-scraper`: establish the app architecture and deliver a usable 2D deck.gl-based app shell on top of the current semantic backend.
 
 ## Technical Context
 - Repo/path: `/home/node/.openclaw/workspace/repos/spain-news-bias-scraper`
-- Señal actual: `data/sched_elmundo_2026-03-16.json` tiene 17 artículos, 14 con `article_text` vacío (~82.4%)
-- Otras fuentes del mismo día salen bien, lo que apunta a un problema específico de source adapter / extracción / markup en El Mundo
-- No asumir Docker/browser automation; preferir diagnóstico reproducible con código, fixtures, tests y fetches ligeros
+- The repo already has a working semantic backend and a static 2D explorer/export
+- The next step is not more static HTML patching; it is a bounded app foundation phase
+- deck.gl is the chosen frontend direction
+- Multiple pages/views are allowed if clearly justified and bounded
+- This project will iterate phase-by-phase via planner -> human gate -> implementer
+- Implementation must create atomic git commits for each logical completed task
 
 ## Scope
-- [x] Cuantificar el problema y describirlo con evidencia
-- [x] Inspeccionar adapter/pipeline de El Mundo y puntos comunes de extracción de texto
-- [x] Comparar comportamiento con una fuente sana
-- [x] Proponer plan de fix incremental con verificación
-- [x] Documentar riesgos y decisiones humanas
+- [x] Define the app architecture for the first serious frontend phase
+- [x] Decide the practical frontend/backend data flow for this phase
+- [x] Implement a usable 2D app shell using deck.gl
+- [x] Provide basic bounded inspection/filtering/selection behavior
+- [x] Keep the current semantic backend as the source of truth
+- [x] Use atomic commits during implementation
 
 ## Non-goals
-- [x] No implementar aún el fix final sin aprobación humana
-- [x] No introducir Selenium/Playwright salvo necesidad demostrada
-- [x] No alterar adapters sanos por intuición
-- [x] No hacer scraping agresivo ni saltos dudosos de protección
+- [x] No 3D implementation in this cycle
+- [x] No scraper/backend redesign
+- [x] No auth/deployment/platform sprawl
+- [x] No speculative future-phase implementation beyond what this foundation requires
 
 ## Acceptance Criteria (checklist)
-- [x] El planner entrega un diagnóstico o 1-2 hipótesis fuertes con evidencia suficiente
-- [x] `PLAN.md` incluye fases claras para instrumentar, corregir y validar
-- [x] Se definen métricas de éxito (p. ej. reducción sustancial del ratio de vacíos en El Mundo)
-- [x] El handoff al implementer indica archivos probables, pruebas y límites
+- [x] `PLAN.md` defines one clear bounded app-foundation phase
+- [x] The resulting app shell is a clear usability step beyond the static HTML export
+- [x] The current semantic system remains the canonical backend/source of truth
+- [x] Existing tests remain green and new behavior is verified
+- [x] Commit history shows atomic logical progress
 
 ## Verification
-Comandos o checks verificables:
+Planner/implementer should include practical checks such as:
 ```bash
-# Cuantificar cobertura actual por fuente
-python3 - <<'PY'
-import json,glob,os
-for path in sorted(glob.glob('data/sched_*_2026-03-16.json')):
-    data=json.load(open(path))
-    arts=data if isinstance(data,list) else data.get('articles',[])
-    total=len(arts)
-    empty=sum(1 for a in arts if not (a.get('article_text') or '').strip())
-    print(os.path.basename(path), total, empty, round(empty/total, 3) if total else None)
-PY
-
-# Revisar tests y adapters relacionados con El Mundo
-rg -n "elmundo|article_text|articleBody|keywords|json-ld" src tests
+# repo gate
+# frontend/app smoke checks
+# data-loading path validation
+# git log / commit granularity sanity check
 ```
 
 ## Delivery Expectations
-- Artefactos esperados: `PLAN.md` actualizado + `STATUS.md` en `PLANNING_DONE`
-- Reporte: causa raíz / hipótesis, plan por fases, riesgos, comandos de validación, primer paso exacto de implementación
+- Main artifacts: updated `PLAN.md`, bounded implementation, passing verification, and atomic commits
 
 ## Safety Constraints
-- No secretos en repo/logs
-- No cambios destructivos sin aprobación
-- No browser automation pesada ni bypass anti-bot sin aprobación explícita
-- Mantener el fix acotado y reversible
+- Keep the phase small, practical, and grounded
+- Do not break the current semantic persistence/query path
+- Do not add 3D or product sprawl yet
+- Use atomic commits rather than a single large dump commit
