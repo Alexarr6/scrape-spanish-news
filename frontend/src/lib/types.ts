@@ -129,6 +129,105 @@ export const DEFAULT_QUERY: ExplorerQuery = {
   limit: 250,
 }
 
+export type ClusterFilterOption = {
+  value: string
+  label: string
+  count: number
+}
+
+export type ClusterEntityOption = {
+  slug: string
+  name: string
+  entity_type: string
+  count: number
+}
+
+export type ClusterTagSummary = {
+  tag_code: string
+  display_name: string
+  tag_group: string
+}
+
+export type ClusterEntitySummary = {
+  entity_id: number
+  slug: string
+  name: string
+  entity_type: string
+  article_coverage_count: number
+  mention_count: number
+}
+
+export type StoryClusterListItem = {
+  id: number
+  cluster_key: string
+  status: string
+  cluster_type: string
+  summary_headline: string
+  summary_text: string
+  article_count: number
+  source_count: number
+  first_article_published_at: string | null
+  last_article_published_at: string | null
+  sources: string[]
+  primary_tag: ClusterTagSummary | null
+  top_entities: ClusterEntitySummary[]
+}
+
+export type StoryClusterMemberItem = {
+  article_id: number
+  source: string
+  title: string
+  url: string
+  published_at: string | null
+  section: string
+  summary: string
+  membership_score: number
+  tags: ClusterTagSummary[]
+  entities: ClusterEntitySummary[]
+}
+
+export type StoryClusterDetail = {
+  cluster: StoryClusterListItem
+  members: StoryClusterMemberItem[]
+}
+
+export type StoryClusterListResponse = {
+  items: StoryClusterListItem[]
+  meta: {
+    total: number
+    limit: number
+    offset: number
+  }
+}
+
+export type StoryClusterFiltersResponse = {
+  sources: ClusterFilterOption[]
+  tags: ClusterFilterOption[]
+  entities: ClusterEntityOption[]
+}
+
+export type StoryClusterQuery = {
+  search: string
+  source: string
+  tagCode: string
+  entitySlug: string
+  dateFrom: string
+  dateTo: string
+  limit: number
+  offset: number
+}
+
+export const DEFAULT_CLUSTER_QUERY: StoryClusterQuery = {
+  search: '',
+  source: '',
+  tagCode: '',
+  entitySlug: '',
+  dateFrom: '',
+  dateTo: '',
+  limit: 20,
+  offset: 0,
+}
+
 export type LoadState<T> = {
   data: T | null
   loading: boolean

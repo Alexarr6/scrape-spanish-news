@@ -1,9 +1,17 @@
-import { buildExplorerPointsQuery } from './query'
+import {
+  buildExplorerPointsQuery,
+  buildStoryClusterFiltersQuery,
+  buildStoryClusterQuery,
+} from './query'
 import type {
   ExplorerArticleDetail,
   ExplorerFiltersResponse,
   ExplorerPointsResponse,
   ExplorerQuery,
+  StoryClusterDetail,
+  StoryClusterFiltersResponse,
+  StoryClusterListResponse,
+  StoryClusterQuery,
 } from './types'
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL ?? ''
@@ -26,4 +34,16 @@ export function fetchExplorerFilters(): Promise<ExplorerFiltersResponse> {
 
 export function fetchExplorerArticleDetail(articleId: number): Promise<ExplorerArticleDetail> {
   return requestJson(`/api/v1/semantic/explorer/articles/${articleId}`)
+}
+
+export function fetchStoryClusters(query: StoryClusterQuery): Promise<StoryClusterListResponse> {
+  return requestJson(`/api/v1/clusters${buildStoryClusterQuery(query)}`)
+}
+
+export function fetchStoryClusterFilters(query: StoryClusterQuery): Promise<StoryClusterFiltersResponse> {
+  return requestJson(`/api/v1/clusters/filters${buildStoryClusterFiltersQuery(query)}`)
+}
+
+export function fetchStoryClusterDetail(clusterId: number): Promise<StoryClusterDetail> {
+  return requestJson(`/api/v1/clusters/${clusterId}`)
 }

@@ -1,5 +1,5 @@
-import { ExplorerPage } from './routes/ExplorerPage'
+import { ClusterBrowserPage } from './routes/ClusterBrowserPage'
 
 export default function App() {
-  return <ExplorerPage />
+  return <ClusterBrowserPage />
 }

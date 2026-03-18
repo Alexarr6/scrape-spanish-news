@@ -34,7 +34,7 @@ button {
 .app-shell {
   min-height: 100vh;
   display: grid;
-  grid-template-columns: 19rem 1fr 24rem;
+  grid-template-columns: 19rem minmax(0, 1fr) 30rem;
   grid-template-rows: auto 1fr;
   grid-template-areas:
     'status status status'
@@ -54,7 +54,8 @@ button {
 .status-chip-row,
 .action-row,
 .field-row,
-.hint-row {
+.hint-row,
+.compact-row {
   display: flex;
   gap: 0.75rem;
 }
@@ -68,7 +69,8 @@ button {
 .status-chip-row,
 .action-row,
 .field-row,
-.hint-row {
+.hint-row,
+.compact-row {
   flex-wrap: wrap;
   align-items: center;
 }
@@ -93,72 +95,19 @@ button {
 .map-panel {
   grid-area: map;
   min-height: 0;
-}
-
-.map-canvas {
-  position: relative;
-  height: 100%;
-  min-height: calc(100vh - 73px);
   background:
-    radial-gradient(circle at top, rgba(59, 130, 246, 0.26), transparent 34%),
-    radial-gradient(circle at bottom right, rgba(16, 185, 129, 0.1), transparent 28%),
+    radial-gradient(circle at top, rgba(59, 130, 246, 0.14), transparent 34%),
+    radial-gradient(circle at bottom right, rgba(16, 185, 129, 0.08), transparent 28%),
     #08111f;
 }
 
-.map-overlay,
-.tooltip-card,
-.note-card,
-.article-card,
-.info-card,
-.empty-state,
-.segmented-control {
-  border-radius: 0.9rem;
-  border: 1px solid rgba(148, 163, 184, 0.2);
-  background: rgba(15, 23, 42, 0.84);
-  box-shadow: 0 12px 36px rgba(2, 8, 23, 0.28);
-}
-
-.map-overlay,
-.empty-state {
-  position: absolute;
-  z-index: 1;
-}
-
-.map-overlay {
-  top: 1rem;
-  left: 1rem;
-  max-width: min(34rem, calc(100% - 2rem));
-  padding: 0.9rem 1rem;
-}
-
-.map-overlay-stack {
-  display: flex;
-  flex-direction: column;
-  gap: 0.9rem;
-}
-
-.empty-state {
-  left: 50%;
-  top: 50%;
-  transform: translate(-50%, -50%);
-  padding: 1rem 1.25rem;
-}
-
-.tooltip-card {
-  position: absolute;
-  z-index: 2;
-  width: 18rem;
-  padding: 0.875rem 1rem;
-  pointer-events: none;
-}
-
-.point-coords {
-  margin-top: 0.55rem;
-  font-size: 0.84rem;
-}
-
 .panel-section,
-.inspector-content {
+.inspector-content,
+.cluster-list-shell,
+.cluster-list,
+.source-groups,
+.source-group,
+.member-list {
   display: flex;
   flex-direction: column;
   gap: 1rem;
@@ -173,7 +122,9 @@ button {
 .field input,
 .field select,
 .ghost-button,
-.segmented-button {
+.segmented-button,
+.cluster-card,
+.member-card {
   border-radius: 0.7rem;
   border: 1px solid rgba(148, 163, 184, 0.24);
   background: rgba(15, 23, 42, 0.92);
@@ -185,25 +136,56 @@ button {
 
 .ghost-button:hover,
 .segmented-button:hover,
-.neighbor-button:hover {
+.neighbor-button:hover,
+.cluster-card:hover,
+.member-card:hover {
   background: rgba(30, 41, 59, 0.98);
   border-color: rgba(125, 211, 252, 0.3);
 }
 
-.segmented-control {
-  display: inline-flex;
-  gap: 0.3rem;
-  padding: 0.25rem;
+.cluster-card,
+.member-card {
+  text-align: left;
 }
 
-.segmented-button {
-  min-width: 3.5rem;
-  background: transparent;
+.cluster-card.active,
+.member-card.active {
+  border-color: rgba(96, 165, 250, 0.65);
+  box-shadow: 0 0 0 1px rgba(96, 165, 250, 0.24);
 }
 
-.segmented-button.active {
-  background: rgba(59, 130, 246, 0.22);
-  border-color: rgba(96, 165, 250, 0.55);
+.cluster-list-shell {
+  padding: 1rem;
+}
+
+.cluster-list-header {
+  padding-bottom: 0.5rem;
+}
+
+.cluster-list {
+  overflow: auto;
+}
+
+.source-group {
+  padding: 1rem;
+  border-radius: 0.9rem;
+  border: 1px solid rgba(148, 163, 184, 0.16);
+  background: rgba(15, 23, 42, 0.48);
+}
+
+.note-card,
+.article-card,
+.info-card,
+.empty-state-inline {
+  border-radius: 0.9rem;
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  background: rgba(15, 23, 42, 0.84);
+  box-shadow: 0 12px 36px rgba(2, 8, 23, 0.18);
+  padding: 0.95rem 1rem;
+}
+
+.empty-state-inline {
+  text-align: center;
 }
 
 .status-chip {
@@ -213,28 +195,26 @@ button {
   border: 1px solid rgba(59, 130, 246, 0.16);
 }
 
+.status-chip.subtle {
+  background: rgba(148, 163, 184, 0.1);
+  border-color: rgba(148, 163, 184, 0.16);
+}
+
 .muted,
 .eyebrow,
-.hint-row {
+.hint-row,
+.small-row {
   color: #94a3b8;
+}
+
+.small-row {
+  font-size: 0.9rem;
 }
 
 .eyebrow {
   text-transform: uppercase;
   letter-spacing: 0.06em;
   font-size: 0.76rem;
-}
-
-.article-card,
-.note-card,
-.info-card {
-  padding: 0.95rem 1rem;
-}
-
-.info-grid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 0.75rem;
 }
 
 .neighbor-list {
@@ -269,16 +249,16 @@ p {
   margin: 0;
 }
 
-@media (max-width: 1200px) {
+@media (max-width: 1280px) {
   .app-shell {
-    grid-template-columns: 17rem 1fr 20rem;
+    grid-template-columns: 17rem minmax(0, 1fr) 25rem;
   }
 }
 
 @media (max-width: 980px) {
   .app-shell {
     grid-template-columns: 1fr;
-    grid-template-rows: auto auto minmax(26rem, 50vh) auto;
+    grid-template-rows: auto auto minmax(20rem, auto) auto;
     grid-template-areas:
       'status'
       'filters'
@@ -290,9 +270,5 @@ p {
   .inspector-panel {
     border: 0;
     border-bottom: 1px solid rgba(148, 163, 184, 0.16);
-  }
-
-  .map-canvas {
-    min-height: 26rem;
   }
 }
