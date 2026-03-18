@@ -42,37 +42,26 @@ type ViewState2D = { target: [number, number, number]; zoom: number }
 type ViewState3D = { target: [number, number, number]; zoom: number; rotationOrbit: number; rotationX: number }
 type ViewStateMap = { 'semantic-2d': ViewState2D; 'semantic-3d': ViewState3D }
 
-const MIN_SPAN_EPSILON = 1e-6
-const VIEW_PADDING = 0.12
-
-function clampZoom(value: number, min: number, max: number): number {
-  return Math.max(min, Math.min(max, value))
-}
-
-function paddedSpan(span: number): number {
-  return Math.max(span, MIN_SPAN_EPSILON) * (1 + VIEW_PADDING * 2) + MIN_SPAN_EPSILON
-}
-
 function build2dViewState(bounds: ExplorerProjectionBounds | null): ViewState2D {
   if (!bounds) return { target: [0, 0, 0], zoom: 0 }
-  const spanX = paddedSpan(bounds.max_x - bounds.min_x)
-  const spanY = paddedSpan(bounds.max_y - bounds.min_y)
+  const spanX = Math.max(bounds.max_x - bounds.min_x, 1)
+  const spanY = Math.max(bounds.max_y - bounds.min_y, 1)
   const dominantSpan = Math.max(spanX, spanY)
   return {
     target: [(bounds.min_x + bounds.max_x) / 2, (bounds.min_y + bounds.max_y) / 2, 0],
-    zoom: clampZoom(Math.log2(2.8 / dominantSpan), -1.2, 7),
+    zoom: Math.max(-1.2, Math.min(7, Math.log2(2.8 / dominantSpan))),
   }
 }
 
 function build3dViewState(bounds: ExplorerProjectionBounds | null): ViewState3D {
   if (!bounds) return { target: [0, 0, 0], zoom: 0, rotationOrbit: 28, rotationX: 32 }
-  const spanX = paddedSpan(bounds.max_x - bounds.min_x)
-  const spanY = paddedSpan(bounds.max_y - bounds.min_y)
-  const spanZ = paddedSpan(bounds.max_z - bounds.min_z)
+  const spanX = Math.max(bounds.max_x - bounds.min_x, 1)
+  const spanY = Math.max(bounds.max_y - bounds.min_y, 1)
+  const spanZ = Math.max(bounds.max_z - bounds.min_z, 1)
   const dominantSpan = Math.max(spanX, spanY, spanZ)
   return {
     target: [(bounds.min_x + bounds.max_x) / 2, (bounds.min_y + bounds.max_y) / 2, (bounds.min_z + bounds.max_z) / 2],
-    zoom: clampZoom(Math.log2(2.25 / dominantSpan), -1, 6),
+    zoom: Math.max(-1, Math.min(6, Math.log2(2.25 / dominantSpan))),
     rotationOrbit: 28,
     rotationX: 32,
   }

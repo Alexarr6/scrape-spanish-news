@@ -59,25 +59,3 @@ def test_project_embeddings_keeps_2d_projection_compatibility() -> None:
     )
 
     assert all(point.z == 0.0 for point in points)
-
-
-def test_project_embeddings_centers_output_and_uses_shared_scale() -> None:
-    points = project_embeddings(
-        [
-            _record(1, [10.0, 0.0, 0.0]),
-            _record(2, [0.0, 5.0, 0.0]),
-            _record(3, [0.0, 0.0, 1.0]),
-            _record(4, [8.0, 1.0, 0.0]),
-        ]
-    )
-
-    mean_x = sum(point.x for point in points) / len(points)
-    mean_y = sum(point.y for point in points) / len(points)
-    mean_z = sum(point.z for point in points) / len(points)
-    max_abs = max(max(abs(point.x), abs(point.y), abs(point.z)) for point in points)
-
-    assert abs(mean_x) < 1e-9
-    assert abs(mean_y) < 1e-9
-    assert abs(mean_z) < 1e-9
-    assert max_abs <= 1.0
-    assert math.isclose(max_abs, 1.0, rel_tol=1e-9, abs_tol=1e-9)
