@@ -537,10 +537,19 @@ def load_projected_points(
                    COALESCE(to_char(a.published_at AT TIME ZONE 'UTC', 'YYYY-MM-DD'), '')
                      AS display_date,
                    a.section, e.summary_snippet, e.source_text_chars, e.embedding_model,
-                   p.x, p.y, COALESCE(p.z, 0.0) AS z
+                   p.x, p.y, COALESCE(p.z, 0.0) AS z,
+                   spa.cluster_id,
+                   COALESCE(spa.cluster_size, 0) AS cluster_size,
+                   COALESCE(spa.is_outlier, false) AS is_outlier,
+                   COALESCE(spa.local_density_distance, 0.0) AS local_density_distance,
+                   COALESCE(spa.source_neighbor_diversity, 0) AS source_neighbor_diversity,
+                   COALESCE(spa.nearby_sources_json, '[]') AS nearby_sources_json
             FROM article_projections p
             JOIN article_embeddings e ON e.id = p.embedding_id
             JOIN articles a ON a.id = p.article_id
+            LEFT JOIN semantic_point_analysis spa
+              ON spa.article_id = p.article_id
+             AND spa.projection_set = p.projection_set
             WHERE p.projection_set = :projection_set
               AND p.projection_kind = :projection_kind
             ORDER BY a.published_at DESC NULLS LAST, a.id DESC
@@ -567,6 +576,7 @@ def load_projected_points(
             x=float(row["x"]),
             y=float(row["y"]),
             z=float(row["z"]),
+            analysis=_analysis_for_row(row, neighbors=[]),
         )
         for row in rows
     ]

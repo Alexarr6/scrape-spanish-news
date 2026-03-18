@@ -41,7 +41,7 @@ That gives you:
 - `/api/v1/semantic/explorer/*` from FastAPI as the canonical semantic data surface
 - optional built-app serving at `http://127.0.0.1:8000/explorer` after `make frontend-build`
 
-The current explorer phase is now a bounded dual-view foundation: the backend serves canonical `x/y/z`, the frontend can flip between 2D and 3D deck.gl views, and the 2D framing is tuned to stop reading like an unreadable blob.
+The current explorer phase is a bounded clustering + UX refinement pass: the backend serves canonical `x/y/z`, persists semantic cluster/outlier analysis by `projection_set`, and the frontend can flip between 2D and 3D deck.gl views with cluster-aware filters, color modes, and better focus/reset controls.
 
 ## Persistence/API behavior notes
 
@@ -73,6 +73,7 @@ The semantic workflow is still boring on purpose, but now the durable source of 
 - keeps scraped content in `articles`
 - stores OpenAI embeddings in `article_embeddings` via pgvector, with the vector width aligned to the selected embedding model
 - stores derived PCA coordinates in a separate `article_projections` table, including real `x/y/z` for the canonical 3D explorer set
+- stores persisted semantic point analysis + cluster summaries keyed by `projection_set` for explorer filtering and UI modes
 - supports bounded backfill / incremental sync for missing or changed articles
 - supports nearest-neighbor similarity queries in Postgres
 - still exports rebuildable JSON/HTML artifacts under `data/semantic/`

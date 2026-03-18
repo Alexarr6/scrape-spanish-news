@@ -166,6 +166,7 @@ def _cluster_labels(normalized_embeddings: np.ndarray, *, config: AnalysisConfig
         cluster_selection_epsilon=config.cluster_selection_epsilon,
         metric="euclidean",
         allow_single_cluster=False,
+        copy=False,
     )
     return estimator.fit_predict(normalized_embeddings)
 

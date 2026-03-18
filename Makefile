@@ -59,7 +59,7 @@ help:
 	  '  make api DATABASE_URL=...     Run FastAPI app via uvicorn' \
 	  '  make semantic-db-init DATABASE_URL=...           Create pgvector extension + semantic tables' \
 	  '  make semantic-sync DATABASE_URL=... LIMIT=100    Backfill/sync missing or changed embeddings' \
-	  '  make semantic-project DATABASE_URL=...           Rebuild the named 2D projection set' \
+	  '  make semantic-project DATABASE_URL=...           Rebuild the named explorer projection set (defaults to pca_3d_latest)' \
 	  '  make semantic-neighbors DATABASE_URL=... ARTICLE_ID=...  Query nearest neighbors' \
 	  '  make semantic-build DATABASE_URL=... LIMIT=500   Export semantic artifacts from persisted state' \
 	  '  make semantic-smoke DATABASE_URL=...             Export a bounded semantic smoke artifact set' \
@@ -173,7 +173,7 @@ semantic-sync: preflight
 semantic-project: preflight
 	@set -euo pipefail; \
 	[[ -n "$(DATABASE_URL)" ]] || { echo 'DATABASE_URL is required for semantic-project'; exit 1; }; \
-	cd "$(APP_ROOT)" && PYTHONPATH="$(APP_ROOT):$${PYTHONPATH:-}" $(PYTHON) scripts/semantic_project.py --db-url "$(DATABASE_URL)" --projection-set "$${PROJECTION_SET:-pca_2d_latest}" --out-json "data/semantic/articles_points_$${PROJECTION_SET:-pca_2d_latest}.json" --out-html "data/semantic/semantic_map_$${PROJECTION_SET:-pca_2d_latest}.html" $${SEMANTIC_ARGS:-}
+	cd "$(APP_ROOT)" && PYTHONPATH="$(APP_ROOT):$${PYTHONPATH:-}" $(PYTHON) scripts/semantic_project.py --db-url "$(DATABASE_URL)" --projection-set "$${PROJECTION_SET:-pca_3d_latest}" --out-json "data/semantic/articles_points_$${PROJECTION_SET:-pca_3d_latest}.json" --out-html "data/semantic/semantic_map_$${PROJECTION_SET:-pca_3d_latest}.html" $${SEMANTIC_ARGS:-}
 
 semantic-neighbors: preflight
 	@set -euo pipefail; \
@@ -184,12 +184,12 @@ semantic-neighbors: preflight
 semantic-build: preflight
 	@set -euo pipefail; \
 	[[ -n "$(DATABASE_URL)" ]] || { echo 'DATABASE_URL is required for semantic-build'; exit 1; }; \
-	cd "$(APP_ROOT)" && PYTHONPATH="$(APP_ROOT):$${PYTHONPATH:-}" $(PYTHON) scripts/build_semantic_map.py --db-url "$(DATABASE_URL)" --limit "$${LIMIT:-500}" --projection-set "$${PROJECTION_SET:-pca_2d_latest}" $${SEMANTIC_ARGS:-}
+	cd "$(APP_ROOT)" && PYTHONPATH="$(APP_ROOT):$${PYTHONPATH:-}" $(PYTHON) scripts/build_semantic_map.py --db-url "$(DATABASE_URL)" --limit "$${LIMIT:-500}" --projection-set "$${PROJECTION_SET:-pca_3d_latest}" $${SEMANTIC_ARGS:-}
 
 semantic-smoke: preflight
 	@set -euo pipefail; \
 	[[ -n "$(DATABASE_URL)" ]] || { echo 'DATABASE_URL is required for semantic-smoke'; exit 1; }; \
-	cd "$(APP_ROOT)" && PYTHONPATH="$(APP_ROOT):$${PYTHONPATH:-}" $(PYTHON) scripts/build_semantic_map.py --db-url "$(DATABASE_URL)" --limit "$${LIMIT:-50}" --projection-set "$${PROJECTION_SET:-pca_2d_latest}" $${SEMANTIC_ARGS:-}
+	cd "$(APP_ROOT)" && PYTHONPATH="$(APP_ROOT):$${PYTHONPATH:-}" $(PYTHON) scripts/build_semantic_map.py --db-url "$(DATABASE_URL)" --limit "$${LIMIT:-50}" --projection-set "$${PROJECTION_SET:-pca_3d_latest}" $${SEMANTIC_ARGS:-}
 
 scheduler-dry-run:
 	@DRY_RUN=1 DATABASE_URL="$(DATABASE_URL)" UV="$(UV)" bash "$(SCHEDULER_SCRIPT)"
