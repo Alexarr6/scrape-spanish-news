@@ -23,35 +23,37 @@ export function ClusterInspectorPanel({
   onSelectArticle,
 }: Props) {
   if (loading && !detail) {
-    return <div className="panel-section"><h2>Cluster detail</h2><p>Loading cluster…</p></div>
+    return <div className="panel-section empty-state-card"><h2>Cluster detail</h2><p className="muted">Loading cluster coverage and member articles…</p></div>
   }
 
   if (error) {
-    return <div className="panel-section"><h2>Cluster detail</h2><p>{error}</p></div>
+    return <div className="panel-section empty-state-card error-state"><h2>Cluster detail unavailable</h2><p>{error}</p></div>
   }
 
   if (!detail) {
-    return <div className="panel-section"><h2>Cluster detail</h2><p>Select a story cluster to inspect its member articles.</p></div>
+    return <div className="panel-section empty-state-card"><h2>Cluster detail</h2><p className="muted">Select a story cluster to inspect its member articles and compare coverage by source.</p></div>
   }
 
   const groupedMembers = groupMembersBySource(detail.members)
 
   return (
     <div className="panel-section inspector-content">
-      <div className="article-card">
+      <div className="article-card detail-hero-card">
         <div className="eyebrow">{detail.cluster.cluster_type.replace(/_/g, ' ')} · {detail.cluster.status}</div>
         <h2>{detail.cluster.summary_headline}</h2>
         <p>{detail.cluster.summary_text}</p>
         <div className="status-chip-row compact-row">
           <span className="status-chip">{detail.cluster.article_count} articles</span>
           <span className="status-chip">{detail.cluster.source_count} sources</span>
-          {detail.cluster.primary_tag ? <span className="status-chip">{detail.cluster.primary_tag.display_name}</span> : null}
+          {detail.cluster.primary_tag ? <span className="status-chip subtle">{detail.cluster.primary_tag.display_name}</span> : null}
         </div>
-        <div className="status-chip-row compact-row">
-          {detail.cluster.top_entities.map((entity) => (
-            <span key={entity.slug} className="status-chip subtle">{entity.name}</span>
-          ))}
-        </div>
+        {detail.cluster.top_entities.length > 0 ? (
+          <div className="status-chip-row compact-row">
+            {detail.cluster.top_entities.map((entity) => (
+              <span key={entity.slug} className="status-chip subtle">{entity.name}</span>
+            ))}
+          </div>
+        ) : null}
       </div>
 
       <div className="panel-header compact">
@@ -92,12 +94,12 @@ export function ClusterInspectorPanel({
 
       <div className="panel-header compact">
         <h3>Article inspection</h3>
-        <span className="muted">Open a member to see more than a raw cluster card</span>
+        <span className="muted">Open a member to see article detail plus semantic neighbors.</span>
       </div>
-      {articleLoading && !article ? <p>Loading article detail…</p> : null}
-      {articleError ? <p>{articleError}</p> : null}
+      {articleLoading && !article ? <div className="empty-state-inline">Loading article detail…</div> : null}
+      {articleError ? <div className="empty-state-inline error-state">{articleError}</div> : null}
       {article ? (
-        <div className="article-card">
+        <div className="article-card detail-article-card">
           <div className="eyebrow">{article.article.source} · {article.article.section || 'no section'}</div>
           <h3>{article.article.title}</h3>
           <p className="muted">{formatDate(article.article.published_at)}</p>
@@ -117,17 +119,22 @@ export function ClusterInspectorPanel({
                   <button className="neighbor-button" type="button" onClick={() => onSelectArticle(neighbor.article_id)}>
                     <span>
                       <strong>{neighbor.title}</strong>
-                      <span className="muted">{neighbor.source} · {formatDate(neighbor.published_at)}</span>
+                      <span className="muted block-row">{neighbor.source} · {formatDate(neighbor.published_at)}</span>
                     </span>
                     <span className="status-chip">{formatSimilarity(neighbor.similarity)}</span>
                   </button>
                 </li>
               ))}
             </ul>
-          ) : null}
+          ) : (
+            <p className="muted">No semantic neighbors returned for this article yet.</p>
+          )}
         </div>
       ) : (
-        <p className="muted">Select a member article to inspect it.</p>
+        <div className="empty-state-inline empty-state-card">
+          <strong>No article selected</strong>
+          <p className="muted">Pick a member article to inspect the piece itself and the nearby semantic context.</p>
+        </div>
       )}
     </div>
   )

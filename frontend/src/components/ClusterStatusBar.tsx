@@ -16,14 +16,16 @@ export function ClusterStatusBar({
   selectedArticleId,
   onResetFilters,
 }: Props) {
+  const range = data ? `${data.meta.offset + 1}-${data.meta.offset + data.items.length} / ${data.meta.total}` : 'Loading…'
+
   return (
     <div className="status-bar-content">
       <div>
-        <strong>Story cluster browser</strong>
+        <strong>Spain news cluster browser</strong>
         <p className="muted">Browse the actual story groups first. The dot cloud can wait its turn.</p>
       </div>
       <div className="status-chip-row">
-        <span className="status-chip">{data ? `${data.meta.offset + 1}-${data.meta.offset + data.items.length} / ${data.meta.total}` : 'Loading…'}</span>
+        <span className="status-chip">{range}</span>
         <span className="status-chip">{formatCount(selectedCluster?.article_count, 'articles')}</span>
         <span className="status-chip">{formatCount(selectedCluster?.source_count, 'sources')}</span>
         <span className="status-chip">{activeFilterCount} active filters</span>

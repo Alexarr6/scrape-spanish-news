@@ -15,7 +15,15 @@ import type {
   StoryClusterQuery,
 } from '../lib/types'
 
-export function useClusterBrowserData(query: StoryClusterQuery) {
+type SelectionSetter = (value: number | null) => void
+
+export function useClusterBrowserData(
+  query: StoryClusterQuery,
+  selectedClusterId: number | null,
+  selectedArticleId: number | null,
+  setSelectedClusterId: SelectionSetter,
+  setSelectedArticleId: SelectionSetter,
+) {
   const [listState, setListState] = useState<LoadState<StoryClusterListResponse>>({
     data: null,
     loading: true,
@@ -26,8 +34,6 @@ export function useClusterBrowserData(query: StoryClusterQuery) {
     loading: true,
     error: null,
   })
-  const [selectedClusterId, setSelectedClusterId] = useState<number | null>(null)
-  const [selectedArticleId, setSelectedArticleId] = useState<number | null>(null)
   const [detailState, setDetailState] = useState<LoadState<StoryClusterDetail>>({
     data: null,
     loading: false,
@@ -94,7 +100,7 @@ export function useClusterBrowserData(query: StoryClusterQuery) {
     return () => {
       cancelled = true
     }
-  }, [query, selectedClusterId])
+  }, [query, selectedClusterId, setSelectedArticleId, setSelectedClusterId])
 
   useEffect(() => {
     if (selectedClusterId == null) {
@@ -123,7 +129,7 @@ export function useClusterBrowserData(query: StoryClusterQuery) {
     return () => {
       cancelled = true
     }
-  }, [selectedClusterId, selectedArticleId])
+  }, [selectedClusterId, selectedArticleId, setSelectedArticleId])
 
   useEffect(() => {
     if (selectedArticleId == null) {
@@ -161,16 +167,5 @@ export function useClusterBrowserData(query: StoryClusterQuery) {
     detailState,
     articleState,
     selectedCluster,
-    selectedClusterId,
-    selectedArticleId,
-    setSelectedClusterId,
-    setSelectedArticleId,
-    nextPage() {
-      if (!listState.data) return null
-      return { ...query, offset: query.offset + query.limit }
-    },
-    previousPage() {
-      return { ...query, offset: Math.max(0, query.offset - query.limit) }
-    },
   }
 }

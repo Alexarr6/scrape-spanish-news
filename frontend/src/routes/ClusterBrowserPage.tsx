@@ -4,21 +4,27 @@ import { ClusterInspectorPanel } from '../components/ClusterInspectorPanel'
 import { ClusterListPanel } from '../components/ClusterListPanel'
 import { ClusterStatusBar } from '../components/ClusterStatusBar'
 import { useClusterBrowserData } from '../hooks/useClusterBrowserData'
-import { useClusterFilters } from '../hooks/useClusterFilters'
+import { useClusterUrlState } from '../hooks/useClusterUrlState'
 
 export function ClusterBrowserPage() {
-  const { query, activeFilterCount, updateQuery, resetQuery } = useClusterFilters()
   const {
-    listState,
-    filtersState,
-    detailState,
-    articleState,
-    selectedCluster,
+    query,
+    activeFilterCount,
+    updateQuery,
+    resetQuery,
     selectedClusterId,
     selectedArticleId,
     setSelectedClusterId,
     setSelectedArticleId,
-  } = useClusterBrowserData(query)
+  } = useClusterUrlState()
+
+  const { listState, filtersState, detailState, articleState, selectedCluster } = useClusterBrowserData(
+    query,
+    selectedClusterId,
+    selectedArticleId,
+    setSelectedClusterId,
+    setSelectedArticleId,
+  )
 
   return (
     <ExplorerLayout
@@ -46,10 +52,7 @@ export function ClusterBrowserPage() {
           loading={listState.loading}
           error={listState.error}
           selectedClusterId={selectedClusterId}
-          onSelectCluster={(clusterId) => {
-            setSelectedClusterId(clusterId)
-            setSelectedArticleId(null)
-          }}
+          onSelectCluster={setSelectedClusterId}
           onNextPage={() => updateQuery({ offset: query.offset + query.limit })}
           onPreviousPage={() => updateQuery({ offset: Math.max(0, query.offset - query.limit) })}
         />
