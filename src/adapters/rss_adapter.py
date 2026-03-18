@@ -92,8 +92,7 @@ def _read_tags(page: str) -> str:
         return ", ".join(explicit_tags)
 
     keyword_tags = _split_tag_values(
-        _read_all_meta(page, "news_keywords")
-        or _read_all_meta(page, "keywords")
+        _read_all_meta(page, "news_keywords") or _read_all_meta(page, "keywords")
     )
     if keyword_tags:
         return ", ".join(keyword_tags)

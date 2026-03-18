@@ -15,8 +15,12 @@ class _FakeSession:
 
 
 def test_semantic_neighbors_json_output(monkeypatch, capsys) -> None:
-    monkeypatch.setattr(semantic_neighbors, "create_postgres_engine", lambda *_args, **_kwargs: object())
-    monkeypatch.setattr(semantic_neighbors, "resolve_db_url", lambda value: value or "postgresql://example")
+    monkeypatch.setattr(
+        semantic_neighbors, "create_postgres_engine", lambda *_args, **_kwargs: object()
+    )
+    monkeypatch.setattr(
+        semantic_neighbors, "resolve_db_url", lambda value: value or "postgresql://example"
+    )
     monkeypatch.setattr(semantic_neighbors, "make_session", lambda _engine: _FakeSession())
     monkeypatch.setattr(
         semantic_neighbors,
@@ -52,13 +56,17 @@ def test_semantic_neighbors_json_output(monkeypatch, capsys) -> None:
             )
         ],
     )
-    monkeypatch.setattr(semantic_neighbors, "parse_args", lambda: semantic_neighbors.argparse.Namespace(
-        db_url="",
-        article_id=1,
-        limit=5,
-        json_mode=True,
-        include_seed=True,
-    ))
+    monkeypatch.setattr(
+        semantic_neighbors,
+        "parse_args",
+        lambda: semantic_neighbors.argparse.Namespace(
+            db_url="",
+            article_id=1,
+            limit=5,
+            json_mode=True,
+            include_seed=True,
+        ),
+    )
 
     assert semantic_neighbors.main() == 0
     payload = json.loads(capsys.readouterr().out)
@@ -67,8 +75,12 @@ def test_semantic_neighbors_json_output(monkeypatch, capsys) -> None:
 
 
 def test_semantic_neighbors_human_output_includes_seed_and_summary(monkeypatch, capsys) -> None:
-    monkeypatch.setattr(semantic_neighbors, "create_postgres_engine", lambda *_args, **_kwargs: object())
-    monkeypatch.setattr(semantic_neighbors, "resolve_db_url", lambda value: value or "postgresql://example")
+    monkeypatch.setattr(
+        semantic_neighbors, "create_postgres_engine", lambda *_args, **_kwargs: object()
+    )
+    monkeypatch.setattr(
+        semantic_neighbors, "resolve_db_url", lambda value: value or "postgresql://example"
+    )
     monkeypatch.setattr(semantic_neighbors, "make_session", lambda _engine: _FakeSession())
     monkeypatch.setattr(
         semantic_neighbors,
@@ -104,13 +116,17 @@ def test_semantic_neighbors_human_output_includes_seed_and_summary(monkeypatch, 
             )
         ],
     )
-    monkeypatch.setattr(semantic_neighbors, "parse_args", lambda: semantic_neighbors.argparse.Namespace(
-        db_url="",
-        article_id=1,
-        limit=5,
-        json_mode=False,
-        include_seed=True,
-    ))
+    monkeypatch.setattr(
+        semantic_neighbors,
+        "parse_args",
+        lambda: semantic_neighbors.argparse.Namespace(
+            db_url="",
+            article_id=1,
+            limit=5,
+            json_mode=False,
+            include_seed=True,
+        ),
+    )
 
     assert semantic_neighbors.main() == 0
     output = capsys.readouterr().out

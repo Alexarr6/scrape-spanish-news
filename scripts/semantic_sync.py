@@ -1,0 +1,83 @@
+from __future__ import annotations
+
+import argparse
+import sys
+from pathlib import Path
+
+REPO_ROOT = Path(__file__).resolve().parents[1]
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
+
+from src.persistence.db import create_postgres_engine, make_session, resolve_db_url  # noqa: E402
+from src.semantic.contracts import SemanticBuildConfig, SemanticMetrics  # noqa: E402
+from src.semantic.dbstore import (  # noqa: E402
+    DEFAULT_EMBEDDING_MODEL,
+    ensure_vector_index,
+    select_embedding_candidates,
+    upsert_embeddings,
+)
+from src.semantic.embed import build_embedding_artifacts  # noqa: E402
+
+
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(
+        description=("Backfill or incrementally sync article embeddings into pgvector")
+    )
+    parser.add_argument("--db-url", default="")
+    parser.add_argument("--limit", type=int, default=100)
+    parser.add_argument("--batch-size", type=int, default=20)
+    parser.add_argument("--embedding-model", default=DEFAULT_EMBEDDING_MODEL)
+    parser.add_argument("--max-chars", type=int, default=12000)
+    parser.add_argument("--ensure-ann-index", action="store_true")
+    return parser.parse_args()
+
+
+def main() -> int:
+    args = parse_args()
+    engine = create_postgres_engine(resolve_db_url(args.db_url))
+    config = SemanticBuildConfig(
+        database_url=resolve_db_url(args.db_url),
+        limit=args.limit,
+        batch_size=args.batch_size,
+        embedding_model=args.embedding_model,
+        max_chars=args.max_chars,
+    )
+    metrics = SemanticMetrics(article_limit=args.limit)
+    with make_session(engine) as session:
+        candidates = select_embedding_candidates(
+            session,
+            limit=args.limit,
+            max_chars=args.max_chars,
+            embedding_model=args.embedding_model,
+        )
+        metrics.fetched_rows = len(candidates)
+        if not candidates:
+            print("semantic_sync candidates=0 embedded=0")
+            return 0
+        articles = [candidate.article for candidate in candidates]
+        embeddings = build_embedding_artifacts(articles=articles, config=config, metrics=metrics)
+        content_hashes = {
+            candidate.article.article_id: candidate.content_hash for candidate in candidates
+        }
+        source_text_chars = {
+            candidate.article.article_id: len(candidate.assembled_text) for candidate in candidates
+        }
+        count = upsert_embeddings(
+            session,
+            embeddings,
+            content_hashes=content_hashes,
+            source_text_chars=source_text_chars,
+        )
+    if args.ensure_ann_index and count:
+        ensure_vector_index(engine)
+    print(
+        "semantic_sync "
+        f"candidates={len(candidates)} "
+        f"embedded={count} "
+        f"requests={metrics.embedding_requests}"
+    )
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

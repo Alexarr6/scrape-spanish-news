@@ -9,6 +9,9 @@ data/
 logs/*.json
 logs/*.log
 AGENTS.md
+PROJECT_BRIEF.md
+TASK_CONTRACT.md
+PLAN.md
 RESULTS.md
 STATUS.md
 TODO.md

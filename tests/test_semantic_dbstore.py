@@ -8,11 +8,13 @@ import pytest
 from src.semantic.contracts import EmbeddingArtifact, SemanticArticle
 from src.semantic.dbstore import (
     MIN_TEXT_LENGTH,
-    NeighborRow,
+    ExplorerFilters,
     assemble_article_text,
     content_hash_for_text,
     embedding_dimensions_for_model,
     get_embedding_vector_dimensions,
+    load_explorer_article_detail,
+    load_explorer_points_page,
     load_neighbors_for_articles,
     parse_vector_text,
     render_init_sql,
@@ -128,6 +130,53 @@ class _NeighborSession:
         return SimpleNamespace(mappings=lambda: SimpleNamespace(all=lambda: rows))
 
 
+class _ExplorerQueryResult:
+    def __init__(self, *, rows=None, first_row=None, scalar=None):
+        self._rows = rows or []
+        self._first_row = first_row
+        self._scalar = scalar
+
+    def mappings(self):
+        return self
+
+    def scalars(self):
+        return self
+
+    def all(self):
+        return self._rows
+
+    def first(self):
+        return self._first_row
+
+    def scalar_one(self):
+        return self._scalar
+
+
+class _ExplorerSession:
+    def __init__(self):
+        self.sql: list[str] = []
+
+    def execute(self, statement, params=None):
+        sql = str(statement)
+        self.sql.append(sql)
+        if "SELECT a.id AS article_id" in sql and "FROM article_projections p" in sql:
+            return _ExplorerQueryResult(rows=[])
+        if "SELECT COUNT(*)" in sql:
+            return _ExplorerQueryResult(scalar=0)
+        if "SELECT a.id AS article_id" in sql and "FROM articles a" in sql:
+            return _ExplorerQueryResult(first_row=None)
+        if "SELECT MIN(x) AS min_x" in sql:
+            return _ExplorerQueryResult(
+                first_row={"min_x": None, "max_x": None, "min_y": None, "max_y": None}
+            )
+        if (
+            "SELECT DISTINCT a.source AS value" in sql
+            or "SELECT DISTINCT a.section AS value" in sql
+        ):
+            return _ExplorerQueryResult(rows=[])
+        raise AssertionError(f"Unexpected SQL: {sql}")
+
+
 def test_assemble_article_text_includes_source_and_section_context() -> None:
     text_value = assemble_article_text(_article(), max_chars=500)
 
@@ -176,9 +225,7 @@ def test_render_init_sql_uses_requested_model_dimensions() -> None:
 
 
 def test_get_embedding_vector_dimensions_parses_pgvector_type() -> None:
-    bind = SimpleNamespace(
-        execute=lambda *_args, **_kwargs: _ScalarResult("vector(3072)")
-    )
+    bind = SimpleNamespace(execute=lambda *_args, **_kwargs: _ScalarResult("vector(3072)"))
 
     assert get_embedding_vector_dimensions(bind) == 3072
 
@@ -304,3 +351,29 @@ def test_load_neighbors_for_articles_returns_enriched_neighbor_artifacts(monkeyp
     assert payload[1][0].article_id == 2
     assert payload[1][0].title == "Vecino"
     assert payload[1][0].similarity == pytest.approx(0.91)
+
+
+def test_load_explorer_points_page_formats_published_at_as_text_sql() -> None:
+    session = _ExplorerSession()
+
+    load_explorer_points_page(session, filters=ExplorerFilters())
+
+    sql = next(sql for sql in session.sql if "FROM article_projections p" in sql)
+    assert "COALESCE(a.published_at, '')" not in sql
+    assert "to_char(a.published_at AT TIME ZONE 'UTC'" in sql
+    assert "AS published_at" in sql
+
+
+def test_load_explorer_article_detail_formats_published_at_as_text_sql() -> None:
+    session = _ExplorerSession()
+
+    load_explorer_article_detail(
+        session,
+        article_id=1,
+        projection_set="pca_2d_latest",
+    )
+
+    sql = next(sql for sql in session.sql if "FROM articles a" in sql)
+    assert "COALESCE(a.published_at, '')" not in sql
+    assert "to_char(a.published_at AT TIME ZONE 'UTC'" in sql
+    assert "AS published_at" in sql

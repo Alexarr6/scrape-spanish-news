@@ -18,7 +18,11 @@ def test_normalize_populates_article_text_and_tags_from_page_metadata():
         <meta property="article:tag" content="España">
         <meta property="article:tag" content="Elecciones">
         <script type="application/ld+json">
-          {"@context":"https://schema.org","@type":"NewsArticle","articleBody":" Primer párrafo.\\n\\nSegundo párrafo. "}
+          {
+            "@context":"https://schema.org",
+            "@type":"NewsArticle",
+            "articleBody":" Primer párrafo.\\n\\nSegundo párrafo. "
+          }
         </script>
       </head>
     </html>
@@ -54,8 +58,12 @@ def test_normalize_falls_back_to_keywords_and_leaves_missing_tags_empty():
     </html>
     """
 
-    with_keywords = _AdapterUnderTest().normalize({"url": "https://example.com/keywords", "html": keywords_page})
-    without_tags = _AdapterUnderTest().normalize({"url": "https://example.com/empty", "html": empty_page})
+    with_keywords = _AdapterUnderTest().normalize(
+        {"url": "https://example.com/keywords", "html": keywords_page}
+    )
+    without_tags = _AdapterUnderTest().normalize(
+        {"url": "https://example.com/empty", "html": empty_page}
+    )
 
     assert with_keywords.article_text == "Texto largo"
     assert with_keywords.tags == "vox, castilla y león, política"

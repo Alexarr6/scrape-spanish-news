@@ -677,8 +677,33 @@ class ExplorerArticleDetailRecord:
     neighbors: list[NeighborArtifact]
 
 
+def _session_dialect_name(session: Session | Any) -> str:
+    bind = getattr(session, "bind", None)
+    if bind is None and hasattr(session, "get_bind"):
+        try:
+            bind = session.get_bind()
+        except Exception:
+            bind = None
+    dialect = getattr(bind, "dialect", None)
+    return getattr(dialect, "name", "postgresql")
+
+
+def _explorer_published_at_sql(*, dialect_name: str) -> str:
+    if dialect_name == "sqlite":
+        return """COALESCE(CAST(a.published_at AS TEXT), '') AS published_at,
+                   COALESCE(substr(CAST(a.published_at AS TEXT), 1, 10), '') AS published_date,
+                   COALESCE(substr(CAST(a.published_at AS TEXT), 1, 10), '') AS display_date"""
+    return """COALESCE(
+                       to_char(a.published_at AT TIME ZONE 'UTC', 'YYYY-MM-DD\"T\"HH24:MI:SSOF'),
+                       ''
+                   ) AS published_at,
+                   COALESCE(to_char(a.published_at AT TIME ZONE 'UTC', 'YYYY-MM-DD'), '') AS published_date,
+                   COALESCE(to_char(a.published_at AT TIME ZONE 'UTC', 'YYYY-MM-DD'), '') AS display_date"""
+
+
 def load_explorer_points_page(session: Session, *, filters: ExplorerFilters) -> ExplorerPointsPage:
     where_sql, params = _build_explorer_where_clause(filters)
+    published_at_sql = _explorer_published_at_sql(dialect_name=_session_dialect_name(session))
     rows = (
         session.execute(
             text(
@@ -687,9 +712,7 @@ def load_explorer_points_page(session: Session, *, filters: ExplorerFilters) -> 
                    a.source,
                    a.title,
                    a.url,
-                   COALESCE(a.published_at, '') AS published_at,
-                   COALESCE(substr(CAST(a.published_at AS TEXT), 1, 10), '') AS published_date,
-                   COALESCE(substr(CAST(a.published_at AS TEXT), 1, 10), '') AS display_date,
+                   {published_at_sql},
                    COALESCE(a.section, '') AS section,
                    COALESCE(e.summary_snippet, '') AS summary_snippet,
                    p.x,
@@ -779,17 +802,16 @@ def load_explorer_article_detail(
     article_id: int,
     projection_set: str,
 ) -> ExplorerArticleDetailRecord | None:
+    published_at_sql = _explorer_published_at_sql(dialect_name=_session_dialect_name(session))
     row = (
         session.execute(
             text(
-                """
+                f"""
             SELECT a.id AS article_id,
                    a.source,
                    a.title,
                    a.url,
-                   COALESCE(a.published_at, '') AS published_at,
-                   COALESCE(substr(CAST(a.published_at AS TEXT), 1, 10), '') AS published_date,
-                   COALESCE(substr(CAST(a.published_at AS TEXT), 1, 10), '') AS display_date,
+                   {published_at_sql},
                    COALESCE(a.section, '') AS section,
                    COALESCE(a.summary, '') AS summary,
                    COALESCE(a.article_text, '') AS article_text,
