@@ -8,20 +8,31 @@ from sklearn.decomposition import PCA
 from src.semantic.contracts import EmbeddingArtifact, PointArtifact
 
 
-def project_embeddings(records: list[EmbeddingArtifact]) -> list[PointArtifact]:
+def project_embeddings(
+    records: list[EmbeddingArtifact], *, dimensions: int = 3
+) -> list[PointArtifact]:
     if not records:
         return []
+    if dimensions not in {2, 3}:
+        raise ValueError("projection dimensions must be 2 or 3")
 
     matrix = np.array([record.embedding for record in records], dtype=float)
-    if len(records) == 1:
-        coords = np.array([[0.0, 0.0]], dtype=float)
+    component_count = min(dimensions, len(records), matrix.shape[1])
+    if component_count <= 0:
+        coords = np.zeros((len(records), dimensions), dtype=float)
+    elif len(records) == 1:
+        coords = np.zeros((1, dimensions), dtype=float)
     else:
-        pca = PCA(n_components=2)
-        coords = pca.fit_transform(matrix)
+        pca = PCA(n_components=component_count)
+        projected = pca.fit_transform(matrix)
+        coords = np.zeros((len(records), dimensions), dtype=float)
+        coords[:, :component_count] = projected
 
     points: list[PointArtifact] = []
-    for record, (x, y) in zip(records, coords, strict=True):
-        if not math.isfinite(float(x)) or not math.isfinite(float(y)):
+    for record, values in zip(records, coords, strict=True):
+        x, y = float(values[0]), float(values[1])
+        z = float(values[2]) if dimensions == 3 else 0.0
+        if not all(math.isfinite(value) for value in (x, y, z)):
             raise ValueError("projection produced non-finite coordinates")
         points.append(
             PointArtifact(
@@ -36,8 +47,9 @@ def project_embeddings(records: list[EmbeddingArtifact]) -> list[PointArtifact]:
                 summary_snippet=record.summary_snippet,
                 text_length=record.text_length,
                 embedding_model=record.embedding_model,
-                x=float(x),
-                y=float(y),
+                x=x,
+                y=y,
+                z=z,
             )
         )
     return points

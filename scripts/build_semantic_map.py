@@ -22,6 +22,7 @@ from src.semantic.dbstore import (  # noqa: E402
     DEFAULT_PROJECTION_SET,
     load_embedding_artifacts,
     load_projected_points,
+    projection_kind_for_set,
 )
 from src.semantic.export import (  # noqa: E402
     write_analysis_json,
@@ -78,7 +79,7 @@ def main() -> int:
     metrics.eligible_rows = len(embeddings)
     metrics.embedding_model = embeddings[0].embedding_model if embeddings else ""
     metrics.embedding_dimensions = len(embeddings[0].embedding) if embeddings else 0
-    metrics.projection_method = "pca_2d"
+    metrics.projection_method = projection_kind_for_set(args.projection_set)
 
     analysis = analyze_points(points, embeddings)
     analysis_by_id = {point.article_id: point for point in analysis.points}

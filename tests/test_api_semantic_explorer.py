@@ -14,6 +14,10 @@ from src.api.v1.semantic import router
 from src.persistence.orm_models import Base
 
 
+DEFAULT_PROJECTION_SET = "pca_3d_latest"
+DEFAULT_PROJECTION_KIND = "pca_3d"
+
+
 def _build_client() -> TestClient:
     engine = create_engine(
         "sqlite+pysqlite:///:memory:",
@@ -142,23 +146,23 @@ def _build_client() -> TestClient:
                 "id": 21,
                 "article_id": 1,
                 "embedding_id": 11,
-                "projection_set": "pca_2d_latest",
-                "projection_kind": "pca_2d",
+                "projection_set": DEFAULT_PROJECTION_SET,
+                "projection_kind": DEFAULT_PROJECTION_KIND,
                 "projection_version": "v1",
                 "x": 0.25,
                 "y": 0.75,
-                "z": None,
+                "z": 0.4,
             },
             {
                 "id": 22,
                 "article_id": 2,
                 "embedding_id": 12,
-                "projection_set": "pca_2d_latest",
-                "projection_kind": "pca_2d",
+                "projection_set": DEFAULT_PROJECTION_SET,
+                "projection_kind": DEFAULT_PROJECTION_KIND,
                 "projection_version": "v1",
                 "x": -0.4,
                 "y": 0.15,
-                "z": None,
+                "z": -0.2,
             },
         ]
         for projection in projections:
@@ -206,8 +210,18 @@ def test_explorer_points_returns_filtered_items_and_metadata(monkeypatch) -> Non
     payload = response.json()
     assert payload["meta"]["total"] == 1
     assert payload["meta"]["returned"] == 1
+    assert payload["meta"]["projection_set"] == DEFAULT_PROJECTION_SET
+    assert payload["meta"]["bounds"] == {
+        "min_x": -0.4,
+        "max_x": 0.25,
+        "min_y": 0.15,
+        "max_y": 0.75,
+        "min_z": -0.2,
+        "max_z": 0.4,
+    }
     assert payload["meta"]["available_sources"] == ["elpais"]
     assert payload["items"][0]["article_id"] == 1
+    assert payload["items"][0]["z"] == 0.4
     assert payload["items"][0]["analysis"]["neighbor_count"] == 0
 
 
@@ -218,7 +232,7 @@ def test_explorer_filters_returns_available_options() -> None:
 
     assert response.status_code == 200
     assert response.json() == {
-        "projection_set": "pca_2d_latest",
+        "projection_set": DEFAULT_PROJECTION_SET,
         "available_sources": ["elmundo", "elpais"],
         "available_sections": ["economia", "politica"],
         "available_clusters": [],
@@ -268,10 +282,13 @@ def test_explorer_article_detail_returns_detail_and_neighbors(monkeypatch) -> No
 
     assert response.status_code == 200
     payload = response.json()
+    assert payload["projection_set"] == DEFAULT_PROJECTION_SET
     assert payload["article"]["article_id"] == 1
     assert payload["point"]["article_id"] == 1
+    assert payload["point"]["z"] == 0.4
     assert payload["neighbors"][0]["article_id"] == 2
     assert payload["semantic_summary"]["neighbor_count"] == 1
+
 
 
 def test_explorer_article_detail_returns_404_for_missing_article() -> None:

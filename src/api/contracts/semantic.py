@@ -23,6 +23,7 @@ class ExplorerPoint(BaseModel):
     summary_snippet: str = ""
     x: float
     y: float
+    z: float
     analysis: ExplorerSemanticSummary = Field(default_factory=ExplorerSemanticSummary)
 
 
@@ -31,6 +32,8 @@ class ExplorerProjectionBounds(BaseModel):
     max_x: float
     min_y: float
     max_y: float
+    min_z: float
+    max_z: float
 
 
 class ExplorerMeta(BaseModel):

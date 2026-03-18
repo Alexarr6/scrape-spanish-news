@@ -19,7 +19,7 @@ from src.semantic.export import write_points_json, write_semantic_map_html  # no
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description=("Rebuild the 2D PCA projection set from persisted embeddings")
+        description=("Rebuild the semantic PCA projection set from persisted embeddings")
     )
     parser.add_argument("--db-url", default="")
     parser.add_argument("--projection-set", default=DEFAULT_PROJECTION_SET)

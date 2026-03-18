@@ -135,6 +135,7 @@ class PointArtifact:
     embedding_model: str = ""
     x: float = 0.0
     y: float = 0.0
+    z: float = 0.0
     neighbors: list[NeighborArtifact] = field(default_factory=list)
     analysis: PointAnalysisArtifact = field(
         default_factory=lambda: PointAnalysisArtifact(article_id=0)

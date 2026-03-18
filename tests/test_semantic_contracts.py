@@ -63,6 +63,7 @@ def test_artifact_model_dump_is_plain_dict() -> None:
         embedding_model="text-embedding-3-small",
         x=1.0,
         y=-1.0,
+        z=0.5,
         neighbors=[neighbor],
         analysis=PointAnalysisArtifact(
             article_id=1,
@@ -95,6 +96,7 @@ def test_artifact_model_dump_is_plain_dict() -> None:
 
     assert embedding.model_dump()["embedding"] == [0.1, 0.2]
     assert point.model_dump()["x"] == 1.0
+    assert point.model_dump()["z"] == 0.5
     assert point.model_dump()["neighbors"][0]["article_id"] == 2
     assert point.model_dump()["analysis"]["cluster_id"] == 4
     assert analysis.model_dump()["clusters"][0]["top_sources"]["abc"] == 3

@@ -17,6 +17,7 @@ from src.semantic.dbstore import (
     load_explorer_points_page,
     load_neighbors_for_articles,
     parse_vector_text,
+    projection_kind_for_set,
     render_init_sql,
     select_embedding_candidates,
     summary_snippet,
@@ -167,7 +168,14 @@ class _ExplorerSession:
             return _ExplorerQueryResult(first_row=None)
         if "SELECT MIN(x) AS min_x" in sql:
             return _ExplorerQueryResult(
-                first_row={"min_x": None, "max_x": None, "min_y": None, "max_y": None}
+                first_row={
+                    "min_x": None,
+                    "max_x": None,
+                    "min_y": None,
+                    "max_y": None,
+                    "min_z": None,
+                    "max_z": None,
+                }
             )
         if (
             "SELECT DISTINCT a.source AS value" in sql
@@ -377,3 +385,8 @@ def test_load_explorer_article_detail_formats_published_at_as_text_sql() -> None
     assert "COALESCE(a.published_at, '')" not in sql
     assert "to_char(a.published_at AT TIME ZONE 'UTC'" in sql
     assert "AS published_at" in sql
+
+
+def test_projection_kind_for_set_distinguishes_2d_and_3d_sets() -> None:
+    assert projection_kind_for_set("pca_2d_latest") == "pca_2d"
+    assert projection_kind_for_set("pca_3d_latest") == "pca_3d"

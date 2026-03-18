@@ -23,8 +23,8 @@ from src.semantic.contracts import (
 from src.semantic.project import project_embeddings
 
 DEFAULT_EMBEDDING_MODEL = "text-embedding-3-small"
-DEFAULT_PROJECTION_KIND = "pca_2d"
-DEFAULT_PROJECTION_SET = "pca_2d_latest"
+DEFAULT_PROJECTION_KIND = "pca_3d"
+DEFAULT_PROJECTION_SET = "pca_3d_latest"
 DEFAULT_PROJECTION_VERSION = "v1"
 DEFAULT_NEIGHBOR_LIMIT = 5
 MIN_TEXT_LENGTH = 40
@@ -411,8 +411,11 @@ def load_embedding_artifacts(
 def refresh_projection_set(
     session: Session, *, projection_set: str, projection_version: str = DEFAULT_PROJECTION_VERSION
 ) -> int:
-    records = load_embedding_artifacts(session)
-    points = project_embeddings(records)
+    projection_kind = projection_kind_for_set(projection_set)
+    points = project_embeddings(
+        load_embedding_artifacts(session),
+        dimensions=3 if projection_kind == "pca_3d" else 2,
+    )
     now = _utc_now()
     for point in points:
         embedding_id = session.execute(
@@ -428,7 +431,7 @@ def refresh_projection_set(
                 ) VALUES (
                   :article_id, :embedding_id, :projection_set,
                   :projection_kind, :projection_version,
-                  :x, :y, NULL, :projected_at, :updated_at
+                  :x, :y, :z, :projected_at, :updated_at
                 )
                 ON CONFLICT (article_id, projection_set) DO UPDATE SET
                   embedding_id = EXCLUDED.embedding_id,
@@ -445,16 +448,25 @@ def refresh_projection_set(
                 "article_id": point.article_id,
                 "embedding_id": embedding_id,
                 "projection_set": projection_set,
-                "projection_kind": DEFAULT_PROJECTION_KIND,
+                "projection_kind": projection_kind,
                 "projection_version": projection_version,
                 "x": point.x,
                 "y": point.y,
+                "z": point.z,
                 "projected_at": now,
                 "updated_at": now,
             },
         )
     session.commit()
     return len(points)
+
+
+def projection_kind_for_set(projection_set: str) -> str:
+    if projection_set.startswith("pca_2d"):
+        return "pca_2d"
+    if projection_set.startswith("pca_3d"):
+        return "pca_3d"
+    return DEFAULT_PROJECTION_KIND
 
 
 def load_projected_points(
@@ -464,6 +476,7 @@ def load_projected_points(
     include_neighbors: bool = False,
     neighbor_limit: int = DEFAULT_NEIGHBOR_LIMIT,
 ) -> list[PointArtifact]:
+    projection_kind = projection_kind_for_set(projection_set)
     rows = (
         session.execute(
             text(
@@ -478,7 +491,7 @@ def load_projected_points(
                    COALESCE(to_char(a.published_at AT TIME ZONE 'UTC', 'YYYY-MM-DD'), '')
                      AS display_date,
                    a.section, e.summary_snippet, e.source_text_chars, e.embedding_model,
-                   p.x, p.y
+                   p.x, p.y, COALESCE(p.z, 0.0) AS z
             FROM article_projections p
             JOIN article_embeddings e ON e.id = p.embedding_id
             JOIN articles a ON a.id = p.article_id
@@ -487,7 +500,7 @@ def load_projected_points(
             ORDER BY a.published_at DESC NULLS LAST, a.id DESC
             """
             ),
-            {"projection_set": projection_set, "projection_kind": DEFAULT_PROJECTION_KIND},
+            {"projection_set": projection_set, "projection_kind": projection_kind},
         )
         .mappings()
         .all()
@@ -507,6 +520,7 @@ def load_projected_points(
             embedding_model=row["embedding_model"],
             x=float(row["x"]),
             y=float(row["y"]),
+            z=float(row["z"]),
         )
         for row in rows
     ]
@@ -702,7 +716,8 @@ def _explorer_published_at_sql(*, dialect_name: str) -> str:
 
 
 def load_explorer_points_page(session: Session, *, filters: ExplorerFilters) -> ExplorerPointsPage:
-    where_sql, params = _build_explorer_where_clause(filters)
+    projection_kind = projection_kind_for_set(filters.projection_set)
+    where_sql, params = _build_explorer_where_clause(filters, projection_kind=projection_kind)
     published_at_sql = _explorer_published_at_sql(dialect_name=_session_dialect_name(session))
     rows = (
         session.execute(
@@ -716,7 +731,8 @@ def load_explorer_points_page(session: Session, *, filters: ExplorerFilters) -> 
                    COALESCE(a.section, '') AS section,
                    COALESCE(e.summary_snippet, '') AS summary_snippet,
                    p.x,
-                   p.y
+                   p.y,
+                   COALESCE(p.z, 0.0) AS z
             FROM article_projections p
             JOIN articles a ON a.id = p.article_id
             JOIN article_embeddings e ON e.id = p.embedding_id
@@ -746,6 +762,7 @@ def load_explorer_points_page(session: Session, *, filters: ExplorerFilters) -> 
                 summary_snippet=row["summary_snippet"] or "",
                 x=float(row["x"]),
                 y=float(row["y"]),
+                z=float(row["z"]),
                 analysis=_analysis_for_neighbors(row["article_id"], neighbors),
             )
         )
@@ -802,6 +819,7 @@ def load_explorer_article_detail(
     article_id: int,
     projection_set: str,
 ) -> ExplorerArticleDetailRecord | None:
+    projection_kind = projection_kind_for_set(projection_set)
     published_at_sql = _explorer_published_at_sql(dialect_name=_session_dialect_name(session))
     row = (
         session.execute(
@@ -817,6 +835,7 @@ def load_explorer_article_detail(
                    COALESCE(a.article_text, '') AS article_text,
                    p.x,
                    p.y,
+                   COALESCE(p.z, 0.0) AS z,
                    COALESCE(e.summary_snippet, '') AS summary_snippet
             FROM articles a
             LEFT JOIN article_embeddings e ON e.article_id = a.id
@@ -830,7 +849,7 @@ def load_explorer_article_detail(
             {
                 "article_id": article_id,
                 "projection_set": projection_set,
-                "projection_kind": DEFAULT_PROJECTION_KIND,
+                "projection_kind": projection_kind,
             },
         )
         .mappings()
@@ -853,6 +872,7 @@ def load_explorer_article_detail(
             summary_snippet=row["summary_snippet"] or "",
             x=float(row["x"]),
             y=float(row["y"]),
+            z=float(row["z"]),
             analysis=_analysis_for_neighbors(row["article_id"], neighbors),
         )
     return ExplorerArticleDetailRecord(
@@ -874,11 +894,14 @@ def load_explorer_article_detail(
     )
 
 
-def _build_explorer_where_clause(filters: ExplorerFilters) -> tuple[str, dict[str, Any]]:
+def _build_explorer_where_clause(
+    filters: ExplorerFilters, *, projection_kind: str | None = None
+) -> tuple[str, dict[str, Any]]:
+    resolved_projection_kind = projection_kind or projection_kind_for_set(filters.projection_set)
     clauses = ["p.projection_set = :projection_set", "p.projection_kind = :projection_kind"]
     params: dict[str, Any] = {
         "projection_set": filters.projection_set,
-        "projection_kind": DEFAULT_PROJECTION_KIND,
+        "projection_kind": resolved_projection_kind,
     }
     if filters.source:
         clauses.append("a.source = :source")
@@ -903,24 +926,30 @@ def _build_explorer_where_clause(filters: ExplorerFilters) -> tuple[str, dict[st
 
 
 def _load_projection_bounds(session: Session, *, projection_set: str) -> dict[str, float] | None:
+    projection_kind = projection_kind_for_set(projection_set)
     row = (
         session.execute(
             text(
                 """
-            SELECT MIN(x) AS min_x, MAX(x) AS max_x, MIN(y) AS min_y, MAX(y) AS max_y
+            SELECT MIN(x) AS min_x,
+                   MAX(x) AS max_x,
+                   MIN(y) AS min_y,
+                   MAX(y) AS max_y,
+                   MIN(COALESCE(z, 0.0)) AS min_z,
+                   MAX(COALESCE(z, 0.0)) AS max_z
             FROM article_projections
             WHERE projection_set = :projection_set
               AND projection_kind = :projection_kind
             """
             ),
-            {"projection_set": projection_set, "projection_kind": DEFAULT_PROJECTION_KIND},
+            {"projection_set": projection_set, "projection_kind": projection_kind},
         )
         .mappings()
         .first()
     )
     if row is None or row["min_x"] is None:
         return None
-    return {key: float(row[key]) for key in ("min_x", "max_x", "min_y", "max_y")}
+    return {key: float(row[key]) for key in ("min_x", "max_x", "min_y", "max_y", "min_z", "max_z")}
 
 
 def _load_distinct_values(session: Session, *, column: str, projection_set: str) -> list[str]:
@@ -930,7 +959,10 @@ def _load_distinct_values(session: Session, *, column: str, projection_set: str)
         where_sql=(
             "WHERE p.projection_set = :projection_set AND p.projection_kind = :projection_kind"
         ),
-        params={"projection_set": projection_set, "projection_kind": DEFAULT_PROJECTION_KIND},
+        params={
+            "projection_set": projection_set,
+            "projection_kind": projection_kind_for_set(projection_set),
+        },
     )
 
 
