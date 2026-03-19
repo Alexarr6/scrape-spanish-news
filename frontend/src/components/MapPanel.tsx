@@ -156,6 +156,16 @@ function colorForPoint(point: ExplorerPoint, mode: ExplorerColorMode): [number, 
   return [79, 70, 229, 200]
 }
 
+function withAlpha(color: [number, number, number, number], alpha: number): [number, number, number, number] {
+  return [color[0], color[1], color[2], alpha]
+}
+
+function getLensDescription(colorMode: ExplorerColorMode): string {
+  if (colorMode === 'source') return 'Source highlights outlet grouping and editorial segregation.'
+  if (colorMode === 'cluster') return 'Cluster highlights algorithmic grouping coherence.'
+  return 'Neutral keeps attention on shape, density, and outliers first.'
+}
+
 export function MapPanel({
   points,
   loading,
@@ -175,6 +185,7 @@ export function MapPanel({
   const neighborKey = Array.from(neighborIds).sort((a, b) => a - b).join(',')
   const bounds = points?.meta.bounds ?? null
   const selectedPoint = useMemo(() => points?.items.find((item) => item.article_id === selectedArticleId) ?? null, [points, selectedArticleId])
+  const hasSelection = selectedArticleId != null
 
   useEffect(() => {
     setViewState((current) => buildInitialViewState(points, current))
@@ -183,15 +194,17 @@ export function MapPanel({
   const focusSelection = () => {
     if (!selectedPoint) return
     const selectionBounds = buildSelectionBounds(selectedPoint, points?.items ?? [], neighborIds)
+    const focused2d = build2dViewState(selectionBounds)
+    const focused3d = build3dViewState(selectionBounds, viewState['semantic-3d'])
     setViewState((current) => ({
       ...current,
       'semantic-2d': {
-        ...build2dViewState(selectionBounds),
-        zoom: Math.max(current['semantic-2d'].zoom, Math.min(build2dViewState(selectionBounds).zoom + 0.25, 6.8)),
+        ...focused2d,
+        zoom: Math.max(current['semantic-2d'].zoom, Math.min(focused2d.zoom + 0.25, 6.8)),
       },
       'semantic-3d': {
-        ...build3dViewState(selectionBounds, current['semantic-3d']),
-        zoom: Math.max(current['semantic-3d'].zoom, Math.min(build3dViewState(selectionBounds, current['semantic-3d']).zoom + 0.2, 6.2)),
+        ...focused3d,
+        zoom: Math.max(current['semantic-3d'].zoom, Math.min(focused3d.zoom + 0.2, 6.2)),
       },
     }))
   }
@@ -206,28 +219,39 @@ export function MapPanel({
         pickable: true,
         filled: true,
         stroked: true,
-        opacity: is3d ? 0.92 : 0.86,
+        opacity: is3d ? 0.94 : 0.9,
         radiusUnits: 'pixels',
         getPosition: (point: ExplorerPoint) => (is3d ? [point.x, point.y, point.z] : [point.x, point.y]),
         getRadius: (point: ExplorerPoint) => {
-          if (point.article_id === selectedArticleId) return is3d ? 9.5 : 8.5
-          if (neighborIds.has(point.article_id)) return is3d ? 7.5 : 6.5
-          if (point.article_id === hoveredArticleId) return is3d ? 6.5 : 5.7
-          if (point.analysis.is_outlier) return is3d ? 5.7 : 5.2
-          return is3d ? 4.8 : 4.2
+          if (point.article_id === selectedArticleId) return is3d ? 10 : 8.8
+          if (neighborIds.has(point.article_id)) return is3d ? 7.6 : 6.8
+          if (point.article_id === hoveredArticleId) return is3d ? 6.4 : 5.8
+          if (point.analysis.is_outlier) return is3d ? 5.6 : 5.1
+          return is3d ? 4.4 : 3.9
         },
-        radiusScale: is3d ? 1 : 1.15,
+        radiusScale: is3d ? 1 : 1.1,
         radiusMinPixels: 3,
         radiusMaxPixels: 18,
         lineWidthUnits: 'pixels',
-        getLineWidth: (point: ExplorerPoint) => (point.article_id === selectedArticleId ? 2.5 : 1),
+        getLineWidth: (point: ExplorerPoint) => {
+          if (point.article_id === selectedArticleId) return 2.8
+          if (neighborIds.has(point.article_id)) return 1.5
+          return 0.8
+        },
         getFillColor: (point: ExplorerPoint) => {
           if (point.article_id === selectedArticleId) return [14, 165, 233, 255]
           if (neighborIds.has(point.article_id)) return [34, 197, 94, 235]
           if (point.article_id === hoveredArticleId) return [125, 211, 252, 235]
-          return colorForPoint(point, colorMode)
+          const base = colorForPoint(point, colorMode)
+          if (!hasSelection) return base
+          if (point.analysis.is_outlier) return withAlpha(base, 150)
+          return withAlpha(base, 78)
         },
-        getLineColor: (point: ExplorerPoint) => (point.article_id === selectedArticleId ? [255, 255, 255, 255] : [248, 250, 252, 190]),
+        getLineColor: (point: ExplorerPoint) => {
+          if (point.article_id === selectedArticleId) return [255, 255, 255, 255]
+          if (neighborIds.has(point.article_id)) return [236, 253, 245, 240]
+          return hasSelection ? [226, 232, 240, 90] : [248, 250, 252, 190]
+        },
         onHover: (info: PickingInfoLike) => {
           const point = info.object
           onHoverArticle(point?.article_id ?? null)
@@ -239,11 +263,11 @@ export function MapPanel({
           getPosition: [viewMode],
           getRadius: [viewMode, selectedArticleId, hoveredArticleId, neighborKey],
           getFillColor: [viewMode, colorMode, selectedArticleId, hoveredArticleId, neighborKey],
-          getLineColor: [selectedArticleId],
+          getLineColor: [selectedArticleId, neighborKey],
         },
       }),
     ]
-  }, [points, viewMode, colorMode, selectedArticleId, hoveredArticleId, neighborIds, neighborKey, onHoverArticle, onSelectArticle])
+  }, [points, viewMode, colorMode, selectedArticleId, hoveredArticleId, neighborIds, neighborKey, onHoverArticle, onSelectArticle, hasSelection])
 
   const resetView = () => setViewState((current) => buildInitialViewState(points, current))
 
@@ -253,29 +277,33 @@ export function MapPanel({
     <div className="map-frame">
       <div className="map-overlay map-overlay-stack">
         <div className="map-toolbar">
-          <div className="map-toolbar-row">
+          <div className="map-toolbar-row map-toolbar-header-row">
             <div>
-              <div className="eyebrow">Explorer</div>
+              <div className="eyebrow">Semantic analysis workspace</div>
               <h2>{viewMode === '3d' ? '3D semantic view' : '2D semantic view'}</h2>
-              <p className="muted">Auto-fit keeps the visible subset framed on load. Select an article when you want to inspect its local semantic neighborhood.</p>
+              <p className="muted">{viewMode === '3d' ? 'Use 3D to inspect overlap, outliers, and cluster thickness.' : 'Use 2D to scan the overall layout and broad neighborhood structure quickly.'}</p>
             </div>
             <div className="status-chip-row compact-row">
               <span className="status-chip emphasis">{loading ? 'Loading projection…' : `${points?.items.length ?? 0} visible points`}</span>
               <span className="status-chip">{points?.meta.available_clusters.length ?? 0} clusters</span>
             </div>
           </div>
-          <div className="map-toolbar-row">
+
+          <div className="map-control-grid">
             <div className="control-group">
-              <h3>View</h3>
-              <p className="muted">Switch between flat and spatial inspection.</p>
+              <div className="eyebrow">Mode</div>
+              <h3>Projection</h3>
+              <p className="muted">2D is faster for layout scans. 3D is better for separation and overlap checks.</p>
               <div className="segmented-control" role="tablist" aria-label="Explorer view mode">
                 <button className={viewMode === '2d' ? 'segmented-button active' : 'segmented-button'} type="button" onClick={() => onViewModeChange('2d')}>2D</button>
                 <button className={viewMode === '3d' ? 'segmented-button active' : 'segmented-button'} type="button" onClick={() => onViewModeChange('3d')}>3D</button>
               </div>
             </div>
+
             <div className="control-group">
-              <h3>Color encoding</h3>
-              <p className="muted">Choose the lens, not just the paint.</p>
+              <div className="eyebrow">Lens</div>
+              <h3>Color by</h3>
+              <p className="muted">{getLensDescription(colorMode)}</p>
               <div className="segmented-control" role="tablist" aria-label="Explorer color mode">
                 {(['neutral', 'source', 'cluster'] as ExplorerColorMode[]).map((mode) => (
                   <button key={mode} className={colorMode === mode ? 'segmented-button active' : 'segmented-button'} type="button" onClick={() => onColorModeChange(mode)}>
@@ -284,17 +312,26 @@ export function MapPanel({
                 ))}
               </div>
             </div>
+
             <div className="control-group">
-              <h3>Focus</h3>
-              <p className="muted">Fit the whole subset or tighten around the selected neighborhood.</p>
+              <div className="eyebrow">Camera</div>
+              <h3>Frame</h3>
+              <p className="muted">Fit the full subset or tighten around the selected article and its nearby semantic neighbors.</p>
               <div className="action-row">
                 <button className="ghost-button" type="button" onClick={focusSelection} disabled={!selectedPoint}>Focus selected</button>
                 <button className="ghost-button" type="button" onClick={resetView}>Fit all</button>
               </div>
             </div>
           </div>
+
+          <div className="map-inline-guide">
+            <span className="status-chip subtle">Each point is one article.</span>
+            <span className="status-chip subtle">Selected = blue, neighbors = green.</span>
+            <span className="status-chip subtle">{hasSelection ? 'Selection mutes the rest so the local neighborhood reads clearly.' : 'Neutral is the best first pass when you want structure, not categorical noise.'}</span>
+          </div>
+
           <div className="legend-row">
-            <span className="muted">{viewMode === '3d' ? 'Drag to orbit, scroll to zoom, right-drag to pan.' : 'Drag to pan, scroll to zoom, click a point for context.'}</span>
+            <span className="muted">{viewMode === '3d' ? 'Drag to orbit, scroll to zoom, right-drag to pan.' : 'Drag to pan, scroll to zoom, click a point for article and cluster context.'}</span>
             <span className="muted">{error ? error : `Projection set: ${points?.meta.projection_set ?? 'loading'}`}</span>
           </div>
         </div>

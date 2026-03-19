@@ -15,18 +15,31 @@ export function InspectorPanel({ selectedPoint, detail, loading, error, onClearS
   if (!selectedPoint) {
     return (
       <div className="selection-stack">
+        <div className="legend-card">
+          <div className="eyebrow">Guide</div>
+          <h3>How to read this workspace</h3>
+          <p>Explorer is for semantic shape, not coverage comparison. Start with Neutral, use 2D for the broad scan, then switch to 3D when you need to inspect overlap, outliers, or cluster thickness.</p>
+        </div>
+
         <div className="empty-state-card">
           <h2>No point selected</h2>
-          <p className="muted">Click a point to inspect the article, cluster metadata, and nearest semantic neighbors.</p>
+          <p className="muted">Click a point to inspect the article, its cluster status, and the nearest semantic neighbors.</p>
         </div>
+
         <div className="legend-card">
           <div className="eyebrow">Legend</div>
-          <h3>What the map is telling you</h3>
+          <h3>Point emphasis</h3>
           <ul className="legend-list">
-            <li><span><span className="legend-dot" style={{ background: '#4f46e5' }} />Neutral color mode uses one sober baseline.</span></li>
-            <li><span><span className="legend-dot" style={{ background: '#0ea5e9' }} />Selected points get stronger emphasis.</span></li>
-            <li><span><span className="legend-dot" style={{ background: '#22c55e' }} />Neighbors show local semantic context.</span></li>
+            <li><span><span className="legend-dot" style={{ background: '#4f46e5' }} />Neutral is the default lens when you want structure before categories.</span></li>
+            <li><span><span className="legend-dot" style={{ background: '#0ea5e9' }} />Selected points are the active article under inspection.</span></li>
+            <li><span><span className="legend-dot" style={{ background: '#22c55e' }} />Neighbors show the local semantic neighborhood around the selected article.</span></li>
+            <li><span><span className="legend-dot" style={{ background: '#ef4444' }} />Outliers are semantically oddballs, especially useful in 3D.</span></li>
           </ul>
+        </div>
+
+        <div className="helper-card">
+          <strong>When to use which mode</strong>
+          <p><strong>2D:</strong> quick broad scan. <strong>3D:</strong> separation, overlap, and cluster depth. <strong>Stories:</strong> coverage comparison and narrative overview.</p>
         </div>
       </div>
     )
@@ -71,6 +84,14 @@ export function InspectorPanel({ selectedPoint, detail, loading, error, onClearS
         <Info label="Neighbors" value={String(summary.neighbor_count)} />
         <Info label="Source diversity" value={String(summary.source_neighbor_diversity ?? 0)} />
         <Info label="Local density" value={summary.local_density_distance?.toFixed(3) ?? '0.000'} />
+      </div>
+
+      <div className="helper-card">
+        <div className="panel-header compact">
+          <h3>Reading the selection</h3>
+          <span className="muted">Quick interpretation</span>
+        </div>
+        <p className="muted">Use neighbors to judge whether this article sits inside a coherent pocket or near a semantic edge. Higher density usually means it belongs to a tighter local theme.</p>
       </div>
 
       <div className="helper-card">
