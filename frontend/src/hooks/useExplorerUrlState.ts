@@ -15,9 +15,9 @@ const EXPLORER_PARAM_KEYS = [
   'sem_article',
 ] as const
 
-function parsePositiveInteger(value: string | null, fallback: number): number {
+function parseStrictPositiveInteger(value: string | null, fallback: number): number {
   const parsed = Number(value)
-  return Number.isInteger(parsed) && parsed >= 0 ? parsed : fallback
+  return Number.isInteger(parsed) && parsed > 0 ? parsed : fallback
 }
 
 function parseOptionalInteger(value: string | null): number | null {
@@ -35,7 +35,7 @@ function readInitialState() {
     dateFrom: params.get('sem_from') ?? DEFAULT_QUERY.dateFrom,
     dateTo: params.get('sem_to') ?? DEFAULT_QUERY.dateTo,
     outlierOnly: params.get('sem_outliers') === 'true',
-    limit: parsePositiveInteger(params.get('sem_limit'), DEFAULT_QUERY.limit),
+    limit: parseStrictPositiveInteger(params.get('sem_limit'), DEFAULT_QUERY.limit),
   }
 
   return {

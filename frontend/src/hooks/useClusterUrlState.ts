@@ -15,7 +15,12 @@ const CLUSTER_PARAM_KEYS = [
   'article',
 ] as const
 
-function parsePositiveInteger(value: string | null, fallback: number): number {
+function parseStrictPositiveInteger(value: string | null, fallback: number): number {
+  const parsed = Number(value)
+  return Number.isInteger(parsed) && parsed > 0 ? parsed : fallback
+}
+
+function parseNonNegativeInteger(value: string | null, fallback: number): number {
   const parsed = Number(value)
   return Number.isInteger(parsed) && parsed >= 0 ? parsed : fallback
 }
@@ -34,8 +39,8 @@ function readInitialState() {
     entitySlug: params.get('entity') ?? DEFAULT_CLUSTER_QUERY.entitySlug,
     dateFrom: params.get('from') ?? DEFAULT_CLUSTER_QUERY.dateFrom,
     dateTo: params.get('to') ?? DEFAULT_CLUSTER_QUERY.dateTo,
-    limit: parsePositiveInteger(params.get('limit'), DEFAULT_CLUSTER_QUERY.limit),
-    offset: parsePositiveInteger(params.get('offset'), DEFAULT_CLUSTER_QUERY.offset),
+    limit: parseStrictPositiveInteger(params.get('limit'), DEFAULT_CLUSTER_QUERY.limit),
+    offset: parseNonNegativeInteger(params.get('offset'), DEFAULT_CLUSTER_QUERY.offset),
   }
 
   return {
