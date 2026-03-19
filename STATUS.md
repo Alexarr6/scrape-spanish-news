@@ -1,50 +1,49 @@
-- State: DONE
-- Current phase: UI/UX overhaul implemented and verified
-- Last update: 2026-03-19 13:33 UTC
+- State: IN_PROGRESS
+- Current phase: iter/003 implementation underway — phase 1 camera fit / framing / focus behavior complete; phase 2 controls / legend / emphasis in progress
+- Last update: 2026-03-19 20:49 UTC
 
-## Completed implementation phases
-1. Light analytical theme foundations
-2. Product shell + primary navigation
-3. Story-first cluster browser restructure
-4. Explorer workspace reframing and control/layout overhaul
-5. Polish pass for state consistency and removal of obsolete shared layout shell
+## Iteration focus
+Upgrade the Explorer from a merely functional 2D/3D scatterplot workspace into a more deliberate semantic analysis tool, with emphasis on:
+1. useful first-load framing / camera behavior
+2. stronger 3D interaction model
+3. clearer legend and control grouping
+4. better separation of article context, cluster context, and help/explanation
+5. responsive cleanup where Explorer currently feels cramped
 
-## What was implemented
-- Replaced the dark/glowy prototype baseline with a light / light-neutral analytical visual system in `frontend/src/styles.css`.
-- Added a real app shell in `frontend/src/components/AppShell.tsx` with persistent sidebar navigation and section-aware page headers.
-- Updated `frontend/src/App.tsx` so Stories and Explorer are explicit first-class workspaces.
-- Reworked Stories route and components:
-  - `frontend/src/routes/ClusterBrowserPage.tsx`
-  - `frontend/src/components/ClusterFilterPanel.tsx`
-  - `frontend/src/components/ClusterListPanel.tsx`
-  - `frontend/src/components/ClusterInspectorPanel.tsx`
-  - `frontend/src/components/ClusterStatusBar.tsx`
-- Reworked Explorer route and components:
-  - `frontend/src/routes/ExplorerPage.tsx`
-  - `frontend/src/components/FilterBar.tsx`
-  - `frontend/src/components/MapPanel.tsx`
-  - `frontend/src/components/InspectorPanel.tsx`
-  - `frontend/src/components/StatusBar.tsx`
-- Removed obsolete shared shell component:
-  - deleted `frontend/src/components/ExplorerLayout.tsx`
+## What is already complete from iter/002
+- light analytical theme foundations
+- app shell + primary navigation
+- Stories as the default story-first workspace
+- Explorer as a dedicated workspace
+- general state consistency improvements
+- build verification passed previously via `cd frontend && npm run build`
 
-## Verification executed
+## Planner conclusions for iter/003
+- The biggest remaining product weakness is Explorer framing and self-explanation, not the overall shell.
+- 3D should remain in the product, but it must become a deliberate semantic analysis mode rather than a flashy alternate view.
+- Explorer should auto-fit to visible data on load and after scope changes.
+- The no-selection state needs a stronger legend/help panel.
+- The right rail needs local information architecture, not one long mixed-content stack.
+- Performance/code-splitting is a follow-up option, not the primary objective.
+
+## Planned implementation phases
+1. camera fit / framing / focus behavior
+2. control regrouping + legend/help + point emphasis tuning
+3. side-panel information architecture + responsive cleanup
+4. optional bundle-weight follow-up
+
+## Required implementer verification
 ```bash
 cd frontend && npm run build
 ```
-Result:
-- PASS (final build successful)
-- Non-blocking warnings remain from Vite/loaders.gl browser external handling and large chunk size output.
 
-## Atomic commits created for this implementation
-1. `5ad1b30` — `feat(ui): establish light analytical theme foundations`
-2. `66c0426` — `feat(ui): add product shell and primary navigation`
-3. `4baefd9` — `feat(ui): restructure cluster browser into story-first workspace`
-4. `93f4c5f` — `feat(ui): integrate semantic explorer as dedicated analytical workspace`
-5. `219db66` — `feat(ui): polish states consistency and responsive behavior`
+If shared API/data behavior changes:
+```bash
+cd /home/node/.openclaw/workspace/repos/spain-news-bias-scraper && pytest
+```
 
-## Remaining follow-up opportunities
-- Improve explorer initial camera / fit-to-data behavior for tightly bounded point clouds.
-- Tighten responsive behavior further at intermediate widths.
-- Consider code-splitting / chunking follow-up to reduce frontend bundle warning.
-- Add richer subviews in detail panels if the next iteration wants compare tabs or deeper analytical presets.
+## Atomic commit expectation
+1. `feat(explorer): improve semantic camera fit and selection framing`
+2. `feat(explorer): clarify controls legend and point emphasis`
+3. `feat(explorer): reorganize side-panel context and responsive layout`
+4. optional: `perf(frontend): reduce explorer bundle weight`

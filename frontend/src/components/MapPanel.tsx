@@ -25,35 +25,108 @@ type PickingInfoLike = { object?: ExplorerPoint; x?: number; y?: number }
 type ViewState2D = { target: [number, number, number]; zoom: number }
 type ViewState3D = { target: [number, number, number]; zoom: number; rotationOrbit: number; rotationX: number }
 type ViewStateMap = { 'semantic-2d': ViewState2D; 'semantic-3d': ViewState3D }
+type PointBounds = {
+  minX: number
+  maxX: number
+  minY: number
+  maxY: number
+  minZ: number
+  maxZ: number
+}
 
-function build2dViewState(bounds: ExplorerProjectionBounds | null): ViewState2D {
-  if (!bounds) return { target: [0, 0, 0], zoom: 0 }
-  const spanX = Math.max(bounds.max_x - bounds.min_x, 0.2)
-  const spanY = Math.max(bounds.max_y - bounds.min_y, 0.2)
+const DEFAULT_3D_ORBIT = 28
+const DEFAULT_3D_TILT = 32
+
+function normalizeBounds(bounds: ExplorerProjectionBounds | null): PointBounds | null {
+  if (!bounds) return null
+  return {
+    minX: bounds.min_x,
+    maxX: bounds.max_x,
+    minY: bounds.min_y,
+    maxY: bounds.max_y,
+    minZ: bounds.min_z,
+    maxZ: bounds.max_z,
+  }
+}
+
+function boundsFromPoints(items: ExplorerPoint[]): PointBounds | null {
+  if (items.length === 0) return null
+  return items.reduce<PointBounds>(
+    (acc, point) => ({
+      minX: Math.min(acc.minX, point.x),
+      maxX: Math.max(acc.maxX, point.x),
+      minY: Math.min(acc.minY, point.y),
+      maxY: Math.max(acc.maxY, point.y),
+      minZ: Math.min(acc.minZ, point.z),
+      maxZ: Math.max(acc.maxZ, point.z),
+    }),
+    {
+      minX: items[0].x,
+      maxX: items[0].x,
+      minY: items[0].y,
+      maxY: items[0].y,
+      minZ: items[0].z,
+      maxZ: items[0].z,
+    },
+  )
+}
+
+function build2dViewState(bounds: PointBounds | null): ViewState2D {
+  if (!bounds) return { target: [0, 0, 0], zoom: 1.8 }
+  const spanX = bounds.maxX - bounds.minX
+  const spanY = bounds.maxY - bounds.minY
   const dominantSpan = Math.max(spanX, spanY)
+  const paddedSpan = Math.max(dominantSpan * 1.45, 1.1)
   return {
-    target: [(bounds.min_x + bounds.max_x) / 2, (bounds.min_y + bounds.max_y) / 2, 0],
-    zoom: Math.max(0.35, Math.min(8, Math.log2(3.4 / dominantSpan))),
+    target: [(bounds.minX + bounds.maxX) / 2, (bounds.minY + bounds.maxY) / 2, 0],
+    zoom: Math.max(1.4, Math.min(7.2, Math.log2(3.2 / paddedSpan) + 1.4)),
   }
 }
 
-function build3dViewState(bounds: ExplorerProjectionBounds | null): ViewState3D {
-  if (!bounds) return { target: [0, 0, 0], zoom: 0.8, rotationOrbit: 28, rotationX: 32 }
-  const spanX = Math.max(bounds.max_x - bounds.min_x, 0.2)
-  const spanY = Math.max(bounds.max_y - bounds.min_y, 0.2)
-  const spanZ = Math.max(bounds.max_z - bounds.min_z, 0.2)
+function build3dViewState(bounds: PointBounds | null, current?: ViewState3D): ViewState3D {
+  if (!bounds) {
+    return {
+      target: [0, 0, 0],
+      zoom: 1.9,
+      rotationOrbit: current?.rotationOrbit ?? DEFAULT_3D_ORBIT,
+      rotationX: current?.rotationX ?? DEFAULT_3D_TILT,
+    }
+  }
+  const spanX = bounds.maxX - bounds.minX
+  const spanY = bounds.maxY - bounds.minY
+  const spanZ = bounds.maxZ - bounds.minZ
   const dominantSpan = Math.max(spanX, spanY, spanZ)
+  const paddedSpan = Math.max(dominantSpan * 1.6, 1.15)
   return {
-    target: [(bounds.min_x + bounds.max_x) / 2, (bounds.min_y + bounds.max_y) / 2, (bounds.min_z + bounds.max_z) / 2],
-    zoom: Math.max(0.45, Math.min(7, Math.log2(2.8 / dominantSpan))),
-    rotationOrbit: 28,
-    rotationX: 32,
+    target: [(bounds.minX + bounds.maxX) / 2, (bounds.minY + bounds.maxY) / 2, (bounds.minZ + bounds.maxZ) / 2],
+    zoom: Math.max(1.55, Math.min(6.6, Math.log2(3.1 / paddedSpan) + 1.2)),
+    rotationOrbit: current?.rotationOrbit ?? DEFAULT_3D_ORBIT,
+    rotationX: current?.rotationX ?? DEFAULT_3D_TILT,
   }
 }
 
-function buildInitialViewState(points: ExplorerPointsResponse | null): ViewStateMap {
-  const bounds = points?.meta.bounds ?? null
-  return { 'semantic-2d': build2dViewState(bounds), 'semantic-3d': build3dViewState(bounds) }
+function buildInitialViewState(points: ExplorerPointsResponse | null, current?: ViewStateMap): ViewStateMap {
+  const bounds = normalizeBounds(points?.meta.bounds ?? null)
+  return {
+    'semantic-2d': build2dViewState(bounds),
+    'semantic-3d': build3dViewState(bounds, current?.['semantic-3d']),
+  }
+}
+
+function buildSelectionBounds(selectedPoint: ExplorerPoint, items: ExplorerPoint[], neighborIds: Set<number>): PointBounds {
+  const related = items.filter((item) => item.article_id === selectedPoint.article_id || neighborIds.has(item.article_id))
+  const selectionBounds = boundsFromPoints(related.length > 0 ? related : [selectedPoint])
+  if (!selectionBounds) {
+    return {
+      minX: selectedPoint.x,
+      maxX: selectedPoint.x,
+      minY: selectedPoint.y,
+      maxY: selectedPoint.y,
+      minZ: selectedPoint.z,
+      maxZ: selectedPoint.z,
+    }
+  }
+  return selectionBounds
 }
 
 const SOURCE_COLORS: Record<string, [number, number, number, number]> = {
@@ -104,17 +177,24 @@ export function MapPanel({
   const selectedPoint = useMemo(() => points?.items.find((item) => item.article_id === selectedArticleId) ?? null, [points, selectedArticleId])
 
   useEffect(() => {
-    setViewState(buildInitialViewState(points))
-  }, [bounds?.min_x, bounds?.max_x, bounds?.min_y, bounds?.max_y, bounds?.min_z, bounds?.max_z, points?.meta.projection_set])
+    setViewState((current) => buildInitialViewState(points, current))
+  }, [bounds?.min_x, bounds?.max_x, bounds?.min_y, bounds?.max_y, bounds?.min_z, bounds?.max_z, points?.meta.projection_set, points?.items.length])
 
-  useEffect(() => {
+  const focusSelection = () => {
     if (!selectedPoint) return
+    const selectionBounds = buildSelectionBounds(selectedPoint, points?.items ?? [], neighborIds)
     setViewState((current) => ({
       ...current,
-      'semantic-2d': { ...current['semantic-2d'], target: [selectedPoint.x, selectedPoint.y, 0], zoom: Math.max(current['semantic-2d'].zoom, 4.2) },
-      'semantic-3d': { ...current['semantic-3d'], target: [selectedPoint.x, selectedPoint.y, selectedPoint.z], zoom: Math.max(current['semantic-3d'].zoom, 3.8) },
+      'semantic-2d': {
+        ...build2dViewState(selectionBounds),
+        zoom: Math.max(current['semantic-2d'].zoom, Math.min(build2dViewState(selectionBounds).zoom + 0.25, 6.8)),
+      },
+      'semantic-3d': {
+        ...build3dViewState(selectionBounds, current['semantic-3d']),
+        zoom: Math.max(current['semantic-3d'].zoom, Math.min(build3dViewState(selectionBounds, current['semantic-3d']).zoom + 0.2, 6.2)),
+      },
     }))
-  }, [selectedPoint?.article_id])
+  }
 
   const layers = useMemo(() => {
     const items = points?.items ?? []
@@ -165,15 +245,7 @@ export function MapPanel({
     ]
   }, [points, viewMode, colorMode, selectedArticleId, hoveredArticleId, neighborIds, neighborKey, onHoverArticle, onSelectArticle])
 
-  const resetView = () => setViewState(buildInitialViewState(points))
-  const focusSelection = () => {
-    if (!selectedPoint) return
-    setViewState((current) => ({
-      ...current,
-      'semantic-2d': { ...current['semantic-2d'], target: [selectedPoint.x, selectedPoint.y, 0], zoom: Math.max(current['semantic-2d'].zoom, 4.2) },
-      'semantic-3d': { ...current['semantic-3d'], target: [selectedPoint.x, selectedPoint.y, selectedPoint.z], zoom: Math.max(current['semantic-3d'].zoom, 3.8) },
-    }))
-  }
+  const resetView = () => setViewState((current) => buildInitialViewState(points, current))
 
   const activeViewState = viewState[viewMode === '3d' ? 'semantic-3d' : 'semantic-2d']
 
@@ -185,7 +257,7 @@ export function MapPanel({
             <div>
               <div className="eyebrow">Explorer</div>
               <h2>{viewMode === '3d' ? '3D semantic view' : '2D semantic view'}</h2>
-              <p className="muted">Points are articles. Color encodes source or cluster. Selection reveals the local semantic neighborhood.</p>
+              <p className="muted">Auto-fit keeps the visible subset framed on load. Select an article when you want to inspect its local semantic neighborhood.</p>
             </div>
             <div className="status-chip-row compact-row">
               <span className="status-chip emphasis">{loading ? 'Loading projection…' : `${points?.items.length ?? 0} visible points`}</span>
@@ -214,9 +286,9 @@ export function MapPanel({
             </div>
             <div className="control-group">
               <h3>Focus</h3>
-              <p className="muted">Keep the camera honest.</p>
+              <p className="muted">Fit the whole subset or tighten around the selected neighborhood.</p>
               <div className="action-row">
-                {selectedPoint ? <button className="ghost-button" type="button" onClick={focusSelection}>Focus selected</button> : null}
+                <button className="ghost-button" type="button" onClick={focusSelection} disabled={!selectedPoint}>Focus selected</button>
                 <button className="ghost-button" type="button" onClick={resetView}>Fit all</button>
               </div>
             </div>
