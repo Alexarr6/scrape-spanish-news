@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { DEFAULT_QUERY } from '../lib/types'
 import type { ExplorerQuery } from '../lib/types'
 
@@ -79,18 +79,24 @@ export function useExplorerUrlState() {
     return count
   }, [state.query])
 
+  const updateQuery = useCallback((patch: Partial<ExplorerQuery>) => {
+    setState((current) => ({ ...current, query: { ...current.query, ...patch } }))
+  }, [])
+
+  const resetQuery = useCallback(() => {
+    setState({ query: { ...DEFAULT_QUERY }, selectedArticleId: null })
+  }, [])
+
+  const setSelectedArticleId = useCallback((articleId: number | null) => {
+    setState((current) => ({ ...current, selectedArticleId: articleId }))
+  }, [])
+
   return {
     query: state.query,
     selectedArticleId: state.selectedArticleId,
     activeFilterCount,
-    updateQuery(patch: Partial<ExplorerQuery>) {
-      setState((current) => ({ ...current, query: { ...current.query, ...patch } }))
-    },
-    resetQuery() {
-      setState({ query: DEFAULT_QUERY, selectedArticleId: null })
-    },
-    setSelectedArticleId(articleId: number | null) {
-      setState((current) => ({ ...current, selectedArticleId: articleId }))
-    },
+    updateQuery,
+    resetQuery,
+    setSelectedArticleId,
   }
 }

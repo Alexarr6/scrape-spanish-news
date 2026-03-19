@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { DEFAULT_CLUSTER_QUERY } from '../lib/types'
 import type { StoryClusterQuery } from '../lib/types'
 
@@ -84,25 +84,33 @@ export function useClusterUrlState() {
     return count
   }, [state.query])
 
+  const updateQuery = useCallback((patch: Partial<StoryClusterQuery>) => {
+    setState((current) => ({
+      ...current,
+      query: { ...current.query, ...patch },
+    }))
+  }, [])
+
+  const resetQuery = useCallback(() => {
+    setState({ query: { ...DEFAULT_CLUSTER_QUERY }, selectedClusterId: null, selectedArticleId: null })
+  }, [])
+
+  const setSelectedClusterId = useCallback((clusterId: number | null) => {
+    setState((current) => ({ ...current, selectedClusterId: clusterId, selectedArticleId: null }))
+  }, [])
+
+  const setSelectedArticleId = useCallback((articleId: number | null) => {
+    setState((current) => ({ ...current, selectedArticleId: articleId }))
+  }, [])
+
   return {
     query: state.query,
     selectedClusterId: state.selectedClusterId,
     selectedArticleId: state.selectedArticleId,
     activeFilterCount,
-    updateQuery(patch: Partial<StoryClusterQuery>) {
-      setState((current) => ({
-        ...current,
-        query: { ...current.query, ...patch },
-      }))
-    },
-    resetQuery() {
-      setState({ query: DEFAULT_CLUSTER_QUERY, selectedClusterId: null, selectedArticleId: null })
-    },
-    setSelectedClusterId(clusterId: number | null) {
-      setState((current) => ({ ...current, selectedClusterId: clusterId, selectedArticleId: null }))
-    },
-    setSelectedArticleId(articleId: number | null) {
-      setState((current) => ({ ...current, selectedArticleId: articleId }))
-    },
+    updateQuery,
+    resetQuery,
+    setSelectedClusterId,
+    setSelectedArticleId,
   }
 }
