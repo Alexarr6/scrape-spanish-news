@@ -1,6 +1,6 @@
-- State: IN_PROGRESS
-- Current phase: iter/003 implementation underway — phase 2 controls / legend / emphasis complete; phase 3 side-panel context + responsive cleanup in progress
-- Last update: 2026-03-19 20:54 UTC
+- State: DONE
+- Current phase: iter/003 implementation complete — camera fit, controls/legend emphasis, and side-panel context/responsive cleanup delivered
+- Last update: 2026-03-19 21:00 UTC
 
 ## Iteration focus
 Upgrade the Explorer from a merely functional 2D/3D scatterplot workspace into a more deliberate semantic analysis tool, with emphasis on:

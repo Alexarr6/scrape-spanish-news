@@ -1,67 +1,72 @@
 # RESULTS.md
 
 ## Resumen de entrega
-Se implementó una pasada fuerte de rediseño frontend para sacar la app del aspecto de prototipo oscuro y convertirla en un producto analítico bastante más serio y legible. No fue un simple repaint: cambió la estructura de navegación, la jerarquía de pantallas y la separación entre filtros, contenido principal y contexto.
+Se implementó iter/003 como una pasada de **productización del Explorer 3D**, sin volver a rediseñar el shell general. El foco estuvo donde debía: framing de cámara, controles más legibles, leyenda persistente, mejor énfasis visual durante selección, y una right rail con estructura útil en vez de una pila mezclada de cosas.
 
 ## Cambios realizados
 
-### 1) Base visual nueva: light analytical UI
-Se reemplazó la estética dark/glow por una base light / light-neutral en `frontend/src/styles.css`:
-- tokens de color más sobrios
-- superficies claras y bordes suaves
-- jerarquía tipográfica más clara
-- botones, chips, cards y paneles más consistentes
-- estados selected/error/empty menos cutres y menos dependientes de brillo artificioso
+### 1) Cámara / framing / focus
+Archivos principales:
+- `frontend/src/components/MapPanel.tsx`
 
-### 2) App shell real + navegación primaria persistente
-Se añadió `frontend/src/components/AppShell.tsx` y se actualizó `frontend/src/App.tsx` para introducir:
-- sidebar persistente
-- navegación primaria clara entre `Stories` y `Explorer`
-- page header con contexto de sección
-- status strip separado del contenido principal
+Cambios:
+- se reemplazó el framing simple por un cálculo más explícito de **fit-to-bounds con padding y suelo mínimo de span**
+- el Explorer ahora **auto-fit** en carga inicial y cuando cambia el subset visible
+- `Fit all` vuelve al framing calculado del dataset visible
+- `Focus selected` ya no hace un salto bruto: centra y encuadra el artículo seleccionado usando también sus vecinos semánticos cuando existen
+- en 3D se mantiene una órbita deliberada y estable, pero con zoom recalculado de forma más útil para nubes compactas
 
-Esto corrige uno de los fallos más obvios del frontend anterior: parecía una misma pantalla deformada para todo.
+Resultado:
+- datasets acotados cerca de `-1..1` dejan de abrir tan lejos
+- la cámara se siente más intencional y menos genérica
 
-### 3) Stories como workspace por defecto y de verdad
-Se reestructuró el flujo cluster-first en:
-- `frontend/src/routes/ClusterBrowserPage.tsx`
-- `frontend/src/components/ClusterFilterPanel.tsx`
-- `frontend/src/components/ClusterListPanel.tsx`
-- `frontend/src/components/ClusterInspectorPanel.tsx`
-- `frontend/src/components/ClusterStatusBar.tsx`
-
-Mejoras principales:
-- filtros agrupados por intención
-- resumen de filtros activos
-- área central de resultados con mejor jerarquía
-- panel derecho de story detail más claro
-- cobertura por fuente más legible
-- selected article con mejor framing y salida directa al Explorer
-
-### 4) Explorer como workspace analítico dedicado
-Se rehízo el framing del explorer en:
-- `frontend/src/routes/ExplorerPage.tsx`
-- `frontend/src/components/FilterBar.tsx`
+### 2) Controles / leyenda / énfasis visual
+Archivos principales:
 - `frontend/src/components/MapPanel.tsx`
 - `frontend/src/components/InspectorPanel.tsx`
-- `frontend/src/components/StatusBar.tsx`
+- `frontend/src/styles.css`
 
-Mejoras principales:
-- ya no se presenta como un canvas huérfano
-- toolbar superior con grupos de control reales: view / color / focus
-- mejor framing del mapa y del propósito del workspace
-- mejor tratamiento de selección, leyenda y contexto
-- inspector derecho más útil incluso antes de seleccionar puntos
-- ajuste de cámara inicial algo más agresivo para datasets muy concentrados
+Cambios:
+- los controles superiores se reagruparon como **Projection / Color by / Frame**
+- se añadió copy más explícito sobre **cuándo usar 2D vs 3D**
+- se añadió guía inline persistente dentro del canvas
+- el panel derecho sin selección ahora arranca con una **Guide + Legend** mucho más útil
+- se mejoró el énfasis visual:
+  - seleccionado = prioridad máxima
+  - vecinos = prioridad secundaria clara
+  - resto de puntos = atenuados cuando hay selección activa
+  - outliers conservan identidad sin gritar demasiado
 
-### 5) Limpieza estructural
-Se eliminó el layout viejo compartido:
-- `frontend/src/components/ExplorerLayout.tsx`
+Resultado:
+- el Explorer explica mejor qué está mostrando y para qué sirve
+- la selección local ahora se lee bastante mejor dentro de nubes densas
 
-Eso ayuda a dejar claro que Stories y Explorer comparten lenguaje visual, pero no tienen por qué ser la misma página disfrazada.
+### 3) Context panel y responsive cleanup
+Archivos principales:
+- `frontend/src/components/InspectorPanel.tsx`
+- `frontend/src/routes/ExplorerPage.tsx`
+- `frontend/src/styles.css`
+
+Cambios:
+- el panel derecho pasó a tener tabs locales:
+  - sin selección: `Guide`, `Legend`
+  - con selección: `Article`, `Cluster`, `Legend`
+- se separó claramente:
+  - evidencia del artículo
+  - contexto del cluster
+  - referencia persistente de lectura
+- el tab de cluster usa metadata ya disponible para dar contexto sin meter backend nuevo
+- en responsive:
+  - la barra de controles colapsa mejor
+  - el Explorer pasa antes a layout más limpio en anchuras intermedias
+  - el panel de contexto baja de fila antes de que todo se apelotone
+
+Resultado:
+- la right rail ahora tiene jerarquía real
+- el Explorer se degrada bastante mejor en widths intermedios
 
 ## Verificación ejecutada
-Comando usado repetidamente durante la implementación y al final:
+Comando mínimo requerido ejecutado varias veces durante la implementación y al final:
 
 ```bash
 cd frontend && npm run build
@@ -70,26 +75,23 @@ cd frontend && npm run build
 Resultado final:
 - PASS
 
-Salida relevante:
-- build completada correctamente con Vite
-- warning no bloqueante de `@loaders.gl/worker-utils` / browser external `spawn`
-- warning no bloqueante por tamaño de chunk (~906 kB minificado)
+Notas del build:
+- sigue apareciendo el warning no bloqueante de `@loaders.gl/worker-utils` / browser external `spawn`
+- sigue apareciendo el warning no bloqueante de chunk grande (~914 kB minificado)
+- no hizo falta tocar backend ni estructuras API compartidas, así que no corrí `pytest`
 
 ## Pendientes / no resueltos
-- El fit-to-data inicial del Explorer mejoró, pero todavía merece una iteración específica si el usuario sigue notando framing raro con nubes muy compactas.
-- La parte responsive es usable, pero aún se puede refinar mejor en anchuras intermedias.
-- El warning de chunk grande sugiere una futura pasada de code-splitting.
-- No se añadieron tabs secundarios más sofisticados en detail panels; eso queda bien como siguiente iteración si se quiere profundizar producto/flujo.
+- el warning de chunk grande sigue vivo; eso encaja bien como **iteración opcional de performance** con lazy-loading o code-splitting del Explorer
+- el tab de cluster es útil, pero todavía es derivado de metadata existente; una iteración futura podría enriquecerlo con más narrativa o métricas específicas si de verdad aportan valor
+- la experiencia visual ya es bastante más analítica, pero aún podría afinarse con una pasada de microcopy y validación manual sobre datasets especialmente raros o dispersos
 
 ## Commits atómicos creados
-1. `5ad1b30` — `feat(ui): establish light analytical theme foundations`
-2. `66c0426` — `feat(ui): add product shell and primary navigation`
-3. `4baefd9` — `feat(ui): restructure cluster browser into story-first workspace`
-4. `93f4c5f` — `feat(ui): integrate semantic explorer as dedicated analytical workspace`
-5. `219db66` — `feat(ui): polish states consistency and responsive behavior`
+1. `52deeb6` — `feat(explorer): improve semantic camera fit and selection framing`
+2. `dc6a254` — `feat(explorer): clarify controls legend and point emphasis`
+3. latest HEAD on `iter/003` — `feat(explorer): reorganize side-panel context and responsive layout`
 
 ## Git summary
-- branch: `iter/002`
+- branch: `iter/003`
 - repo verified with:
 
 ```bash
@@ -99,20 +101,14 @@ git branch --show-current
 
 ### Recent relevant commits
 ```bash
-git log --oneline -n 5
-219db66 feat(ui): polish states consistency and responsive behavior
-93f4c5f feat(ui): integrate semantic explorer as dedicated analytical workspace
-4baefd9 feat(ui): restructure cluster browser into story-first workspace
-66c0426 feat(ui): add product shell and primary navigation
-5ad1b30 feat(ui): establish light analytical theme foundations
+git log --oneline -n 6
 ```
 
 ### Rollback / review hint
-Si hay que volver al estado previo a esta pasada de UI, el punto de rollback/revisión razonable es el commit anterior a `5ad1b30`.
+Para revisar por fases:
+- cámara / framing: `52deeb6`
+- controles / leyenda / énfasis: `dc6a254`
+- side-panel / responsive: usar el siguiente commit de esta iteración
 
-Si hay que revisar por fases, usar estos hitos:
-- base visual: `5ad1b30`
-- shell/nav: `66c0426`
-- Stories: `4baefd9`
-- Explorer: `93f4c5f`
-- polish final: `219db66`
+Rollback razonable si hubiera que deshacer iter/003 completo:
+- volver al commit inmediatamente anterior a `52deeb6`

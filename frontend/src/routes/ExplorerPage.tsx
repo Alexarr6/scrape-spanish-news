@@ -103,6 +103,9 @@ export function ExplorerPage({ navItems, shell: Shell }: Props) {
           detail={detailState.data}
           loading={detailState.loading}
           error={detailState.error}
+          clusterSummaries={pointsState.data?.meta.cluster_summaries ?? filtersState.data?.cluster_summaries ?? []}
+          viewMode={viewMode}
+          colorMode={colorMode}
           onClearSelection={clearSelectedArticle}
           onSelectArticle={setSelectedArticleId}
         />
