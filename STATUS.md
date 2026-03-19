@@ -1,34 +1,50 @@
-- State: TEMPORAL_WINDOW_PHASE_DONE
-- Current phase: bounded semantic DB windowing + analysis memory optimization
-- Last update: 2026-03-18 14:55 UTC
-- Pending approvals: none
+- State: DONE
+- Current phase: UI/UX overhaul implemented and verified
+- Last update: 2026-03-19 13:33 UTC
 
-## Completed in this iteration
-- Replaced the ambiguous follow-up with the bounded temporal-window phase from `PLAN.md`.
-- Added a reusable semantic window contract in `src/semantic/dbstore.py` via `resolve_semantic_window()` and `SemanticWindow`.
-- Wired `--days-back`, `--date-from`, and `--date-to` through:
-  - `scripts/semantic_sync.py`
-  - `scripts/semantic_project.py`
-  - `scripts/build_semantic_map.py`
-- Applied the window contract to:
-  - semantic sync candidate selection
-  - embedding artifact loading
-  - projection-set rebuilds
-  - projected-point loads used by the build/export path
-- Kept no-window behavior backward-compatible: full history still runs when no window flags are passed.
-- Replaced the worst analysis-time O(N^2) memory spike in `src/semantic/analyze.py`:
-  - clustering still runs on normalized embeddings
-  - local density and nearby-source signals now come from nearest-neighbor queries instead of a full pairwise distance matrix
-- Added regression coverage for temporal window normalization / SQL plumbing and the nearest-neighbor analysis path.
+## Completed implementation phases
+1. Light analytical theme foundations
+2. Product shell + primary navigation
+3. Story-first cluster browser restructure
+4. Explorer workspace reframing and control/layout overhaul
+5. Polish pass for state consistency and removal of obsolete shared layout shell
 
-## Verification run
-- `~/.local/bin/uv run pytest -q tests/test_semantic_analysis.py tests/test_semantic_dbstore.py tests/test_semantic_build_cli.py tests/test_api_semantic_explorer.py`
-  - Result: `33 passed`
+## What was implemented
+- Replaced the dark/glowy prototype baseline with a light / light-neutral analytical visual system in `frontend/src/styles.css`.
+- Added a real app shell in `frontend/src/components/AppShell.tsx` with persistent sidebar navigation and section-aware page headers.
+- Updated `frontend/src/App.tsx` so Stories and Explorer are explicit first-class workspaces.
+- Reworked Stories route and components:
+  - `frontend/src/routes/ClusterBrowserPage.tsx`
+  - `frontend/src/components/ClusterFilterPanel.tsx`
+  - `frontend/src/components/ClusterListPanel.tsx`
+  - `frontend/src/components/ClusterInspectorPanel.tsx`
+  - `frontend/src/components/ClusterStatusBar.tsx`
+- Reworked Explorer route and components:
+  - `frontend/src/routes/ExplorerPage.tsx`
+  - `frontend/src/components/FilterBar.tsx`
+  - `frontend/src/components/MapPanel.tsx`
+  - `frontend/src/components/InspectorPanel.tsx`
+  - `frontend/src/components/StatusBar.tsx`
+- Removed obsolete shared shell component:
+  - deleted `frontend/src/components/ExplorerLayout.tsx`
 
-## Atomic commits created
-- `047b42f` — `Add temporal window support to semantic sync and projection dbstore flow`
-- `e78f781` — `Reduce semantic analysis memory pressure and add regression coverage`
+## Verification executed
+```bash
+cd frontend && npm run build
+```
+Result:
+- PASS (final build successful)
+- Non-blocking warnings remain from Vite/loaders.gl browser external handling and large chunk size output.
 
-## Remaining caveats
-- No live Postgres smoke was executed in this session because no concrete `DATABASE_URL` for an honest Raspberry/remote run was provided here.
-- In bounded mode, `refresh_projection_set()` clears and rebuilds the named `projection_set` for the bounded slice so the set stays internally consistent instead of mixing old global rows with fresh windowed rows.
+## Atomic commits created for this implementation
+1. `5ad1b30` — `feat(ui): establish light analytical theme foundations`
+2. `66c0426` — `feat(ui): add product shell and primary navigation`
+3. `4baefd9` — `feat(ui): restructure cluster browser into story-first workspace`
+4. `93f4c5f` — `feat(ui): integrate semantic explorer as dedicated analytical workspace`
+5. `219db66` — `feat(ui): polish states consistency and responsive behavior`
+
+## Remaining follow-up opportunities
+- Improve explorer initial camera / fit-to-data behavior for tightly bounded point clouds.
+- Tighten responsive behavior further at intermediate widths.
+- Consider code-splitting / chunking follow-up to reduce frontend bundle warning.
+- Add richer subviews in detail panels if the next iteration wants compare tabs or deeper analytical presets.

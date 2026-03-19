@@ -1,113 +1,118 @@
 # RESULTS.md
 
 ## Resumen de entrega
-Ya está hecho el arreglo que importaba de verdad: el pipeline semántico en DB ahora acepta ventanas temporales explícitas y el análisis dejó de construir la barbaridad de matriz NxN completa solo para densidad local y fuentes cercanas. En una Raspberry eso no es un detalle; es la diferencia entre funcionar y ponerse a arder con dignidad.
+Se implementó una pasada fuerte de rediseño frontend para sacar la app del aspecto de prototipo oscuro y convertirla en un producto analítico bastante más serio y legible. No fue un simple repaint: cambió la estructura de navegación, la jerarquía de pantallas y la separación entre filtros, contenido principal y contexto.
 
 ## Cambios realizados
 
-### 1) Contrato temporal reutilizable
-Implementé el contrato común pedido en `src/semantic/dbstore.py`:
-- `SemanticWindow`
-- `resolve_semantic_window(days_back=..., date_from=..., date_to=...)`
-- validación centralizada para combinaciones inválidas
-- resolución de `--days-back` como ventana inclusiva UTC terminando hoy
+### 1) Base visual nueva: light analytical UI
+Se reemplazó la estética dark/glow por una base light / light-neutral en `frontend/src/styles.css`:
+- tokens de color más sobrios
+- superficies claras y bordes suaves
+- jerarquía tipográfica más clara
+- botones, chips, cards y paneles más consistentes
+- estados selected/error/empty menos cutres y menos dependientes de brillo artificioso
 
-Eso evita que cada script rehaga la misma aritmética de fechas de forma cutre.
+### 2) App shell real + navegación primaria persistente
+Se añadió `frontend/src/components/AppShell.tsx` y se actualizó `frontend/src/App.tsx` para introducir:
+- sidebar persistente
+- navegación primaria clara entre `Stories` y `Explorer`
+- page header con contexto de sección
+- status strip separado del contenido principal
 
-### 2) Plumbing del window por la ruta DB existente
-Apliqué la ventana temporal a la ruta real, sin inventar workarounds paralelos:
+Esto corrige uno de los fallos más obvios del frontend anterior: parecía una misma pantalla deformada para todo.
 
-- `select_embedding_candidates(...)`
-  - filtra por `articles.published_at` cuando se pasa ventana
-- `load_embedding_artifacts(...)`
-  - filtra embeddings unidos con `articles`
-- `refresh_projection_set(...)`
-  - acepta `window`
-  - en modo acotado borra y reconstruye el `projection_set` solicitado para esa ventana, manteniendo consistencia interna del set
-- `load_projected_points(...)`
-  - también acepta `window`, para que el build/export no derive en drift absurdo entre embeddings y puntos
+### 3) Stories como workspace por defecto y de verdad
+Se reestructuró el flujo cluster-first en:
+- `frontend/src/routes/ClusterBrowserPage.tsx`
+- `frontend/src/components/ClusterFilterPanel.tsx`
+- `frontend/src/components/ClusterListPanel.tsx`
+- `frontend/src/components/ClusterInspectorPanel.tsx`
+- `frontend/src/components/ClusterStatusBar.tsx`
 
-### 3) Flags CLI añadidos
-Wired end-to-end en:
-- `scripts/semantic_sync.py`
-- `scripts/semantic_project.py`
-- `scripts/build_semantic_map.py`
+Mejoras principales:
+- filtros agrupados por intención
+- resumen de filtros activos
+- área central de resultados con mejor jerarquía
+- panel derecho de story detail más claro
+- cobertura por fuente más legible
+- selected article con mejor framing y salida directa al Explorer
 
-Flags soportados:
-- `--days-back N`
-- `--date-from YYYY-MM-DD`
-- `--date-to YYYY-MM-DD`
+### 4) Explorer como workspace analítico dedicado
+Se rehízo el framing del explorer en:
+- `frontend/src/routes/ExplorerPage.tsx`
+- `frontend/src/components/FilterBar.tsx`
+- `frontend/src/components/MapPanel.tsx`
+- `frontend/src/components/InspectorPanel.tsx`
+- `frontend/src/components/StatusBar.tsx`
 
-Comportamiento:
-- sin flags => historial completo, igual que antes
-- `--days-back` no se puede mezclar con fechas explícitas
-- `date_from` / `date_to` pueden usarse por separado o juntos
+Mejoras principales:
+- ya no se presenta como un canvas huérfano
+- toolbar superior con grupos de control reales: view / color / focus
+- mejor framing del mapa y del propósito del workspace
+- mejor tratamiento de selección, leyenda y contexto
+- inspector derecho más útil incluso antes de seleccionar puntos
+- ajuste de cámara inicial algo más agresivo para datasets muy concentrados
 
-### 4) Optimización de memoria pragmática
-En `src/semantic/analyze.py` quité el cuello de botella idiota:
-- antes: normalización + matriz completa de distancias NxN
-- ahora: normalización + `NearestNeighbors` para obtener vecinos cercanos por fila
+### 5) Limpieza estructural
+Se eliminó el layout viejo compartido:
+- `frontend/src/components/ExplorerLayout.tsx`
 
-Se mantiene:
-- clustering HDBSCAN sobre embeddings normalizados
-
-Se calcula ahora vía vecinos cercanos:
-- `local_density_distance`
-- `nearby_sources`
-- `source_neighbor_diversity`
-
-Resultado: semántica prácticamente equivalente para ese contexto, pero sin el pico de memoria más tóxico.
-
-## Tests / cobertura añadida
-Añadí y ajusté cobertura para:
-- normalización y validación de ventanas temporales
-- aplicación de filtros temporales en candidate selection y projected-point SQL
-- aceptación de flags temporales en CLI build
-- regresión de la ruta nearest-neighbor para análisis
+Eso ayuda a dejar claro que Stories y Explorer comparten lenguaje visual, pero no tienen por qué ser la misma página disfrazada.
 
 ## Verificación ejecutada
+Comando usado repetidamente durante la implementación y al final:
+
 ```bash
-~/.local/bin/uv run pytest -q tests/test_semantic_analysis.py tests/test_semantic_dbstore.py tests/test_semantic_build_cli.py tests/test_api_semantic_explorer.py
+cd frontend && npm run build
 ```
-Resultado:
-- `33 passed`
+
+Resultado final:
+- PASS
+
+Salida relevante:
+- build completada correctamente con Vite
+- warning no bloqueante de `@loaders.gl/worker-utils` / browser external `spawn`
+- warning no bloqueante por tamaño de chunk (~906 kB minificado)
+
+## Pendientes / no resueltos
+- El fit-to-data inicial del Explorer mejoró, pero todavía merece una iteración específica si el usuario sigue notando framing raro con nubes muy compactas.
+- La parte responsive es usable, pero aún se puede refinar mejor en anchuras intermedias.
+- El warning de chunk grande sugiere una futura pasada de code-splitting.
+- No se añadieron tabs secundarios más sofisticados en detail panels; eso queda bien como siguiente iteración si se quiere profundizar producto/flujo.
 
 ## Commits atómicos creados
-1. `047b42f` — `Add temporal window support to semantic sync and projection dbstore flow`
-2. `e78f781` — `Reduce semantic analysis memory pressure and add regression coverage`
+1. `5ad1b30` — `feat(ui): establish light analytical theme foundations`
+2. `66c0426` — `feat(ui): add product shell and primary navigation`
+3. `4baefd9` — `feat(ui): restructure cluster browser into story-first workspace`
+4. `93f4c5f` — `feat(ui): integrate semantic explorer as dedicated analytical workspace`
+5. `219db66` — `feat(ui): polish states consistency and responsive behavior`
 
-## Comandos exactos para Raspberry
-Flujo con ventana reciente de 2 días:
-
-```bash
-cd /home/node/.openclaw/workspace/repos/spain-news-bias-scraper
-export DATABASE_URL='postgresql+psycopg://user:pass@host:5432/dbname'
-export OPENAI_API_KEY='sk-...'
-
-make semantic-sync LIMIT=100 SEMANTIC_ARGS='--embedding-model text-embedding-3-small --days-back 2'
-make semantic-project PROJECTION_SET=pca_3d_latest SEMANTIC_ARGS='--days-back 2'
-make semantic-build LIMIT=100 PROJECTION_SET=pca_3d_latest SEMANTIC_ARGS='--days-back 2'
-```
-
-Flujo equivalente con fechas explícitas:
+## Git summary
+- branch: `iter/002`
+- repo verified with:
 
 ```bash
-cd /home/node/.openclaw/workspace/repos/spain-news-bias-scraper
-export DATABASE_URL='postgresql+psycopg://user:pass@host:5432/dbname'
-export OPENAI_API_KEY='sk-...'
-
-~/.local/bin/uv run python scripts/semantic_sync.py --db-url "$DATABASE_URL" --limit 100 --embedding-model text-embedding-3-small --date-from 2026-03-16 --date-to 2026-03-18
-~/.local/bin/uv run python scripts/semantic_project.py --db-url "$DATABASE_URL" --projection-set pca_3d_latest --date-from 2026-03-16 --date-to 2026-03-18
-~/.local/bin/uv run python scripts/build_semantic_map.py --db-url "$DATABASE_URL" --projection-set pca_3d_latest --limit 100 --date-from 2026-03-16 --date-to 2026-03-18
+git rev-parse --is-inside-work-tree
+git branch --show-current
 ```
 
-Verificación local rápida:
-
+### Recent relevant commits
 ```bash
-cd /home/node/.openclaw/workspace/repos/spain-news-bias-scraper
-~/.local/bin/uv run pytest -q tests/test_semantic_analysis.py tests/test_semantic_dbstore.py tests/test_semantic_build_cli.py tests/test_api_semantic_explorer.py
+git log --oneline -n 5
+219db66 feat(ui): polish states consistency and responsive behavior
+93f4c5f feat(ui): integrate semantic explorer as dedicated analytical workspace
+4baefd9 feat(ui): restructure cluster browser into story-first workspace
+66c0426 feat(ui): add product shell and primary navigation
+5ad1b30 feat(ui): establish light analytical theme foundations
 ```
 
-## Caveats
-- No hice smoke end-to-end contra una base Postgres real en esta sesión porque faltaba un `DATABASE_URL` operativo concreto.
-- Si reutilizas el mismo `projection_set` en modo bounded y luego quieres volver a historial completo, simplemente vuelve a correr `semantic-project` sin ventana para reconstruir el set completo.
+### Rollback / review hint
+Si hay que volver al estado previo a esta pasada de UI, el punto de rollback/revisión razonable es el commit anterior a `5ad1b30`.
+
+Si hay que revisar por fases, usar estos hitos:
+- base visual: `5ad1b30`
+- shell/nav: `66c0426`
+- Stories: `4baefd9`
+- Explorer: `93f4c5f`
+- polish final: `219db66`
