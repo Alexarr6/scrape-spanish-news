@@ -1,4 +1,4 @@
-import { ExplorerLayout } from '../components/ExplorerLayout'
+import type { ComponentType, ReactNode } from 'react'
 import { ClusterFilterPanel } from '../components/ClusterFilterPanel'
 import { ClusterInspectorPanel } from '../components/ClusterInspectorPanel'
 import { ClusterListPanel } from '../components/ClusterListPanel'
@@ -6,7 +6,29 @@ import { ClusterStatusBar } from '../components/ClusterStatusBar'
 import { useClusterBrowserData } from '../hooks/useClusterBrowserData'
 import { useClusterUrlState } from '../hooks/useClusterUrlState'
 
-export function ClusterBrowserPage() {
+type ShellProps = {
+  section: string
+  title: string
+  description: string
+  summary?: ReactNode
+  actions?: ReactNode
+  navItems: Array<{ key: string; label: string; description: string; href: string; active?: boolean }>
+  status?: ReactNode
+  filters?: ReactNode
+  filtersTitle?: string
+  main: ReactNode
+  detail?: ReactNode
+  detailTitle?: string
+  contentClassName?: string
+  mainClassName?: string
+}
+
+type Props = {
+  navItems: ShellProps['navItems']
+  shell: ComponentType<ShellProps>
+}
+
+export function ClusterBrowserPage({ navItems, shell: Shell }: Props) {
   const {
     query,
     activeFilterCount,
@@ -27,7 +49,19 @@ export function ClusterBrowserPage() {
   )
 
   return (
-    <ExplorerLayout
+    <Shell
+      section="Stories"
+      title="Cluster browser"
+      description="Start with the shared story, not with a random article. Compare coverage, source mix, and the cluster context before diving into individual pieces."
+      summary={
+        <>
+          <span className="summary-pill emphasis">Default workspace</span>
+          <span className="summary-pill">{listState.data?.meta.total ?? 0} clusters in scope</span>
+          <span className="summary-pill">{activeFilterCount} active filters</span>
+          <span className="summary-pill subtle">{selectedCluster ? `${selectedCluster.source_count} sources in selected story` : 'Select a story to inspect coverage'}</span>
+        </>
+      }
+      navItems={navItems}
       status={
         <ClusterStatusBar
           data={listState.data}
@@ -37,6 +71,7 @@ export function ClusterBrowserPage() {
           onResetFilters={resetQuery}
         />
       }
+      filtersTitle="Story filters"
       filters={
         <ClusterFilterPanel
           filters={filtersState.data}
@@ -46,7 +81,8 @@ export function ClusterBrowserPage() {
           disabled={listState.loading && !listState.data}
         />
       }
-      map={
+      mainClassName="workspace-panel workspace-panel-main"
+      main={
         <ClusterListPanel
           data={listState.data}
           loading={listState.loading}
@@ -57,7 +93,8 @@ export function ClusterBrowserPage() {
           onPreviousPage={() => updateQuery({ offset: Math.max(0, query.offset - query.limit) })}
         />
       }
-      inspector={
+      detailTitle="Story detail"
+      detail={
         <ClusterInspectorPanel
           detail={detailState.data}
           article={articleState.data}
