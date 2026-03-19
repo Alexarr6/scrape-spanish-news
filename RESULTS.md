@@ -81,6 +81,8 @@ Notas del build:
 - no hizo falta tocar backend ni estructuras API compartidas, así que no corrí `pytest`
 
 ## Pendientes / no resueltos
+- hotfix posterior: el rediseño dejó el viewport del Explorer sin una altura explícita/flexible fiable (`.map-canvas` dependía de `min-height: 100%`), así que DeckGL podía quedarse con un canvas colapsado o invisiblemente pequeño pese a que el shell sí se veía
+- fix aplicado en `frontend/src/styles.css`: `map-frame` ahora actúa como contenedor flex vertical y `map-canvas` recibe un viewport explícito (`flex: 1` + `min-height: 42rem`, con el hijo directo ocupando `height: 100%`)
 - el warning de chunk grande sigue vivo; eso encaja bien como **iteración opcional de performance** con lazy-loading o code-splitting del Explorer
 - el tab de cluster es útil, pero todavía es derivado de metadata existente; una iteración futura podría enriquecerlo con más narrativa o métricas específicas si de verdad aportan valor
 - la experiencia visual ya es bastante más analítica, pero aún podría afinarse con una pasada de microcopy y validación manual sobre datasets especialmente raros o dispersos

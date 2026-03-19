@@ -1,6 +1,6 @@
 - State: DONE
-- Current phase: iter/003 implementation complete — camera fit, controls/legend emphasis, and side-panel context/responsive cleanup delivered
-- Last update: 2026-03-19 21:00 UTC
+- Current phase: iter/003 hotfix complete — restored explicit Explorer map viewport sizing after the UI pass left the DeckGL surface without a reliable rendered height
+- Last update: 2026-03-19 22:15 UTC
 
 ## Iteration focus
 Upgrade the Explorer from a merely functional 2D/3D scatterplot workspace into a more deliberate semantic analysis tool, with emphasis on:
