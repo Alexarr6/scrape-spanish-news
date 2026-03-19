@@ -13,45 +13,34 @@ type Props = {
   onSelectArticle: (articleId: number) => void
 }
 
-export function ClusterInspectorPanel({
-  detail,
-  article,
-  loading,
-  articleLoading,
-  error,
-  articleError,
-  selectedArticleId,
-  onSelectArticle,
-}: Props) {
+export function ClusterInspectorPanel({ detail, article, loading, articleLoading, error, articleError, selectedArticleId, onSelectArticle }: Props) {
   if (loading && !detail) {
-    return <div className="panel-section empty-state-card"><h2>Cluster detail</h2><p className="muted">Loading cluster coverage and member articles…</p></div>
+    return <div className="loading-card"><h2>Story detail</h2><p className="muted">Loading story coverage and member articles…</p></div>
   }
 
   if (error) {
-    return <div className="panel-section empty-state-card error-state"><h2>Cluster detail unavailable</h2><p>{error}</p></div>
+    return <div className="state-card error-state"><h2>Story detail unavailable</h2><p>{error}</p></div>
   }
 
   if (!detail) {
-    return <div className="panel-section empty-state-card"><h2>Cluster detail</h2><p className="muted">Select a story cluster to inspect its member articles and compare coverage by source.</p></div>
+    return <div className="empty-state-card"><h2>Story detail</h2><p className="muted">Select a cluster to inspect the source mix, browse its member articles, and compare coverage properly.</p></div>
   }
 
   const groupedMembers = groupMembersBySource(detail.members)
 
   return (
     <div className="panel-section inspector-content">
-      <div className="article-card detail-hero-card">
+      <div className="selected-story-banner">
         <div className="eyebrow">{detail.cluster.cluster_type.replace(/_/g, ' ')} · {detail.cluster.status}</div>
         <h2>{detail.cluster.summary_headline}</h2>
         <p>{detail.cluster.summary_text}</p>
         <div className="status-chip-row compact-row">
-          <span className="status-chip">{detail.cluster.article_count} articles</span>
+          <span className="status-chip emphasis">{detail.cluster.article_count} articles</span>
           <span className="status-chip">{detail.cluster.source_count} sources</span>
           {detail.cluster.primary_tag ? <span className="status-chip subtle">{detail.cluster.primary_tag.display_name}</span> : null}
         </div>
-        <div className="action-row">
-          <a className="ghost-button" href={buildSemanticExplorerHref({ detail, articleId: selectedArticleId })}>
-            Open this story in semantic explorer
-          </a>
+        <div className="inline-actions">
+          <a className="ghost-button" href={buildSemanticExplorerHref({ detail, articleId: selectedArticleId })}>Open story in Explorer</a>
         </div>
         {detail.cluster.top_entities.length > 0 ? (
           <div className="status-chip-row compact-row">
@@ -63,8 +52,10 @@ export function ClusterInspectorPanel({
       </div>
 
       <div className="panel-header compact">
-        <h3>Coverage by source</h3>
-        <span className="muted">Grouped so comparison doesn’t suck</span>
+        <div>
+          <h3>Coverage by source</h3>
+          <p className="muted">Grouped by outlet so the comparison is actually legible.</p>
+        </div>
       </div>
       <div className="source-groups">
         {groupedMembers.map(([source, members]) => (
@@ -75,12 +66,7 @@ export function ClusterInspectorPanel({
             </div>
             <div className="member-list">
               {members.map((member) => (
-                <button
-                  key={member.article_id}
-                  type="button"
-                  className={selectedArticleId === member.article_id ? 'member-card active' : 'member-card'}
-                  onClick={() => onSelectArticle(member.article_id)}
-                >
+                <button key={member.article_id} type="button" className={selectedArticleId === member.article_id ? 'member-card active' : 'member-card'} onClick={() => onSelectArticle(member.article_id)}>
                   <div className="panel-header compact">
                     <strong>{member.title}</strong>
                     <span className="status-chip">{formatSimilarity(member.membership_score)}</span>
@@ -99,11 +85,13 @@ export function ClusterInspectorPanel({
       </div>
 
       <div className="panel-header compact">
-        <h3>Article inspection</h3>
-        <span className="muted">Open a member to see article detail plus semantic neighbors.</span>
+        <div>
+          <h3>Selected article</h3>
+          <p className="muted">Inspect one member article and its nearby semantic context.</p>
+        </div>
       </div>
-      {articleLoading && !article ? <div className="empty-state-inline">Loading article detail…</div> : null}
-      {articleError ? <div className="empty-state-inline error-state">{articleError}</div> : null}
+      {articleLoading && !article ? <div className="loading-card"><strong>Loading article detail…</strong></div> : null}
+      {articleError ? <div className="state-card error-state"><strong>Article detail failed</strong><p>{articleError}</p></div> : null}
       {article ? (
         <div className="article-card detail-article-card">
           <div className="eyebrow">{article.article.source} · {article.article.section || 'no section'}</div>
@@ -112,14 +100,13 @@ export function ClusterInspectorPanel({
           <p>{clampText(article.article.summary, article.article.article_text_excerpt || 'No article excerpt available.')}</p>
           <div className="action-row">
             <a className="ghost-button" href={article.article.url} target="_blank" rel="noreferrer">Open article</a>
-            <a className="ghost-button" href={buildSemanticExplorerHref({ detail, article, articleId: article.article.article_id })}>
-              Open article in semantic explorer
-            </a>
+            <a className="ghost-button" href={buildSemanticExplorerHref({ detail, article, articleId: article.article.article_id })}>Open article in Explorer</a>
           </div>
-          <div className="status-chip-row compact-row">
-            <span className="status-chip">Cluster {article.semantic_summary.cluster_id ?? '—'}</span>
-            <span className="status-chip">{article.semantic_summary.neighbor_count} neighbors</span>
-            <span className="status-chip">Outlier: {article.semantic_summary.is_outlier ? 'yes' : 'no'}</span>
+          <div className="metric-grid">
+            <Info label="Cluster" value={article.semantic_summary.cluster_id == null ? '—' : String(article.semantic_summary.cluster_id)} />
+            <Info label="Neighbors" value={String(article.semantic_summary.neighbor_count)} />
+            <Info label="Outlier" value={article.semantic_summary.is_outlier ? 'Yes' : 'No'} />
+            <Info label="Nearby sources" value={String(article.semantic_summary.source_neighbor_diversity ?? 0)} />
           </div>
           {article.neighbors.length > 0 ? (
             <ul className="neighbor-list">
@@ -140,11 +127,20 @@ export function ClusterInspectorPanel({
           )}
         </div>
       ) : (
-        <div className="empty-state-inline empty-state-card">
+        <div className="empty-state-card">
           <strong>No article selected</strong>
           <p className="muted">Pick a member article to inspect the piece itself and the nearby semantic context.</p>
         </div>
       )}
+    </div>
+  )
+}
+
+function Info({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="metric-card">
+      <span className="muted">{label}</span>
+      <strong>{value}</strong>
     </div>
   )
 }

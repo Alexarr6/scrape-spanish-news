@@ -11,83 +11,75 @@ type Props = {
   onPreviousPage: () => void
 }
 
-export function ClusterListPanel({
-  data,
-  loading,
-  error,
-  selectedClusterId,
-  onSelectCluster,
-  onNextPage,
-  onPreviousPage,
-}: Props) {
+export function ClusterListPanel({ data, loading, error, selectedClusterId, onSelectCluster, onNextPage, onPreviousPage }: Props) {
   const total = data?.meta.total ?? 0
   const start = total === 0 || !data ? 0 : data.meta.offset + 1
   const end = total === 0 || !data ? 0 : data.meta.offset + data.items.length
 
   return (
     <div className="cluster-list-shell">
-      <div className="cluster-hero">
-        <div>
-          <div className="eyebrow">Story cluster browser</div>
-          <h2>Track the shared story before you inspect the takes.</h2>
-          <p className="muted">Cluster-first flow keeps the product honest: pick the story, compare the source coverage, then dive into individual articles.</p>
-        </div>
-        <div className="status-chip-row compact-row">
-          <span className="status-chip">{start}-{end} shown</span>
-          <span className="status-chip">{total} total clusters</span>
+      <div className="story-hero">
+        <div className="panel-header compact">
+          <div>
+            <div className="eyebrow">Stories / Clusters</div>
+            <h2>Track the event before you argue about the framing.</h2>
+            <p className="muted">A proper story workspace: filters on the left, ranked cluster stream in the middle, inspection on the right.</p>
+          </div>
+          <div className="story-stats">
+            <span className="summary-pill emphasis">{start}-{end} shown</span>
+            <span className="summary-pill">{total} total clusters</span>
+          </div>
         </div>
       </div>
 
-      <div className="cluster-list-header panel-header compact">
-        <div>
-          <h3>Story clusters</h3>
-          <p className="muted">Pick a cluster, then compare the source members on the right.</p>
-        </div>
-        <div className="action-row">
-          <button className="ghost-button" type="button" onClick={onPreviousPage} disabled={!data || data.meta.offset === 0}>
-            Previous page
-          </button>
-          <button
-            className="ghost-button"
-            type="button"
-            onClick={onNextPage}
-            disabled={!data || data.meta.offset + data.meta.limit >= data.meta.total}
-          >
-            Next page
-          </button>
+      <div className="cluster-results-header">
+        <div className="panel-header compact">
+          <div>
+            <h3>Cluster results</h3>
+            <p className="muted">Select a story cluster to inspect member coverage and article detail.</p>
+          </div>
+          <div className="action-row">
+            <button className="ghost-button" type="button" onClick={onPreviousPage} disabled={!data || data.meta.offset === 0}>
+              Previous page
+            </button>
+            <button className="ghost-button" type="button" onClick={onNextPage} disabled={!data || data.meta.offset + data.meta.limit >= data.meta.total}>
+              Next page
+            </button>
+          </div>
         </div>
       </div>
+
       {loading && !data ? (
-        <div className="empty-state-inline empty-state-card">
+        <div className="loading-card">
           <strong>Loading story clusters…</strong>
-          <p className="muted">Pulling the latest grouped coverage from the API.</p>
+          <p className="muted">Pulling grouped coverage and story summaries from the API.</p>
         </div>
       ) : null}
       {error ? (
-        <div className="empty-state-inline empty-state-card error-state">
+        <div className="state-card error-state">
           <strong>Cluster list failed to load</strong>
           <p>{error}</p>
+          <p className="muted">Try again or widen the current filters if the dataset window is too narrow.</p>
         </div>
       ) : null}
       {!loading && !error && data?.items.length === 0 ? (
-        <div className="empty-state-inline empty-state-card">
-          <strong>No clusters match the current filters</strong>
-          <p className="muted">Try clearing one of the filters or widening the date window.</p>
+        <div className="empty-state-card">
+          <strong>No story clusters match the current filters</strong>
+          <p className="muted">Clear one of the filters or widen the date window. Right now you’ve filtered reality into a void.</p>
         </div>
       ) : null}
+
       <div className="cluster-list">
         {(data?.items ?? []).map((cluster) => (
-          <button
-            key={cluster.id}
-            type="button"
-            className={selectedClusterId === cluster.id ? 'cluster-card active' : 'cluster-card'}
-            onClick={() => onSelectCluster(cluster.id)}
-          >
-            <div className="panel-header compact">
+          <button key={cluster.id} type="button" className={selectedClusterId === cluster.id ? 'cluster-card active' : 'cluster-card'} onClick={() => onSelectCluster(cluster.id)}>
+            <div className="result-meta">
               <span className="eyebrow">{cluster.cluster_type.replace(/_/g, ' ')}</span>
-              <span className="status-chip">{cluster.article_count} articles · {cluster.source_count} sources</span>
+              <div className="status-chip-row compact-row">
+                <span className="status-chip emphasis">{cluster.article_count} articles</span>
+                <span className="status-chip">{cluster.source_count} sources</span>
+              </div>
             </div>
-            <h3>{cluster.summary_headline}</h3>
+            <div className="cluster-card-title">{cluster.summary_headline}</div>
             <p>{cluster.summary_text}</p>
             <div className="status-chip-row compact-row">
               {cluster.sources.map((source) => (
@@ -100,7 +92,7 @@ export function ClusterListPanel({
                 <span key={entity.slug} className="status-chip subtle">{entity.name}</span>
               ))}
             </div>
-            <div className="muted small-row">{formatClusterWindow(cluster)}</div>
+            <div className="small-row muted">{formatClusterWindow(cluster)}</div>
           </button>
         ))}
       </div>
