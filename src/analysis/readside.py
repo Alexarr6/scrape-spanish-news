@@ -231,7 +231,7 @@ def _matching_cluster_ids_stmt(filters: ClusterListFilters) -> Select:
         select(StoryClusterORM.id)
         .join(ClusterMemberORM, ClusterMemberORM.cluster_id == StoryClusterORM.id)
         .join(ArticleORM, ArticleORM.id == ClusterMemberORM.article_id)
-        .distinct()
+        .group_by(StoryClusterORM.id, StoryClusterORM.last_article_published_at)
     )
     if filters.source:
         stmt = stmt.where(ArticleORM.source == filters.source)

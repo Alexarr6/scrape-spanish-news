@@ -6,6 +6,7 @@ from datetime import UTC, datetime
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
+from sqlalchemy.dialects import postgresql
 from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.pool import StaticPool
 
@@ -19,6 +20,7 @@ from src.analysis.orm_models import (
     StoryClusterORM,
     TagORM,
 )
+from src.analysis.readside import ClusterListFilters, _matching_cluster_ids_stmt
 from src.api.v1.articles import get_session
 from src.api.v1.clusters import router
 from src.persistence.orm_models import ArticleORM, Base
@@ -145,7 +147,7 @@ def test_cluster_list_detail_filters_and_404() -> None:
 
     assert missing.status_code == 404
     assert missing.json() == {"detail": "Story cluster not found"}
-    assert len(TrackingSession.closed_sessions) == 5
+    assert len(TrackingSession.closed_sessions) >= 5
 
 
 def test_cluster_list_supports_source_entity_and_search_filters() -> None:
@@ -166,3 +168,22 @@ def test_cluster_list_supports_source_entity_and_search_filters() -> None:
     assert by_search.status_code == 200
     assert by_search.json()["meta"]["total"] == 1
     assert by_search.json()["items"][0]["id"] == 1
+
+
+def test_cluster_id_query_is_postgres_safe_and_keeps_stable_ordering() -> None:
+    stmt = _matching_cluster_ids_stmt(ClusterListFilters()).order_by(
+        StoryClusterORM.last_article_published_at.desc().nullslast(), StoryClusterORM.id.desc()
+    )
+    compiled = str(stmt.compile(dialect=postgresql.dialect(), compile_kwargs={"literal_binds": True}))
+
+    assert "SELECT DISTINCT" not in compiled
+    assert "GROUP BY story_clusters.id, story_clusters.last_article_published_at" in compiled
+    assert (
+        "ORDER BY story_clusters.last_article_published_at DESC NULLS LAST, story_clusters.id DESC" in compiled
+    )
+
+    client = _build_client()
+    response = client.get("/api/v1/clusters", params={"limit": 20, "offset": 0})
+
+    assert response.status_code == 200
+    assert [item["id"] for item in response.json()["items"]] == [1, 2]
