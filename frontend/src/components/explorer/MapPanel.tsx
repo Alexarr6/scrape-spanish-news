@@ -15,39 +15,44 @@
  */
 
 import { OrbitView, OrthographicView } from '@deck.gl/core'
-import { ScatterplotLayer } from '@deck.gl/layers'
+import { LineLayer, PointCloudLayer, ScatterplotLayer } from '@deck.gl/layers'
 import DeckGL from '@deck.gl/react'
 import { forwardRef, useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react'
 import { formatDate } from '../../lib/format'
 import {
+  AXIS_COLOR_2D,
+  AXIS_GRID_COLOR_3D,
+  AXIS_X_COLOR_3D,
+  AXIS_Y_COLOR_3D,
+  AXIS_Z_COLOR_3D,
   CLUSTER_NULL_COLOR,
   CLUSTER_OUTLIER_COLOR,
   CLUSTER_PALETTE,
+  PC_SIZE_HOVERED,
+  PC_SIZE_NEIGHBOR,
+  PC_SIZE_OUTLIER,
+  PC_SIZE_REGULAR,
+  PC_SIZE_SELECTED,
   POINT_DEFAULT_STROKE,
   POINT_DEFAULT_STROKE_WIDTH,
   POINT_HOVERED_FILL,
   POINT_HOVERED_RADIUS_2D,
-  POINT_HOVERED_RADIUS_3D,
   POINT_HOVERED_STROKE,
   POINT_HOVERED_STROKE_WIDTH,
   POINT_NEIGHBOR_FILL,
   POINT_NEIGHBOR_RADIUS_2D,
-  POINT_NEIGHBOR_RADIUS_3D,
   POINT_NEIGHBOR_STROKE,
   POINT_NEIGHBOR_STROKE_WIDTH,
   POINT_OUTLIER_ALPHA_NO_SELECTION,
   POINT_OUTLIER_ALPHA_UNDER_SELECTION,
   POINT_OUTLIER_RADIUS_2D,
-  POINT_OUTLIER_RADIUS_3D,
   POINT_RECEDING_STROKE,
   POINT_RECEDING_STROKE_WIDTH,
   POINT_REGULAR_ALPHA_NO_SELECTION,
   POINT_REGULAR_ALPHA_UNDER_SELECTION,
   POINT_REGULAR_RADIUS_2D,
-  POINT_REGULAR_RADIUS_3D,
   POINT_SELECTED_FILL,
   POINT_SELECTED_RADIUS_2D,
-  POINT_SELECTED_RADIUS_3D,
   POINT_SELECTED_STROKE,
   POINT_SELECTED_STROKE_WIDTH,
   SOURCE_COLORS,
@@ -116,22 +121,48 @@ function boundsFromPoints(items: ExplorerPoint[]): PointBounds | null {
 
 // ─── ViewState builders ──────────────────────────────────────────────────────
 
-function build2dViewState(bounds: PointBounds | null): ViewState2D {
-  if (!bounds) return { target: [0, 0, 0], zoom: 1.8 }
+// Padding factors: percentage of canvas the data span should occupy (inverted).
+// 1.25 → data occupies 80% of canvas (10% margin per side) in 2D.
+// 1.4  → slightly more padding in 3D for depth comfort.
+const PADDING_2D = 1.25
+const PADDING_3D = 1.4
+
+/**
+ * Read the canvas element's tighter dimension (width vs height) at call time.
+ * Falls back to 900 (sensible for a ~900px canvas default) when DOM not yet ready.
+ */
+function getCanvasPx(canvasRef: React.RefObject<HTMLDivElement>): number {
+  const el = canvasRef.current
+  if (!el || el.clientWidth === 0 || el.clientHeight === 0) return 900
+  return Math.min(el.clientWidth, el.clientHeight)
+}
+
+/**
+ * Pixel-aware zoom formula (iter/006 fix).
+ *
+ * DeckGL OrthographicView semantics: at zoom Z, one world unit renders as 2^Z pixels.
+ * To fit `paddedSpan` world units into `canvasPx` pixels:
+ *   zoom = log2(canvasPx / paddedSpan)
+ *
+ * For real projection data in [-1, 1]:
+ *   dominantSpan ≈ 2.0, paddedSpan ≈ 2.5, canvasPx ≈ 900 → zoom ≈ 8.5 ✓
+ */
+function build2dViewState(bounds: PointBounds | null, canvasPx: number): ViewState2D {
+  if (!bounds) return { target: [0, 0, 0], zoom: 8.5 }  // sensible default for [-1,1] scale
   const spanX = bounds.maxX - bounds.minX
   const spanY = bounds.maxY - bounds.minY
   const dominantSpan = Math.max(spanX, spanY)
-  const paddedSpan = Math.max(dominantSpan * 1.45, 1.1)
+  const paddedSpan = Math.max(dominantSpan * PADDING_2D, 0.01)  // guard against zero-span
   return {
     target: [(bounds.minX + bounds.maxX) / 2, (bounds.minY + bounds.maxY) / 2, 0],
-    zoom: Math.max(1.4, Math.min(7.2, Math.log2(3.2 / paddedSpan) + 1.4)),
+    zoom: Math.max(1.0, Math.min(14.0, Math.log2(canvasPx / paddedSpan))),
   }
 }
 
-function build3dViewState(bounds: PointBounds | null, current?: ViewState3D): ViewState3D {
+function build3dViewState(bounds: PointBounds | null, canvasPx: number, current?: ViewState3D): ViewState3D {
   if (!bounds) return {
     target: [0, 0, 0],
-    zoom: 1.9,
+    zoom: 8.5,
     rotationOrbit: current?.rotationOrbit ?? DEFAULT_3D_ORBIT,
     rotationX: current?.rotationX ?? DEFAULT_3D_TILT,
   }
@@ -139,20 +170,28 @@ function build3dViewState(bounds: PointBounds | null, current?: ViewState3D): Vi
   const spanY = bounds.maxY - bounds.minY
   const spanZ = bounds.maxZ - bounds.minZ
   const dominantSpan = Math.max(spanX, spanY, spanZ)
-  const paddedSpan = Math.max(dominantSpan * 1.6, 1.15)
+  const paddedSpan = Math.max(dominantSpan * PADDING_3D, 0.01)
   return {
-    target: [(bounds.minX + bounds.maxX) / 2, (bounds.minY + bounds.maxY) / 2, (bounds.minZ + bounds.maxZ) / 2],
-    zoom: Math.max(1.55, Math.min(6.6, Math.log2(3.1 / paddedSpan) + 1.2)),
+    target: [
+      (bounds.minX + bounds.maxX) / 2,
+      (bounds.minY + bounds.maxY) / 2,
+      (bounds.minZ + bounds.maxZ) / 2,
+    ],
+    zoom: Math.max(1.0, Math.min(14.0, Math.log2(canvasPx / paddedSpan))),
     rotationOrbit: current?.rotationOrbit ?? DEFAULT_3D_ORBIT,
     rotationX: current?.rotationX ?? DEFAULT_3D_TILT,
   }
 }
 
-function buildInitialViewState(points: ExplorerPointsResponse | null, current?: ViewStateMap): ViewStateMap {
+function buildInitialViewState(
+  points: ExplorerPointsResponse | null,
+  canvasPx: number,
+  current?: ViewStateMap,
+): ViewStateMap {
   const bounds = normalizeBounds(points?.meta.bounds ?? null)
   return {
-    '2d': build2dViewState(bounds),
-    '3d': build3dViewState(bounds, current?.['3d']),
+    '2d': build2dViewState(bounds, canvasPx),
+    '3d': build3dViewState(bounds, canvasPx, current?.['3d']),
   }
 }
 
@@ -187,6 +226,84 @@ function colorForPoint(point: ExplorerPoint, mode: ExplorerColorMode): [number, 
   return [67, 56, 202] // indigo-700
 }
 
+// ─── Axis layers ─────────────────────────────────────────────────────────────
+
+type AxisLine2D = { from: [number, number, number]; to: [number, number, number] }
+type AxisLine3D = { from: [number, number, number]; to: [number, number, number]; color: [number, number, number, number] }
+
+/**
+ * Build DeckGL axis orientation layers.
+ * Always placed first in the layer stack so points render on top.
+ * Uses LineLayer (already in @deck.gl/layers — no new packages).
+ */
+function buildAxisLayers(viewMode: ExplorerViewMode, bounds: PointBounds | null) {
+  const extent = bounds
+    ? Math.max(1.5, Math.max(
+        Math.abs(bounds.minX), Math.abs(bounds.maxX),
+        Math.abs(bounds.minY), Math.abs(bounds.maxY),
+      ) * 1.1)
+    : 1.5
+
+  if (viewMode === '2d') {
+    const axisData: AxisLine2D[] = [
+      { from: [-extent, 0, 0], to: [extent, 0, 0] },   // X axis
+      { from: [0, -extent, 0], to: [0, extent, 0] },   // Y axis
+    ]
+    return [
+      new LineLayer<AxisLine2D>({
+        id: 'axis-2d',
+        data: axisData,
+        getSourcePosition: (d) => d.from,
+        getTargetPosition: (d) => d.to,
+        getColor: AXIS_COLOR_2D,
+        getWidth: 1.0,
+        widthUnits: 'pixels',
+        pickable: false,
+      }),
+    ]
+  }
+
+  // 3D: RGB-convention XYZ axes + faint XY plane grid
+  const axisData: AxisLine3D[] = [
+    { from: [-extent, 0, 0], to: [extent, 0, 0], color: AXIS_X_COLOR_3D },  // X red
+    { from: [0, -extent, 0], to: [0, extent, 0], color: AXIS_Y_COLOR_3D },  // Y green
+    { from: [0, 0, -extent], to: [0, 0, extent], color: AXIS_Z_COLOR_3D },  // Z blue
+  ]
+
+  // XY plane grid — faint lines at integer intervals to aid depth perception
+  const gridExtent = Math.ceil(extent)
+  const gridLines: AxisLine3D[] = []
+  for (let i = -gridExtent; i <= gridExtent; i++) {
+    gridLines.push(
+      { from: [-extent, i, 0], to: [extent, i, 0], color: AXIS_GRID_COLOR_3D },
+      { from: [i, -extent, 0], to: [i, extent, 0], color: AXIS_GRID_COLOR_3D },
+    )
+  }
+
+  return [
+    new LineLayer<AxisLine3D>({
+      id: 'axis-grid-3d',
+      data: gridLines,
+      getSourcePosition: (d) => d.from,
+      getTargetPosition: (d) => d.to,
+      getColor: (d) => d.color,
+      getWidth: 0.8,
+      widthUnits: 'pixels',
+      pickable: false,
+    }),
+    new LineLayer<AxisLine3D>({
+      id: 'axis-3d',
+      data: axisData,
+      getSourcePosition: (d) => d.from,
+      getTargetPosition: (d) => d.to,
+      getColor: (d) => d.color,
+      getWidth: 1.5,
+      widthUnits: 'pixels',
+      pickable: false,
+    }),
+  ]
+}
+
 // ─── Component ───────────────────────────────────────────────────────────────
 
 export const MapPanel = forwardRef<MapPanelHandle, Props>(function MapPanel(
@@ -205,7 +322,9 @@ export const MapPanel = forwardRef<MapPanelHandle, Props>(function MapPanel(
   ref,
 ) {
   const [tooltip, setTooltip] = useState<TooltipState>(null)
-  const [viewState, setViewState] = useState<ViewStateMap>(() => buildInitialViewState(points))
+  // Initial useState call happens before canvasRef is populated — fallback 900 is acceptable;
+  // the useEffect on first data load will re-fit with real DOM dimensions.
+  const [viewState, setViewState] = useState<ViewStateMap>(() => buildInitialViewState(points, 900))
   const [dataLoaded, setDataLoaded] = useState(false)
   const canvasRef = useRef<HTMLDivElement>(null)
 
@@ -226,8 +345,9 @@ export const MapPanel = forwardRef<MapPanelHandle, Props>(function MapPanel(
       return
     }
     if (!dataLoaded) {
-      // First load or after a full reset — fit to all points
-      setViewState((current) => buildInitialViewState(points, current))
+      // First load or after a full reset — fit to all points with real canvas dimensions
+      const px = getCanvasPx(canvasRef)
+      setViewState((current) => buildInitialViewState(points, px, current))
       setDataLoaded(true)
     }
     // Subsequent filter changes: do NOT reset camera — user's pan/zoom is preserved
@@ -235,14 +355,16 @@ export const MapPanel = forwardRef<MapPanelHandle, Props>(function MapPanel(
 
   // ─── Imperative camera controls ──────────────────────────────────────────
   const fitAll = () => {
-    setViewState((current) => buildInitialViewState(points, current))
+    const px = getCanvasPx(canvasRef)
+    setViewState((current) => buildInitialViewState(points, px, current))
   }
 
   const focusSelected = () => {
     if (!selectedPoint) return
+    const px = getCanvasPx(canvasRef)
     const selectionBounds = buildSelectionBounds(selectedPoint, points?.items ?? [], neighborIds)
-    const focused2d = build2dViewState(selectionBounds)
-    const focused3d = build3dViewState(selectionBounds, viewState['3d'])
+    const focused2d = build2dViewState(selectionBounds, px)
+    const focused3d = build3dViewState(selectionBounds, px, viewState['3d'])
     setViewState((current) => ({
       '2d': { ...focused2d, zoom: Math.min(focused2d.zoom + 0.25, 6.8) },
       '3d': {
@@ -275,34 +397,105 @@ export const MapPanel = forwardRef<MapPanelHandle, Props>(function MapPanel(
   // ─── Layer ───────────────────────────────────────────────────────────────
   const layers = useMemo(() => {
     const items = points?.items ?? []
-    const is3d = viewMode === '3d'
+    const bounds = normalizeBounds(points?.meta.bounds ?? null)
 
+    // Axis layers always first — points render on top
+    const axisLayers = buildAxisLayers(viewMode, bounds)
+
+    // ─── 3D mode: PointCloudLayer tiers (billboarded volumetric spheres) ──────
+    if (viewMode === '3d') {
+      const isHighlighted = (p: ExplorerPoint) =>
+        p.article_id === selectedArticleId ||
+        neighborIds.has(p.article_id) ||
+        p.article_id === hoveredArticleId
+
+      const getPC3dColor = (p: ExplorerPoint): [number, number, number, number] => {
+        if (p.article_id === selectedArticleId) return POINT_SELECTED_FILL
+        if (neighborIds.has(p.article_id)) return POINT_NEIGHBOR_FILL
+        if (p.article_id === hoveredArticleId) return POINT_HOVERED_FILL
+        const [r, g, b] = colorForPoint(p, colorMode)
+        const alpha = hasSelection
+          ? p.analysis.is_outlier
+            ? POINT_OUTLIER_ALPHA_UNDER_SELECTION
+            : POINT_REGULAR_ALPHA_UNDER_SELECTION
+          : p.analysis.is_outlier
+            ? POINT_OUTLIER_ALPHA_NO_SELECTION
+            : POINT_REGULAR_ALPHA_NO_SELECTION
+        return [r, g, b, alpha]
+      }
+
+      const colorTrigger = [colorMode, selectedArticleId, hoveredArticleId, neighborKey, hasSelection]
+
+      // Shared hover/click handlers for all PC tiers
+      const pcOnHover = (info: PickingInfoLike) => {
+        const point = info.object
+        onHoverArticle(point?.article_id ?? null)
+        if (point && info.x != null && info.y != null) {
+          setTooltip({ x: info.x, y: info.y, point })
+        } else {
+          setTooltip(null)
+        }
+      }
+      const pcOnClick = (info: PickingInfoLike) => onSelectArticle(info.object?.article_id ?? null)
+
+      const pcLayer = (id: string, data: ExplorerPoint[], size: number) =>
+        new PointCloudLayer<ExplorerPoint>({
+          id,
+          data,
+          pickable: true,
+          sizeUnits: 'pixels',
+          pointSize: size,
+          getPosition: (p) => [p.x, p.y, p.z],
+          getColor: getPC3dColor,
+          getNormal: [0, 0, 1],   // unused for billboard mode, required by API
+          material: false,         // disable Phong — pure flat color preserves encoding
+          onHover: pcOnHover,
+          onClick: pcOnClick,
+          updateTriggers: {
+            getColor: colorTrigger,
+          },
+        })
+
+      // Split into tiers — layer order: regular (back) → outlier → neighbor → hovered → selected (top)
+      const regular  = items.filter(p => !isHighlighted(p) && !p.analysis.is_outlier)
+      const outlier  = items.filter(p => !isHighlighted(p) && p.analysis.is_outlier)
+      const neighbor = items.filter(p => neighborIds.has(p.article_id))
+      const hovered  = hoveredArticleId != null ? items.filter(p => p.article_id === hoveredArticleId) : []
+      const selected = selectedArticleId != null ? items.filter(p => p.article_id === selectedArticleId) : []
+
+      return [
+        ...axisLayers,
+        pcLayer('pc-regular',  regular,  PC_SIZE_REGULAR),
+        pcLayer('pc-outlier',  outlier,  PC_SIZE_OUTLIER),
+        pcLayer('pc-neighbor', neighbor, PC_SIZE_NEIGHBOR),
+        pcLayer('pc-hovered',  hovered,  PC_SIZE_HOVERED),
+        pcLayer('pc-selected', selected, PC_SIZE_SELECTED),
+      ]
+    }
+
+    // ─── 2D mode: ScatterplotLayer (stroked circles, correct for flat view) ───
     return [
+      ...axisLayers,
       new ScatterplotLayer<ExplorerPoint>({
         id: 'semantic-points', // stable ID — updateTriggers handle all changes (BUG-5 fix)
         data: items,
         pickable: true,
         filled: true,
         stroked: true,
-        opacity: is3d ? 0.94 : 0.9,
+        opacity: 0.9,
         radiusUnits: 'pixels',
         lineWidthUnits: 'pixels',
         radiusMinPixels: 2,
         radiusMaxPixels: 18,
 
-        getPosition: (point: ExplorerPoint) =>
-          is3d ? [point.x, point.y, point.z] : [point.x, point.y],
+        getPosition: (point: ExplorerPoint) => [point.x, point.y],
 
         getRadius: (point: ExplorerPoint) => {
-          if (point.article_id === selectedArticleId)
-            return is3d ? POINT_SELECTED_RADIUS_3D : POINT_SELECTED_RADIUS_2D
-          if (neighborIds.has(point.article_id))
-            return is3d ? POINT_NEIGHBOR_RADIUS_3D : POINT_NEIGHBOR_RADIUS_2D
-          if (point.article_id === hoveredArticleId)
-            return is3d ? POINT_HOVERED_RADIUS_3D : POINT_HOVERED_RADIUS_2D
-          if (point.analysis.is_outlier)
-            return is3d ? POINT_OUTLIER_RADIUS_3D : POINT_OUTLIER_RADIUS_2D
-          return is3d ? POINT_REGULAR_RADIUS_3D : POINT_REGULAR_RADIUS_2D
+          if (point.article_id === selectedArticleId) return POINT_SELECTED_RADIUS_2D
+          if (neighborIds.has(point.article_id)) return POINT_NEIGHBOR_RADIUS_2D
+          if (point.article_id === hoveredArticleId) return POINT_HOVERED_RADIUS_2D
+          if (point.analysis.is_outlier) return POINT_OUTLIER_RADIUS_2D
+          return POINT_REGULAR_RADIUS_2D
         },
 
         getFillColor: (point: ExplorerPoint) => {
@@ -349,9 +542,8 @@ export const MapPanel = forwardRef<MapPanelHandle, Props>(function MapPanel(
         onClick: (info: PickingInfoLike) => onSelectArticle(info.object?.article_id ?? null),
 
         updateTriggers: {
-          getPosition: [viewMode],
-          getRadius: [viewMode, selectedArticleId, hoveredArticleId, neighborKey],
-          getFillColor: [viewMode, colorMode, selectedArticleId, hoveredArticleId, neighborKey],
+          getRadius: [selectedArticleId, hoveredArticleId, neighborKey],
+          getFillColor: [colorMode, selectedArticleId, hoveredArticleId, neighborKey, hasSelection],
           getLineColor: [selectedArticleId, neighborKey, hasSelection],
           getLineWidth: [selectedArticleId, neighborKey, hasSelection],
         },

@@ -80,3 +80,21 @@ export const CLUSTER_PALETTE: Array<[number, number, number]> = [
 
 export const CLUSTER_OUTLIER_COLOR: [number, number, number] = [220, 38, 38]  // red-600
 export const CLUSTER_NULL_COLOR: [number, number, number] = [148, 163, 184]   // slate-400
+
+// ─── Axis and grid colors (iter/006) ─────────────────────────────────────────
+// 2D mode: single subtle grey for both axes
+export const AXIS_COLOR_2D: [number, number, number, number] = [148, 163, 184, 90]    // slate-400 @35%
+
+// 3D mode: RGB convention for XYZ axes
+export const AXIS_X_COLOR_3D: [number, number, number, number] = [220, 38, 38, 115]   // red-600 @45%
+export const AXIS_Y_COLOR_3D: [number, number, number, number] = [34, 197, 94, 115]   // green-500 @45%
+export const AXIS_Z_COLOR_3D: [number, number, number, number] = [59, 130, 246, 115]  // blue-500 @45%
+export const AXIS_GRID_COLOR_3D: [number, number, number, number] = [148, 163, 184, 30] // slate-400 @12%, very faint
+
+// ─── PointCloudLayer sizes (iter/006) — 3D mode only ────────────────────────
+// pointSize is a pixel diameter, one layer per visual tier
+export const PC_SIZE_REGULAR  = 8    // regular field points
+export const PC_SIZE_OUTLIER  = 10   // outlier field points
+export const PC_SIZE_NEIGHBOR = 14   // semantic neighbors (highlighted)
+export const PC_SIZE_HOVERED  = 12   // hovered (unselected) point
+export const PC_SIZE_SELECTED = 18   // selected article — always dominant
