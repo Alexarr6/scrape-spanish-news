@@ -1,60 +1,43 @@
 - State: COMPLETE
-- Current phase: documentation overhaul implemented
+- Current phase: scheduler orchestration implemented
 - Last update: 2026-03-20 UTC
 
 ## Completed deliverables
-- README rewritten into a tighter operator/quickstart guide
-- MkDocs integrated via `mkdocs.yml`
-- new primary docs structure added under `docs/`
-- selective backend/script docstrings added in semantic, analysis, API, and CLI entrypoints
-- `Makefile` updated with `docs-build` and `docs-serve`
-- `pyproject.toml` updated with MkDocs dev dependency
+- created `scripts/run_stories_refresh.sh` for recurring scrape + analysis + clustering refreshes
+- created `scripts/run_explorer_refresh.sh` for recurring semantic explorer refreshes
+- added thin `Makefile` entrypoints:
+  - `make stories-refresh-once`
+  - `make explorer-refresh-once`
+- updated `README.md` and `docs/operator-guide/scheduler.md` with wrapper usage, env requirements, cron examples, and the embedding-model migration caveat
+- preserved the old `scripts/run_scheduled.sh` flow as a legacy scrape-only wrapper instead of silently mutating its behavior
 
-## Implementation scope actually touched
-### README / operator surface
-- `README.md`
-- `Makefile`
-- `pyproject.toml`
-- `mkdocs.yml`
+## Implementation details
+- stories wrapper runs:
+  - `preflight`
+  - `run-all-persist`
+  - `analysis-db-init`
+  - `enrich-articles` with `DAYS_BACK=3`
+  - `build-story-clusters` with `DAYS_BACK=3` and `SCORE_THRESHOLD=0.50`
+  - `verify-output`
+  - `verify-db`
+- explorer wrapper runs:
+  - `preflight`
+  - `semantic-db-init`
+  - `semantic-sync --embedding-model text-embedding-3-large --days-back 3`
+  - `semantic-project --days-back 3`
+  - `semantic-build --days-back 3`
+- both wrappers use per-job `flock -n` locks, append-only logs, and separate state files under `var/`
+- both wrappers fail clearly when required env is missing
+- no retry loop was added to the new wrappers in v1
 
-### Docs IA and content
-- `docs/index.md`
-- `docs/getting-started.md`
-- `docs/operator-guide/*`
-- `docs/semantic/*`
-- `docs/architecture/*`
-- `docs/reference/*`
-- `docs/testing-quality.md`
-- `docs/web-app-api.md`
-- `docs/historical/index.md`
+## Verification completed
+- verified `Makefile` targets and env names against the current repo surface
+- ran shell syntax checks for both new wrapper scripts
+- inspected updated docs and scheduler guidance for consistency with the approved design
 
-### Code docstrings / comments
-- `src/semantic/dbstore.py`
-- `src/semantic/analyze.py`
-- `src/semantic/project.py`
-- `src/analysis/pipeline.py`
-- `src/analysis/readside.py`
-- `src/analysis/canonicalization.py`
-- `src/analysis/heuristics.py`
-- `src/api/app.py`
-- `src/api/v1/clusters.py`
-- `src/api/v1/semantic.py`
-- `scripts/semantic_sync.py`
-- `scripts/semantic_project.py`
-- `scripts/build_semantic_map.py`
-- `scripts/build_story_clusters.py`
-- `scripts/enrich_articles.py`
-- `scripts/run_scheduled.sh`
-- `src/main.py`
+## Important caveat carried into docs
+- if semantic data currently exists for `text-embedding-3-small`, moving scheduled explorer refreshes to `text-embedding-3-large` may require a one-time semantic rebuild/reset
 
-## Verification status
-- `make sync` — ✅ passed
-- `make docs-build` — ✅ passed
-- `make frontend-check` — ✅ passed
-- `make test` — ⚠️ repo has 3 pre-existing fixture-path failures in archived evidence tests for missing `20minutos` fixture JSON under `tests/fixtures/evidence/20260314-1212-8ff9`
-
-## Notes for handoff
-- Docs were written against current `Makefile`, scripts, API app factory, and frontend package commands.
-- Historical docs were kept and clearly demoted to historical context instead of being deleted.
-- Frontend comments were not expanded; existing code was left mostly alone to avoid comment spam.
-- Commit policy target was prepared around atomic slices, but commits themselves were not created in this session yet.
+## Not done in this pass
+- no cron entries were installed on the host
+- no semantic reset/rebuild was performed automatically

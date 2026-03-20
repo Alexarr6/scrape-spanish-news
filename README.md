@@ -170,17 +170,33 @@ Use the same embedding model for schema init and sync. `text-embedding-3-small` 
 
 ### Scheduler and verification
 
+Legacy scrape-only scheduler:
+
 ```bash
 export DATABASE_URL='postgresql+psycopg://user:pass@host:5432/dbname'
 make scheduler-dry-run
 make scheduler-once
 make status
 make tail-log
+```
+
+New recurring orchestration wrappers:
+
+```bash
+export DATABASE_URL='postgresql+psycopg://user:pass@host:5432/dbname'
+export OPENAI_API_KEY='sk-...'
+make stories-refresh-once
+make explorer-refresh-once
 make verify-output DATE=$(date +%F) OUT_PREFIX=sched
 make verify-db
 ```
 
-The scheduler entrypoint is `bash scripts/run_scheduled.sh`. It expects `DATABASE_URL` and uses `make preflight`, `make run-all-persist`, `make verify-output`, and `make verify-db` internally.
+Entrypoints:
+- `bash scripts/run_scheduled.sh` — legacy scrape + verify wrapper
+- `bash scripts/run_stories_refresh.sh` — scrape + persist + analysis + clustering
+- `bash scripts/run_explorer_refresh.sh` — semantic sync + projection + explorer export
+
+The new wrappers keep separate lock, log, and state files under `var/` and are the right surface for recurring 6-hour jobs.
 
 ### Optional local Postgres via Docker
 
@@ -256,12 +272,19 @@ make semantic-project PROJECTION_SET=pca_3d_latest SEMANTIC_ARGS='--days-back 2'
 make semantic-build LIMIT=100 PROJECTION_SET=pca_3d_latest SEMANTIC_ARGS='--days-back 2'
 ```
 
-### 6) Run the scheduler wrapper once
+### 6) Run the stories refresh wrapper once
 
 ```bash
 export DATABASE_URL='postgresql+psycopg://user:pass@host:5432/dbname'
-make scheduler-once
-make status
+make stories-refresh-once
+```
+
+### 7) Run the explorer refresh wrapper once
+
+```bash
+export DATABASE_URL='postgresql+psycopg://user:pass@host:5432/dbname'
+export OPENAI_API_KEY='sk-...'
+make explorer-refresh-once
 ```
 
 ## Where outputs go

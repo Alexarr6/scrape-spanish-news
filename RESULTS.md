@@ -1,6 +1,6 @@
 # RESULTS.md
 
-## Documentation overhaul implementation
+## Scheduler orchestration implementation
 
 **Date:** 2026-03-20 UTC  
 **Outcome:** ✅ implemented
@@ -9,129 +9,111 @@
 
 ## What was accomplished
 
-### 1) README reshaped into the operator front door
-`README.md` now does the job it should have been doing:
-- explains what the repo actually is
-- points to the real command surface
-- documents common operator flows
-- keeps detail in the docs site instead of stuffing everything into one giant page
+Implemented the approved recurring-job orchestration with repo-native wrapper scripts instead of cursed cron spaghetti.
 
-### 2) MkDocs integrated cleanly
-Added:
-- `mkdocs.yml`
-- `make docs-build`
-- `make docs-serve`
-- MkDocs as a dev dependency in `pyproject.toml`
+### New scripts
+- `scripts/run_stories_refresh.sh`
+- `scripts/run_explorer_refresh.sh`
 
-The docs nav is structured around real repo surfaces instead of turning `docs/` into a random markdown bucket.
+### New Make targets
+- `make stories-refresh-once`
+- `make explorer-refresh-once`
 
-### 3) Primary docs written under `docs/`
-New primary sections:
-- docs home
-- getting started
-- operator guide
-- semantic pipeline
-- web app and API
-- architecture
-- testing and quality
-- reference
-- historical notes
-
-Existing review/archive material was preserved and explicitly routed into a historical section rather than being sold as the main documentation path.
-
-### 4) Selective backend/script docstrings added
-Docstrings were added where they materially help comprehension, especially in:
-- semantic storage/projection/read-side code
-- semantic analysis and projection logic
-- analysis enrichment and clustering pipelines
-- cluster read-side payload shaping
-- API entrypoints and response translators
-- key CLI/ops scripts
-
-This was kept selective on purpose. No fake "document every tiny helper" nonsense.
-
----
-
-## Files materially added or changed
-
-### Documentation surface
+### Docs updated
 - `README.md`
-- `mkdocs.yml`
-- `docs/index.md`
-- `docs/getting-started.md`
-- `docs/operator-guide/commands.md`
-- `docs/operator-guide/workflows.md`
 - `docs/operator-guide/scheduler.md`
-- `docs/operator-guide/troubleshooting.md`
-- `docs/semantic/overview.md`
-- `docs/semantic/workflow.md`
-- `docs/web-app-api.md`
-- `docs/architecture/overview.md`
-- `docs/architecture/analysis-pipeline.md`
-- `docs/architecture/semantic-pipeline.md`
-- `docs/testing-quality.md`
-- `docs/reference/environment.md`
-- `docs/reference/outputs.md`
-- `docs/historical/index.md`
-
-### Supporting repo wiring
-- `Makefile`
-- `pyproject.toml`
-
-### Docstring/code clarity pass
-- `src/semantic/dbstore.py`
-- `src/semantic/analyze.py`
-- `src/semantic/project.py`
-- `src/analysis/pipeline.py`
-- `src/analysis/readside.py`
-- `src/analysis/canonicalization.py`
-- `src/analysis/heuristics.py`
-- `src/api/app.py`
-- `src/api/v1/clusters.py`
-- `src/api/v1/semantic.py`
-- `scripts/semantic_sync.py`
-- `scripts/semantic_project.py`
-- `scripts/build_semantic_map.py`
-- `scripts/build_story_clusters.py`
-- `scripts/enrich_articles.py`
-- `scripts/run_scheduled.sh`
-- `src/main.py`
+- `STATUS.md`
 
 ---
 
-## Verification run
+## Implemented behavior
 
-### Passed
-- `make sync`
-- `make docs-build`
-- `make frontend-check`
+### Stories refresh wrapper
+Runs, in order:
 
-### Repo failures found during verification
-- `make test` fails with **3 archived fixture-path failures** unrelated to the documentation work:
-  - `tests/test_comparison_summary_contract.py` (2 failures)
-  - `tests/test_cross_source_output_metrics_contract.py` (1 failure)
-- Common cause: missing `20minutos` fixture JSON candidates under:
-  - `tests/fixtures/evidence/20260314-1212-8ff9`
+```bash
+make preflight
+make run-all-persist DATE="$DATE_LOCAL" OUT_PREFIX="$OUT_PREFIX"
+make analysis-db-init
+make enrich-articles DAYS_BACK=3
+make build-story-clusters DAYS_BACK=3 SCORE_THRESHOLD=0.50
+make verify-output DATE="$DATE_LOCAL" OUT_PREFIX="$OUT_PREFIX"
+make verify-db
+```
 
-Recommendation: treat that as a separate fixture-repair task, not as part of the docs branch.
+Operational behavior:
+- requires `DATABASE_URL`
+- defaults `LOCAL_TZ=Europe/Madrid`
+- defaults `DAYS_BACK=3`
+- defaults `SCORE_THRESHOLD=0.50`
+- defaults `OUT_PREFIX=sched`
+- uses `var/lock/stories-refresh.lock`
+- logs to `var/log/stories-refresh.log`
+- writes state under `var/state/stories_*`
+- exits `0` with `lock_busy` state if a previous stories run is still active
+- stops on first failure and records failed state
+
+### Explorer refresh wrapper
+Runs, in order:
+
+```bash
+make preflight
+make semantic-db-init SEMANTIC_ARGS='--embedding-model text-embedding-3-large'
+make semantic-sync SEMANTIC_ARGS='--embedding-model text-embedding-3-large --days-back 3'
+make semantic-project SEMANTIC_ARGS='--days-back 3'
+make semantic-build SEMANTIC_ARGS='--days-back 3'
+```
+
+Operational behavior:
+- requires `DATABASE_URL`
+- requires `OPENAI_API_KEY`
+- defaults `DAYS_BACK=3`
+- defaults `EMBEDDING_MODEL=text-embedding-3-large`
+- defaults `PROJECTION_SET=pca_3d_latest`
+- defaults `SEMANTIC_LIMIT=100`
+- defaults `SEMANTIC_BUILD_LIMIT=500`
+- uses `var/lock/explorer-refresh.lock`
+- logs to `var/log/explorer-refresh.log`
+- writes state under `var/state/explorer_*`
+- exits `0` with `lock_busy` state if a previous explorer run is still active
+- stops on first failure and records failed state
 
 ---
 
-## Important implementation notes
+## Cron recommendation kept simple
 
-- README commands and operator flows were grounded in the current `Makefile` and actual scripts.
-- Docs avoid claiming workflows that were not clearly supported by code.
-- Historical docs were preserved, not bulldozed.
-- Frontend comments were intentionally not expanded to avoid comment graffiti.
-- `uv.lock` was refreshed by `make sync` after adding MkDocs.
+```cron
+CRON_TZ=Europe/Madrid
+5 */6 * * * cd /home/node/.openclaw/workspace/repos/spain-news-bias-scraper && DATABASE_URL='postgresql+psycopg://...' bash scripts/run_stories_refresh.sh >> var/log/cron.log 2>&1
+35 */6 * * * cd /home/node/.openclaw/workspace/repos/spain-news-bias-scraper && DATABASE_URL='postgresql+psycopg://...' OPENAI_API_KEY='sk-...' bash scripts/run_explorer_refresh.sh >> var/log/cron.log 2>&1
+```
+
+Why this is right:
+- jobs are every 6 hours
+- they are staggered by 30 minutes
+- each job has its own lock instead of one muddy global lock
+- cron stays readable instead of becoming a shell crime scene
 
 ---
 
-## Commit shape recommended from this state
+## Verification performed
 
-1. `docs(readme): reshape README into quickstart/operator guide`
-2. `docs(mkdocs): add MkDocs config and site structure`
-3. `docs(code): add high-value docstrings for semantic/analysis/api entrypoints`
-4. `docs(results): finalize status and handoff notes`
+- verified the referenced Make targets and env names are real
+- ran shell syntax checks on both new wrapper scripts
+- confirmed the docs warn about the embedding-model migration caveat
 
-That split matches the actual change boundaries and keeps review sane.
+---
+
+## Important caveat documented honestly
+
+If the current semantic data was built with `text-embedding-3-small`, moving the explorer scheduler to `text-embedding-3-large` may require a one-time rebuild/reset of semantic embeddings or tables before results are trustworthy.
+
+That warning is now explicit in the docs, because burying it would be bullshit.
+
+---
+
+## Not done automatically
+
+- cron was not installed on the host
+- no semantic reset/rebuild was forced
+- the legacy `run_scheduled.sh` wrapper was not removed; it remains available for scrape-only scheduling

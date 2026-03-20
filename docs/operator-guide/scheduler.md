@@ -1,85 +1,153 @@
 # Operator guide: scheduler
 
-## Supported entrypoint
+## Supported entrypoints
 
-The repo-supported scheduler wrapper is `scripts/run_scheduled.sh`.
+The repo now has three scheduler-style wrappers:
 
 ```bash
 export DATABASE_URL='postgresql+psycopg://user:pass@host:5432/dbname'
+export OPENAI_API_KEY='sk-...'
+
 bash scripts/run_scheduled.sh
+bash scripts/run_stories_refresh.sh
+bash scripts/run_explorer_refresh.sh
 ```
 
-The `Makefile` wrappers are:
+Makefile wrappers:
 
 ```bash
 make scheduler-dry-run
 make scheduler-once
+make stories-refresh-once
+make explorer-refresh-once
 ```
 
-## What the wrapper enforces
+## Job split
 
-The shell script is intentionally strict.
-
-- `set -euo pipefail`
-- lock file under `var/lock/`
-- append-only scheduler log at `var/log/scheduler.log`
-- state files under `var/state/`
-- retry loop with configurable delay
-- optional alert hook after repeated failures
-
-## Required environment
-
-### `DATABASE_URL`
-Required for scheduled runs. The wrapper exits with `preflight_failed` state if it is missing.
-
-### `UV`
-Optional override. Defaults to `~/.local/bin/uv` if not provided.
-
-### `LOCAL_TZ`
-Defaults to `Europe/Madrid` and controls the local run date used by scheduled batch output naming.
-
-### Retry and alert knobs
-
-- `SCHEDULER_RETRY_DELAY_SECONDS` — default `120`
-- `SCHEDULER_MAX_RETRIES` — default `1`
-- `ALERT_COOLDOWN_SECONDS` — default `43200`
-- `ALERT_COMMAND` — optional command invoked after repeated failures
-
-## State files
-
-The wrapper updates these files in `var/state/`:
-
-- `last_status`
-- `last_run_utc`
-- `last_success_utc`
-- `last_error`
-- `consecutive_failures`
-- `last_alert_utc`
-
-`make status` prints them without requiring you to inspect the directory manually.
-
-## Failure behavior
-
-The current implementation does not fake success if verification fails. Each attempt must complete:
+### Legacy wrapper
+`run_scheduled.sh` is the old scrape-only scheduler. It keeps its retry/alert behavior and still runs:
 
 1. `make preflight`
 2. `make run-all-persist`
 3. `make verify-output`
 4. `make verify-db`
 
-If the final attempt still fails, the wrapper increments `consecutive_failures`, records `last_error`, and optionally triggers `ALERT_COMMAND` once cooldown rules allow it.
+Useful if you only want persistent scraping and verification.
 
-## Cron example
+### Stories refresh
+`run_stories_refresh.sh` is the recurring stories pipeline:
+
+1. `make preflight`
+2. `make run-all-persist`
+3. `make analysis-db-init`
+4. `make enrich-articles DAYS_BACK=3`
+5. `make build-story-clusters DAYS_BACK=3 SCORE_THRESHOLD=0.50`
+6. `make verify-output`
+7. `make verify-db`
+
+Defaults:
+- `LOCAL_TZ=Europe/Madrid`
+- `DAYS_BACK=3`
+- `SCORE_THRESHOLD=0.50`
+- `OUT_PREFIX=sched`
+
+### Explorer refresh
+`run_explorer_refresh.sh` is the recurring semantic/explorer pipeline:
+
+1. `make preflight`
+2. `make semantic-db-init SEMANTIC_ARGS='--embedding-model text-embedding-3-large'`
+3. `make semantic-sync SEMANTIC_ARGS='--embedding-model text-embedding-3-large --days-back 3'`
+4. `make semantic-project SEMANTIC_ARGS='--days-back 3'`
+5. `make semantic-build SEMANTIC_ARGS='--days-back 3'`
+
+Defaults:
+- `DAYS_BACK=3`
+- `EMBEDDING_MODEL=text-embedding-3-large`
+- `PROJECTION_SET=pca_3d_latest`
+- `SEMANTIC_LIMIT=100`
+- `SEMANTIC_BUILD_LIMIT=500`
+
+## Lock, log, and state layout
+
+Per-job locks via `flock -n`:
+- `var/lock/stories-refresh.lock`
+- `var/lock/explorer-refresh.lock`
+
+Per-job logs:
+- `var/log/stories-refresh.log`
+- `var/log/explorer-refresh.log`
+- `var/log/scheduler.log` for the legacy wrapper
+
+Per-job state files:
+- `var/state/stories_last_status`
+- `var/state/stories_last_run_utc`
+- `var/state/stories_last_success_utc`
+- `var/state/stories_last_error`
+- `var/state/explorer_last_status`
+- `var/state/explorer_last_run_utc`
+- `var/state/explorer_last_success_utc`
+- `var/state/explorer_last_error`
+
+If a lock is busy, the wrapper logs a skip, writes `lock_busy`, and exits `0`. That is deliberate. Dogpiling the same job on a Pi is dumb.
+
+## Required environment
+
+### Stories refresh
+Required:
+- `DATABASE_URL`
+
+Optional:
+- `UV`
+- `LOCAL_TZ`
+- `DAYS_BACK`
+- `SCORE_THRESHOLD`
+- `OUT_PREFIX`
+
+### Explorer refresh
+Required:
+- `DATABASE_URL`
+- `OPENAI_API_KEY`
+
+Optional:
+- `UV`
+- `DAYS_BACK`
+- `EMBEDDING_MODEL`
+- `PROJECTION_SET`
+- `SEMANTIC_LIMIT`
+- `SEMANTIC_BUILD_LIMIT`
+
+The wrappers fail clearly during preflight if required env is missing.
+
+## Failure behavior
+
+The new orchestration wrappers are strict and boring on purpose:
+
+- `set -euo pipefail`
+- no loose retry loop in v1
+- stop on first failing step
+- mark job state as failed
+- append details to the per-job log
+
+That matters most for the explorer job because retrying embeddings casually is a neat way to pay twice for the same mistake.
+
+## Cron recommendation
+
+Keep cron simple and staggered:
 
 ```cron
 CRON_TZ=Europe/Madrid
-15 7,12,17,22 * * * cd /home/node/.openclaw/workspace/repos/spain-news-bias-scraper && DATABASE_URL='postgresql+psycopg://***external-or-local***' bash scripts/run_scheduled.sh
+
+# Stories refresh every 6 hours
+5 */6 * * * cd /home/node/.openclaw/workspace/repos/spain-news-bias-scraper && DATABASE_URL='postgresql+psycopg://...' bash scripts/run_stories_refresh.sh >> var/log/cron.log 2>&1
+
+# Explorer refresh every 6 hours, offset so scrape/analysis lands first
+35 */6 * * * cd /home/node/.openclaw/workspace/repos/spain-news-bias-scraper && DATABASE_URL='postgresql+psycopg://...' OPENAI_API_KEY='sk-...' bash scripts/run_explorer_refresh.sh >> var/log/cron.log 2>&1
 ```
 
-## Dry-run example
+## Important caveat: embedding model migration
 
-```bash
-make scheduler-dry-run
-```
+The explorer wrapper standardizes on `text-embedding-3-large`.
 
-That logs the planned command and exits before scraping.
+If your existing semantic tables were built with `text-embedding-3-small`, this is **not** a casual flag flip. Because vector dimensionality changes, you may need a one-time semantic reset/rebuild before the scheduled explorer job is trustworthy.
+
+Use the same embedding model for both `semantic-db-init` and `semantic-sync`. Mixing them would be garbage.
