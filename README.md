@@ -1,10 +1,21 @@
 # spain-news-bias-scraper
 
-Repo root is the canonical app root. Historical `runs/` baggage is gone.
+A Spanish news ingestion and analysis repo with five real surfaces: source scraping, PostgreSQL persistence, enrichment and story clustering, semantic embeddings/projections, and a FastAPI + React explorer UI.
 
-## Quick start
+This README is the operator front door. It covers the commands you actually run and points deeper detail at the docs site instead of turning into a prose landfill.
 
-The authoritative workflow is `uv`-managed from repo root.
+## What lives here
+
+- `src/` — scraper runtime, persistence, analysis, semantic pipeline, API
+- `scripts/` — operational entrypoints for enrichment, clustering, semantic sync/project/export
+- `frontend/` — Vite + React + TypeScript explorer and story browser
+- `docs/` — MkDocs-backed project documentation plus historical review material
+- `tests/` — API, persistence, semantic, and runtime contract checks
+- `data/`, `logs/`, `var/` — generated artifacts, metrics, and scheduler state
+
+## Quickstart
+
+The canonical workflow is `uv` from repo root.
 
 ```bash
 make sync
@@ -13,213 +24,278 @@ make check
 make smoke SOURCE=elpais
 ```
 
-Canonical local gate:
+What those do:
+
+- `make sync` — create/update the managed Python environment
+- `make preflight` — verify repo wiring, create runtime dirs, and sanity-check the Python entrypoint
+- `make check` — run the local gate: pre-commit hooks plus tests
+- `make smoke SOURCE=elpais` — bounded non-persistent scrape for one source
+
+If you also want the frontend ready:
 
 ```bash
-make check
-```
-
-## Semantic explorer Phase 0 frontend foundation
-
-The new app foundation lives in `frontend/` as a separate Vite + React + TypeScript workspace.
-
-Development split is intentionally boring:
-
-```bash
-# terminal 1
-export DATABASE_URL='postgresql+psycopg://user:pass@host:5432/dbname'
-make api
-
-# terminal 2
 make frontend-check
-cd frontend && npm run dev
 ```
 
-That gives you:
+That installs frontend dependencies and runs the production build.
 
-- `http://127.0.0.1:4173` for Vite dev
-- `/api/v1/semantic/explorer/*` from FastAPI as the canonical semantic data surface
-- optional built-app serving at `http://127.0.0.1:8000/explorer` after `make frontend-build`
+## Environment you actually need
 
-The current explorer phase is a bounded clustering + UX refinement pass: the backend serves canonical `x/y/z`, persists semantic cluster/outlier analysis by `projection_set`, and the frontend can flip between 2D and 3D deck.gl views with cluster-aware filters, color modes, and better focus/reset controls.
-
-## Persistence/API behavior notes
-
-- `ArticleCRUD.ingest_many()` is now atomic per batch: rows are flushed during the batch and committed once at the end.
-- If any SQLAlchemy persistence error is raised during batch ingest, the whole batch is rolled back and the response reports `rolled_back: true` with zero persisted insert/update counters.
-- Route coverage now includes 200 / 404 / 422 behavior with dependency overrides against an isolated SQLAlchemy test session.
-- `article_text` and `tags` are persisted end-to-end, but they only populate if the source article page exposes them. The scraper now reads `articleBody` from JSON-LD for full text and prefers explicit `article:tag` metadata, falling back to `news_keywords`/`keywords` when present. If a page exposes none of those, the fields remain empty by design.
-
-If you want the hooks installed locally:
-
-```bash
-uv run pre-commit install
-```
-
-For persistent runs / API against any Postgres:
+### Required for persistence and API
 
 ```bash
 export DATABASE_URL='postgresql+psycopg://user:pass@host:5432/dbname'
-make run-all-persist DATE=$(date +%F)
-make api
 ```
 
-## Semantic persistence with pgvector
+Needed by:
 
-The semantic workflow is still boring on purpose, but now the durable source of truth is Postgres instead of disposable local files.
+- `make run-source-persist`
+- `make run-all-persist`
+- `make api`
+- `make analysis-db-init`
+- `make enrich-articles`
+- `make build-story-clusters`
+- all semantic `make semantic-*` targets
+- scheduler runs
 
-### What it does now
-
-- keeps scraped content in `articles`
-- stores OpenAI embeddings in `article_embeddings` via pgvector, with the vector width aligned to the selected embedding model
-- stores derived PCA coordinates in a separate `article_projections` table, including real `x/y/z` for the canonical 3D explorer set
-- stores persisted semantic point analysis + cluster summaries keyed by `projection_set` for explorer filtering and UI modes
-- supports bounded backfill / incremental sync for missing or changed articles
-- supports nearest-neighbor similarity queries in Postgres
-- still exports rebuildable JSON/HTML artifacts under `data/semantic/`
-
-Use the same `--embedding-model` for `semantic-db-init` and `semantic-sync`. `text-embedding-3-small` uses 1536 dims; `text-embedding-3-large` uses 3072. If you switch models against an existing populated semantic table, rebuild or clear semantic embeddings first.
-
-### Required env
+### Required for semantic embedding sync
 
 ```bash
-export DATABASE_URL='postgresql+psycopg://user:pass@host:5432/dbname'
 export OPENAI_API_KEY='sk-...'
 ```
 
-### Smoke flow
+Needed by:
+
+- `make semantic-sync`
+
+### Optional local overrides
+
+`.env` is optional and mainly useful for local Docker Postgres values and boring operator defaults.
+
+## Important command guide
+
+These are the commands worth remembering because the `Makefile` says they are the real operator surface.
+
+### Bootstrap and verification
 
 ```bash
 make sync
 make preflight
-make semantic-db-init SEMANTIC_ARGS="--embedding-model text-embedding-3-small"
-make semantic-sync LIMIT=50 SEMANTIC_ARGS="--embedding-model text-embedding-3-small"
-make semantic-project PROJECTION_SET=pca_3d_latest
-make semantic-smoke LIMIT=50
+make lint
+make pre-commit
+make test
+make check
+make docs-build
 ```
 
-### Temporal window contract
+- `make lint` — run Ruff over `src`, `tests`, and `scripts`
+- `make pre-commit` — run repo hooks across tracked files
+- `make test` — run pytest from repo root
+- `make check` — the main local gate
+- `make docs-build` — build the MkDocs site with strict link/nav checking
 
-The semantic DB flow now supports the same bounded window flags across sync / project / build:
-
-- `--days-back N`
-- `--date-from YYYY-MM-DD`
-- `--date-to YYYY-MM-DD`
-
-Rules:
-
-- pass nothing to keep the old full-history behavior
-- `--days-back N` means an inclusive UTC window ending today
-- `--days-back` cannot be combined with explicit `--date-from` / `--date-to`
-- explicit dates can be used independently or together
-
-Example bounded rebuild for a Raspberry-friendly recent slice:
+### Scrape runtime
 
 ```bash
+make smoke SOURCE=elpais
+make run-source SOURCE=elpais DATE=$(date +%F)
+make run-all DATE=$(date +%F)
+```
+
+Use these when you want JSON output only, with no database writes.
+
+### Persistence-backed scraping
+
+```bash
+export DATABASE_URL='postgresql+psycopg://user:pass@host:5432/dbname'
+make run-source-persist SOURCE=elpais OUT_PREFIX=manual DATE=$(date +%F)
+make run-all-persist DATE=$(date +%F)
+make verify-db
+```
+
+Use these when scraped rows should land in Postgres.
+
+### API and frontend
+
+```bash
+export DATABASE_URL='postgresql+psycopg://user:pass@host:5432/dbname'
+make api
+```
+
+In a second terminal:
+
+```bash
+cd frontend && npm run dev
+```
+
+Useful related commands:
+
+```bash
+make frontend-build
+make frontend-check
+```
+
+Notes:
+
+- `make api` runs `uvicorn src.api.app:create_app --factory`
+- if `frontend/dist` exists, FastAPI also serves the built UI at `/explorer`
+- Vite dev server is separate and intended for frontend iteration
+
+### Analysis and story clustering
+
+```bash
+export DATABASE_URL='postgresql+psycopg://user:pass@host:5432/dbname'
+make analysis-db-init
+make enrich-articles DAYS_BACK=2 LIMIT=150
+make build-story-clusters DAYS_BACK=3 LIMIT=200 SCORE_THRESHOLD=0.68
+make story-cluster-report LIMIT=20
+```
+
+Use this flow after persistent scraping when you want tags, entities, and same-story clusters.
+
+### Semantic pipeline
+
+```bash
+export DATABASE_URL='postgresql+psycopg://user:pass@host:5432/dbname'
+export OPENAI_API_KEY='sk-...'
+
+make semantic-db-init SEMANTIC_ARGS='--embedding-model text-embedding-3-small'
 make semantic-sync LIMIT=100 SEMANTIC_ARGS='--embedding-model text-embedding-3-small --days-back 2'
 make semantic-project PROJECTION_SET=pca_3d_latest SEMANTIC_ARGS='--days-back 2'
 make semantic-build LIMIT=100 PROJECTION_SET=pca_3d_latest SEMANTIC_ARGS='--days-back 2'
+make semantic-smoke LIMIT=50 PROJECTION_SET=pca_3d_latest
 ```
 
-Equivalent explicit-date flow:
+Use the same embedding model for schema init and sync. `text-embedding-3-small` means 1536 dims; `text-embedding-3-large` means 3072. Switching models against an already-populated semantic table requires rebuilding or clearing semantic embeddings first.
+
+### Scheduler and verification
 
 ```bash
-uv run python scripts/semantic_sync.py --db-url "$DATABASE_URL" --limit 100 --embedding-model text-embedding-3-small --date-from 2026-03-16 --date-to 2026-03-18
-uv run python scripts/semantic_project.py --db-url "$DATABASE_URL" --projection-set pca_3d_latest --date-from 2026-03-16 --date-to 2026-03-18
-uv run python scripts/build_semantic_map.py --db-url "$DATABASE_URL" --projection-set pca_3d_latest --limit 100 --date-from 2026-03-16 --date-to 2026-03-18
+export DATABASE_URL='postgresql+psycopg://user:pass@host:5432/dbname'
+make scheduler-dry-run
+make scheduler-once
+make status
+make tail-log
+make verify-output DATE=$(date +%F) OUT_PREFIX=sched
+make verify-db
 ```
 
-### Direct commands
+The scheduler entrypoint is `bash scripts/run_scheduled.sh`. It expects `DATABASE_URL` and uses `make preflight`, `make run-all-persist`, `make verify-output`, and `make verify-db` internally.
 
-```bash
-uv run python scripts/init_pgvector.py --db-url "$DATABASE_URL" --embedding-model text-embedding-3-small
-uv run python scripts/semantic_sync.py --db-url "$DATABASE_URL" --limit 50 --embedding-model text-embedding-3-small
-uv run python scripts/semantic_project.py --db-url "$DATABASE_URL" --projection-set pca_3d_latest
-uv run python scripts/semantic_neighbors.py --db-url "$DATABASE_URL" --article-id 123 --limit 5
-uv run python scripts/build_semantic_map.py --db-url "$DATABASE_URL" --projection-set pca_3d_latest --limit 50
-```
-
-Artifacts land in:
-
-- `data/semantic/articles_embeddings_<stamp>.jsonl`
-- `data/semantic/articles_points_<stamp>.json`
-- `data/semantic/semantic_map_<stamp>.html`
-- `logs/semantic_<stamp>_metrics.json`
-
-## Optional local Postgres for persistence testing
-
-Host-based scraping stays the default. Docker is only for the local dev database path.
-
-### 1) Start local Postgres
+### Optional local Postgres via Docker
 
 ```bash
 cp .env.example .env
 make db-up
 make db-check
-```
-
-Default local dev connection string:
-
-```bash
-make db-url
-# prints: postgresql+psycopg://spain_news:spain_news_dev@127.0.0.1:5433/spain_news_bias
-```
-
-If you want different local dev values, edit `.env` before `make db-up`.
-
-### 2) Export `DATABASE_URL`
-
-```bash
 export DATABASE_URL="$(make --no-print-directory db-url)"
-```
-
-### 3) Manual persistence test
-
-```bash
-make run-source-persist SOURCE=elpais OUT_PREFIX=localdb DATE=$(date +%F)
-make verify-db
-```
-
-### 4) Scheduler persistence test
-
-Scheduled persistent runs remain strict: `DATABASE_URL` must be set.
-
-`scheduler-once` runs one scheduled batch end-to-end: preflight, `run-all-persist`, `verify-output`, and `verify-db` (when `DATABASE_URL` is set). If any verification step fails, the attempt now fails honestly and the wrapper retries/fails instead of reporting a false success.
-
-```bash
-export DATABASE_URL="$(make --no-print-directory db-url)"
-make scheduler-once
-make verify-db
-make status
-```
-
-Useful extras:
-
-```bash
-make db-logs
-make db-psql
 make db-down
 ```
 
-## Scheduler
+This is for local persistence testing. Host-based scraping against an existing Postgres is still the normal path.
 
-The supported scheduler entrypoint is:
+## Common operator flows
+
+### 1) Fresh repo sanity check
 
 ```bash
-bash scripts/run_scheduled.sh
+make sync
+make preflight
+make check
+make smoke SOURCE=elpais
 ```
 
-Recommended cron pattern (Madrid time, 4 runs/day):
+Use this if you just want to prove the repo is alive.
 
-```cron
-CRON_TZ=Europe/Madrid
-15 7,12,17,22 * * * cd /home/node/.openclaw/workspace/repos/spain-news-bias-scraper && DATABASE_URL='postgresql+psycopg://***external-or-local***' bash scripts/run_scheduled.sh
+### 2) Persist a full scrape batch
+
+```bash
+export DATABASE_URL='postgresql+psycopg://user:pass@host:5432/dbname'
+make run-all-persist DATE=$(date +%F)
+make verify-db
 ```
 
-## Notes
+Use this when Postgres is the source of truth.
 
-- `make` uses the root uv workflow and falls back to `~/.local/bin/uv` if `uv` is not already on `PATH`.
-- `.env` is optional and only meant for boring local overrides like `LOCAL_DB_*` or `DATABASE_URL`.
-- Runtime code and tests do not depend on `runs/` anymore. The active evidence fixtures used by contract tests live under `tests/fixtures/evidence/canonical/`.
-- `scripts/detect_app_root.sh` was removed; repo root is the only supported app root.
-- `make check` is expected to pass cleanly on the first run from a fresh `make sync` state without mutating tracked files.
+### 3) Bring up the API and inspect the UI
+
+```bash
+export DATABASE_URL='postgresql+psycopg://user:pass@host:5432/dbname'
+make api
+```
+
+Then either:
+
+```bash
+cd frontend && npm run dev
+```
+
+or build once and let FastAPI serve the built frontend:
+
+```bash
+make frontend-build
+```
+
+### 4) Rebuild tags, entities, and story clusters
+
+```bash
+export DATABASE_URL='postgresql+psycopg://user:pass@host:5432/dbname'
+make analysis-db-init
+make enrich-articles
+make build-story-clusters
+```
+
+### 5) Rebuild semantic explorer data for a bounded recent window
+
+```bash
+export DATABASE_URL='postgresql+psycopg://user:pass@host:5432/dbname'
+export OPENAI_API_KEY='sk-...'
+make semantic-db-init SEMANTIC_ARGS='--embedding-model text-embedding-3-small'
+make semantic-sync LIMIT=100 SEMANTIC_ARGS='--embedding-model text-embedding-3-small --days-back 2'
+make semantic-project PROJECTION_SET=pca_3d_latest SEMANTIC_ARGS='--days-back 2'
+make semantic-build LIMIT=100 PROJECTION_SET=pca_3d_latest SEMANTIC_ARGS='--days-back 2'
+```
+
+### 6) Run the scheduler wrapper once
+
+```bash
+export DATABASE_URL='postgresql+psycopg://user:pass@host:5432/dbname'
+make scheduler-once
+make status
+```
+
+## Where outputs go
+
+- scrape JSON output — `data/<prefix>_<source>_<date>.json`
+- scrape metrics — `logs/<prefix>_<source>_<date>_metrics.json`
+- semantic exports — `data/semantic/`
+- semantic metrics — `logs/semantic_*_metrics.json`
+- scheduler state and logs — `var/state/`, `var/log/`
+- built frontend — `frontend/dist/`
+
+## Documentation
+
+Build the docs locally:
+
+```bash
+make docs-build
+```
+
+Main docs entry points:
+
+- `docs/index.md` — docs home
+- `docs/getting-started.md` — setup and repo layout
+- `docs/operator-guide/commands.md` — command reference grounded in `Makefile`
+- `docs/operator-guide/workflows.md` — real run flows
+- `docs/operator-guide/scheduler.md` — scheduler behavior and cron usage
+- `docs/semantic/` — semantic storage, sync, projection, export
+- `docs/architecture/` — scrape, persistence, analysis, semantic, API/frontend architecture
+- `docs/reference/` — environment variables and output conventions
+- `docs/historical/` — review/archive material kept for context, not as primary docs
+
+## Notes and constraints
+
+- Repo root is the only supported app root.
+- `make` uses the repo-root `uv` workflow and falls back to `~/.local/bin/uv` when needed.
+- Runtime code and tests do not depend on historical `runs/` layout anymore.
+- The README only documents workflows that are clearly backed by the current `Makefile`, scripts, and code paths. If you need deeper behavior, the docs site is where that detail belongs.

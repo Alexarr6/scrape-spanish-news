@@ -36,7 +36,7 @@ LOCAL_DB_USER ?= spain_news
 LOCAL_DB_PASSWORD ?= spain_news_dev
 LOCAL_DATABASE_URL := postgresql+psycopg://$(LOCAL_DB_USER):$(LOCAL_DB_PASSWORD)@$(LOCAL_DB_HOST):$(LOCAL_DB_PORT)/$(LOCAL_DB_NAME)
 
-.PHONY: help print-app-root preflight sync pre-commit lint check test smoke run-source run-source-persist run-all run-all-persist api analysis-db-init enrich-articles build-story-clusters story-cluster-report semantic-db-init semantic-sync semantic-project semantic-neighbors semantic-build semantic-smoke scheduler-once scheduler-dry-run status tail-log verify-output verify-db db-url db-up db-down db-logs db-psql db-check clean-state
+.PHONY: help print-app-root preflight sync pre-commit lint check test docs-build docs-serve smoke run-source run-source-persist run-all run-all-persist api analysis-db-init enrich-articles build-story-clusters story-cluster-report semantic-db-init semantic-sync semantic-project semantic-neighbors semantic-build semantic-smoke scheduler-once scheduler-dry-run status tail-log verify-output verify-db db-url db-up db-down db-logs db-psql db-check clean-state
 
 help:
 	@printf '%s\n' \
@@ -49,6 +49,8 @@ help:
 	  '  make pre-commit               Run repo hooks (ruff-check + ruff-format)' \
 	  '  make check                    Canonical local gate: pre-commit + tests' \
 	  '  make test                     Run tests from repo root' \
+  '  make docs-build               Build the MkDocs site into site/' \
+  '  make docs-serve               Serve the MkDocs site locally' \
 	  '' \
 	  'Runtime:' \
 	  '  make smoke SOURCE=elpais      Quick non-persistent scrape' \
@@ -118,6 +120,12 @@ check: pre-commit test
 test: preflight
 	@cd "$(APP_ROOT)" && \
 	PYTHONPATH="$(APP_ROOT):$${PYTHONPATH:-}" $(PYTHON) -m pytest -q tests
+
+docs-build: preflight
+	@cd "$(APP_ROOT)" && $(PYTHON) -m mkdocs build --strict
+
+docs-serve: preflight
+	@cd "$(APP_ROOT)" && $(PYTHON) -m mkdocs serve -a 127.0.0.1:8001
 
 frontend-install:
 	@cd "$(APP_ROOT)/frontend" && npm install --include=dev
