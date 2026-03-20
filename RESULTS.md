@@ -1,119 +1,148 @@
 # RESULTS.md
 
-## Scheduler orchestration implementation
+## Explorer improvement pass — implementation handoff
 
-**Date:** 2026-03-20 UTC  
-**Outcome:** ✅ implemented
-
----
-
-## What was accomplished
-
-Implemented the approved recurring-job orchestration with repo-native wrapper scripts instead of cursed cron spaghetti.
-
-### New scripts
-- `scripts/run_stories_refresh.sh`
-- `scripts/run_explorer_refresh.sh`
-
-### New Make targets
-- `make stories-refresh-once`
-- `make explorer-refresh-once`
-
-### Docs updated
-- `README.md`
-- `docs/operator-guide/scheduler.md`
-- `STATUS.md`
+**Date:** 2026-03-20 UTC
+**Iteration:** iter/005
+**Role:** `frontend.react` builder 👷
+**Outcome:** ✅ Complete — all bug fixes applied, UX improvements implemented, build passes
 
 ---
 
-## Implemented behavior
+## One-line summary
 
-### Stories refresh wrapper
-Runs, in order:
+**Five concrete render bugs fixed, all planned UX improvements implemented, build passes clean. Points should render reliably on next browser load.**
 
-```bash
-make preflight
-make run-all-persist DATE="$DATE_LOCAL" OUT_PREFIX="$OUT_PREFIX"
-make analysis-db-init
-make enrich-articles DAYS_BACK=3
-make build-story-clusters DAYS_BACK=3 SCORE_THRESHOLD=0.50
-make verify-output DATE="$DATE_LOCAL" OUT_PREFIX="$OUT_PREFIX"
-make verify-db
+---
+
+## What was implemented
+
+### Phase 1 — CSS render reliability (BUG-1, BUG-6)
+
+**File:** `frontend/src/styles.css`
+
+- Added `overflow: hidden` to `.explorer-workspace` — prevents grid from collapsing inside flex parent (BUG-1)
+- Removed `!important` overrides on `.map-canvas > div, canvas` (BUG-6) — DeckGL must control its own canvas dimensions
+- Added explicit `height: 100%` to `.map-canvas` — ensures `offsetHeight > 0` at DeckGL mount time
+- Added all new CSS classes for new UX additions (seed chip, guide explainer, tooltip enhancements, legend additions, dev overlay)
+
+**Commit:** `fix(explorer): restore render reliability — CSS height chain and BUG-6`
+
+---
+
+### Phase 2 — DeckGL stabilization and encoding (BUG-2, BUG-4, BUG-5)
+
+**Files:** `frontend/src/lib/explorerColors.ts` (new), `frontend/src/components/explorer/MapPanel.tsx`
+
+**explorerColors.ts (new):**
+- Authoritative constants for all point encoding: fill colors, stroke colors, stroke widths, radii (2D/3D), alpha values by selection state
+- Source color palette (RGB + HEX), cluster palette, outlier/null colors
+- Imported by MapPanel — no more inline magic arrays
+
+**MapPanel.tsx:**
+- `key="explorer-deck"` on `<DeckGL>` — fixes React 18 StrictMode double-mount (BUG-2)
+- Removed view IDs from `OrthographicView`/`OrbitView` (unnamed single-view) — fixes viewState mismatch (BUG-4)
+- Stable `id: 'semantic-points'` on ScatterplotLayer (BUG-5) — `updateTriggers` handle all dynamic changes
+- ViewState keyed by `'2d'`/`'3d'` (simpler than old `'semantic-2d'`/`'semantic-3d'`)
+- Camera hardening: `dataLoaded` guard — auto-fit only on first load, not on every filter refetch
+- 3D orbit angles preserved in `focusSelected()` — no tilt/orbit reset on selection change
+- Updated `getFillColor`, `getRadius`, `getLineColor`, `getLineWidth` using `explorerColors.ts` constants
+- Updated `Tooltip` component: cluster ID, outlier badge, edge-clamping (won't overflow canvas)
+- Dev diagnostic overlay (DEV only): canvas dimensions × point count × zoom × bounds
+- Dev diagnostic `console.debug` on mount (DEV only)
+
+**Commit:** `fix(explorer): stabilize DeckGL viewport and layer rendering (BUGs 2,4,5)`
+
+---
+
+### Phase 3 — Context rail, control bar, ExplorerPage (UX improvements)
+
+**Files:**
+- `frontend/src/components/explorer/ExplorerContextRail.tsx`
+- `frontend/src/components/explorer/ExplorerControlBar.tsx`
+- `frontend/src/routes/ExplorerPage.tsx`
+
+**ExplorerContextRail:**
+- New props: `seedContext: SeedContext`, `onClearSeed: () => void`
+- Seeded context chip in no-selection state (Stories→Explorer handoff visibility)
+- "How to read this space" onboarding guide block (3 sentences, below guide text)
+- Mode-sensitive `ColorLegend`: neutral dot / source outlet swatches / cluster color list
+- Outlier badge (`context-outlier-badge`) in selection rail header
+
+**ExplorerControlBar:**
+- Labels: `'By source'`, `'By cluster'` instead of raw `'source'`/`'cluster'`
+- `title` hints on 2D/3D buttons
+- Loading label: `'N points (updating)'` during filter-change refetch
+
+**ExplorerPage:**
+- `seedContext = useMemo(...)` derived from `query.clusterId`/`query.search`
+- Passed to `ExplorerContextRail` with `onClearSeed={resetQuery}`
+
+**Commit:** `feat(explorer): context rail polish, seeded chip, and control bar improvements`
+
+---
+
+## Build verification
+
+```
+cd frontend && npm run build
+✓ tsc -b — 0 type errors
+✓ vite build — 711 modules transformed, 0 build errors
+dist/assets/index-CbzGlOTe.css  23.45 kB
+dist/assets/index-t3NwS3ti.js  903.68 kB
+✓ built in 4.90s
 ```
 
-Operational behavior:
-- requires `DATABASE_URL`
-- defaults `LOCAL_TZ=Europe/Madrid`
-- defaults `DAYS_BACK=3`
-- defaults `SCORE_THRESHOLD=0.50`
-- defaults `OUT_PREFIX=sched`
-- uses `var/lock/stories-refresh.lock`
-- logs to `var/log/stories-refresh.log`
-- writes state under `var/state/stories_*`
-- exits `0` with `lock_busy` state if a previous stories run is still active
-- stops on first failure and records failed state
+---
 
-### Explorer refresh wrapper
-Runs, in order:
+## What was NOT done (deferred)
 
-```bash
-make preflight
-make semantic-db-init SEMANTIC_ARGS='--embedding-model text-embedding-3-large'
-make semantic-sync SEMANTIC_ARGS='--embedding-model text-embedding-3-large --days-back 3'
-make semantic-project SEMANTIC_ARGS='--days-back 3'
-make semantic-build SEMANTIC_ARGS='--days-back 3'
-```
-
-Operational behavior:
-- requires `DATABASE_URL`
-- requires `OPENAI_API_KEY`
-- defaults `DAYS_BACK=3`
-- defaults `EMBEDDING_MODEL=text-embedding-3-large`
-- defaults `PROJECTION_SET=pca_3d_latest`
-- defaults `SEMANTIC_LIMIT=100`
-- defaults `SEMANTIC_BUILD_LIMIT=500`
-- uses `var/lock/explorer-refresh.lock`
-- logs to `var/log/explorer-refresh.log`
-- writes state under `var/state/explorer_*`
-- exits `0` with `lock_busy` state if a previous explorer run is still active
-- stops on first failure and records failed state
+| Item | Reason |
+|---|---|
+| BUG-7: `useExplorerBootstrap.ts` orphan | Not a render bug; cleanup-only change, safe to defer |
+| BUG-3: Verify zoom formula against real API data | Requires live API; diagnostic log added for developer to check on first load |
+| Mobile bottom-sheet CSS transform | Out of scope for this pass per spec |
+| `useExplorerData` selected-article race cleanup | Minor UX; not a render bug |
 
 ---
 
-## Cron recommendation kept simple
+## Risks remaining
 
-```cron
-CRON_TZ=Europe/Madrid
-5 */6 * * * cd /home/node/.openclaw/workspace/repos/spain-news-bias-scraper && DATABASE_URL='postgresql+psycopg://...' bash scripts/run_stories_refresh.sh >> var/log/cron.log 2>&1
-35 */6 * * * cd /home/node/.openclaw/workspace/repos/spain-news-bias-scraper && DATABASE_URL='postgresql+psycopg://...' OPENAI_API_KEY='sk-...' bash scripts/run_explorer_refresh.sh >> var/log/cron.log 2>&1
-```
-
-Why this is right:
-- jobs are every 6 hours
-- they are staggered by 30 minutes
-- each job has its own lock instead of one muddy global lock
-- cron stays readable instead of becoming a shell crime scene
+| Risk | Status |
+|---|---|
+| BUG-3: zoom formula may need tuning for real projection scale | Dev diagnostic log added — developer should check `[MapPanel] mount diagnostic` on first load with data |
+| Safari flex/grid `min-height: 0` | `.explorer-workspace` has `min-height: 0` from iter/004; `overflow: hidden` added this pass. Standard fix — should hold |
+| StrictMode test in dev mode | `key="explorer-deck"` is the standard mitigation; test in both dev and preview |
 
 ---
 
-## Verification performed
+## Files changed in this pass
 
-- verified the referenced Make targets and env names are real
-- ran shell syntax checks on both new wrapper scripts
-- confirmed the docs warn about the embedding-model migration caveat
+| File | Change |
+|---|---|
+| `frontend/src/styles.css` | CSS fixes + new Explorer additions |
+| `frontend/src/lib/explorerColors.ts` | **NEW** — authoritative encoding constants |
+| `frontend/src/components/explorer/MapPanel.tsx` | Render bug fixes + encoding improvements |
+| `frontend/src/components/explorer/ExplorerContextRail.tsx` | Seeded chip + guide + legend improvements |
+| `frontend/src/components/explorer/ExplorerControlBar.tsx` | Label + tooltip improvements |
+| `frontend/src/routes/ExplorerPage.tsx` | seedContext derivation + prop pass |
+| `STATUS.md` | Updated |
+| `RESULTS.md` | This file |
 
 ---
 
-## Important caveat documented honestly
+## Previous pass
 
-If the current semantic data was built with `text-embedding-3-small`, moving the explorer scheduler to `text-embedding-3-large` may require a one-time rebuild/reset of semantic embeddings or tables before results are trustworthy.
+### iter/005 — architecture/diagnosis pass (preceding this)
 
-That warning is now explicit in the docs, because burying it would be bullshit.
+**Date:** 2026-03-20 UTC
+**Role:** `frontend` architect 🏗️
+**Outcome:** ✅ Spec complete
+
+Seven concrete render-reliability bugs diagnosed. Three key UX improvements specified. Implementation slices defined. Build order was: fix canvas first, improve encoding second, add context polish third.
+
+See the architecture pass entries in this file for the full diagnosis record.
 
 ---
 
-## Not done automatically
-
-- cron was not installed on the host
-- no semantic reset/rebuild was forced
-- the legacy `run_scheduled.sh` wrapper was not removed; it remains available for scrape-only scheduling
+*Implementation complete. Next: verify in browser with real API data. Check `[MapPanel] mount diagnostic` log for canvas dimensions and zoom.*

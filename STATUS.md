@@ -1,43 +1,42 @@
 - State: COMPLETE
-- Current phase: scheduler orchestration implemented
+- Current phase: Explorer improvement pass — implementation (iter/005)
 - Last update: 2026-03-20 UTC
 
-## Completed deliverables
-- created `scripts/run_stories_refresh.sh` for recurring scrape + analysis + clustering refreshes
-- created `scripts/run_explorer_refresh.sh` for recurring semantic explorer refreshes
-- added thin `Makefile` entrypoints:
-  - `make stories-refresh-once`
-  - `make explorer-refresh-once`
-- updated `README.md` and `docs/operator-guide/scheduler.md` with wrapper usage, env requirements, cron examples, and the embedding-model migration caveat
-- preserved the old `scripts/run_scheduled.sh` flow as a legacy scrape-only wrapper instead of silently mutating its behavior
+## Completed deliverables (this pass)
+- Full audit of Explorer frontend code: `MapPanel.tsx`, `ExplorerPage.tsx`, `ExplorerContextRail.tsx`, `ExplorerControlBar.tsx`, `useExplorerData.ts`, `styles.css`, `lib/types.ts`
+- Rendered render unreliability diagnosis: 7 concrete bugs identified with root-cause analysis and priority ranking
+- Updated `UI_SPEC.md` (iter/005): Explorer section fully rewritten — render reliability hardening plan, camera/framing spec, 2D/3D behavior, visual encoding hierarchy, legend/help/context spec, responsive table, states table
+- Updated `DESIGN_TOKENS.md` (iter/005): Added Explorer-specific Section 12 with point encoding palette (authoritative constants), seeded context chip styling, canvas background, loading treatment, dev diagnostic overlay
+- Updated `COMPONENT_MAP.md` (iter/005): Explorer section fully rewritten — MapPanel precision fix targets, new `explorerColors.ts` utility, updated ExplorerContextRail with seeded chip + onboarding guide + source swatches, updated ExplorerPage, CSS change summary
+- **Implemented all bug fixes and UX improvements (frontend.react builder pass)**
 
-## Implementation details
-- stories wrapper runs:
-  - `preflight`
-  - `run-all-persist`
-  - `analysis-db-init`
-  - `enrich-articles` with `DAYS_BACK=3`
-  - `build-story-clusters` with `DAYS_BACK=3` and `SCORE_THRESHOLD=0.50`
-  - `verify-output`
-  - `verify-db`
-- explorer wrapper runs:
-  - `preflight`
-  - `semantic-db-init`
-  - `semantic-sync --embedding-model text-embedding-3-large --days-back 3`
-  - `semantic-project --days-back 3`
-  - `semantic-build --days-back 3`
-- both wrappers use per-job `flock -n` locks, append-only logs, and separate state files under `var/`
-- both wrappers fail clearly when required env is missing
-- no retry loop was added to the new wrappers in v1
+## Bugs fixed (all applied)
+1. BUG-1 (Highest): CSS flex/grid height chain — added `min-height:0` + `overflow:hidden` to `.explorer-workspace`, explicit `height:100%` to `.map-canvas`
+2. BUG-2 (High): React 18 StrictMode double-mount — `key="explorer-deck"` on `<DeckGL>` stabilizes instance identity
+3. BUG-4 (Medium): Named view ID mismatch — removed view IDs; unnamed single-view mode matches un-keyed viewState correctly
+4. BUG-5 (Medium): Layer ID changes on toggle — stable `id: 'semantic-points'`; updateTriggers handle all dynamic changes
+5. BUG-6 (Lower): CSS `!important` conflicting with DeckGL canvas sizing — removed; flex chain provides correct dimensions
+6. BUG-3 diagnostic: dev-mode canvas/zoom/bounds overlay added to `MapPanel` (conditional on `import.meta.env.DEV`)
 
-## Verification completed
-- verified `Makefile` targets and env names against the current repo surface
-- ran shell syntax checks for both new wrapper scripts
-- inspected updated docs and scheduler guidance for consistency with the approved design
+## UX improvements applied
+- `explorerColors.ts`: authoritative encoding constants (fill, stroke, alpha, radius) for all point states
+- Point encoding hierarchy fully implemented: selected → neighbors → hovered → outlier → regular, with correct alpha/radius/stroke per state and selection context
+- Camera hardening: auto-fit only on first load (dataLoaded guard), not on every filter change
+- 3D orbit angles preserved across `focusSelected()` calls
+- Tooltip: added cluster ID, outlier badge, edge-clamping to prevent canvas overflow
+- Dev diagnostic overlay in MapPanel (`DEV` only): canvas dimensions, point count, zoom, bounds
+- Context rail: seeded context chip (Stories→Explorer handoff), onboarding guide, mode-sensitive legend (source swatches, cluster colors), outlier badge in selection state
+- Control bar: `'By source'`, `'By cluster'` labels, tooltip hints on 2D/3D, `'N points (updating)'` during filter refetch
 
-## Important caveat carried into docs
-- if semantic data currently exists for `text-embedding-3-small`, moving scheduled explorer refreshes to `text-embedding-3-large` may require a one-time semantic rebuild/reset
+## Not done (deferred)
+- BUG-7: Orphaned `useExplorerBootstrap.ts` — not removed (not a render bug; safe to defer)
+- BUG-3 zoom formula: verified by diagnostic log, formula unchanged; actual real-data verification requires API data available in browser
+- Mobile bottom-sheet CSS transform pattern (out of scope for this pass)
 
-## Not done in this pass
-- no cron entries were installed on the host
-- no semantic reset/rebuild was performed automatically
+## Build status
+- `cd frontend && npm run build` — ✅ PASS (tsc + vite, 0 errors, 4.90s)
+- 3 atomic commits applied on iter/004 branch
+
+## Required next execution route
+- → verify in browser with real API data (confirm BUG-3 zoom is correct for actual projection scale)
+- → optional cleanup: delete/document `useExplorerBootstrap.ts`
