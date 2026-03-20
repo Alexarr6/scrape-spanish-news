@@ -1,3 +1,5 @@
+"""Export offline semantic artifacts from already-persisted embeddings and projections."""
+
 from __future__ import annotations
 
 import argparse
@@ -56,6 +58,8 @@ def parse_args() -> argparse.Namespace:
 
 
 def main() -> int:
+    """Load persisted semantic state, analyze it, and write export artifacts."""
+
     args = parse_args()
     database_url = resolve_db_url(args.db_url)
     window = resolve_semantic_window(
@@ -140,6 +144,8 @@ def _canonicalize_semantic_records(
     limit: int,
     projection_set: str,
 ) -> tuple[list[EmbeddingArtifact], list[PointArtifact]]:
+    """Force embeddings and projected points into the same ordered article slice."""
+
     points_by_id = {point.article_id: point for point in points}
     embeddings_by_id = {embedding.article_id: embedding for embedding in embeddings}
     point_ids = set(points_by_id)

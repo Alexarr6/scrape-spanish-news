@@ -1,3 +1,5 @@
+"""Sync missing or changed article embeddings into the pgvector-backed store."""
+
 from __future__ import annotations
 
 import argparse
@@ -37,6 +39,8 @@ def parse_args() -> argparse.Namespace:
 
 
 def main() -> int:
+    """Resolve the semantic window, embed candidates, and upsert one sync batch."""
+
     args = parse_args()
     window = resolve_semantic_window(
         days_back=args.days_back,

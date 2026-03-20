@@ -42,6 +42,8 @@ def get_explorer_points(
     date_to: str | None = None,
     search: str | None = None,
 ) -> ExplorerPointsResponse:
+    """Return explorer points plus the metadata needed to drive the UI shell."""
+
     filters = ExplorerFilters(
         projection_set=projection_set,
         limit=limit,
@@ -62,6 +64,8 @@ def get_explorer_filters(
     session: Session = Depends(get_session),
     projection_set: str = DEFAULT_PROJECTION_SET,
 ) -> ExplorerFiltersResponse:
+    """Return semantic explorer filter options for one projection set."""
+
     options = load_explorer_filter_options(session, projection_set=projection_set)
     return ExplorerFiltersResponse(**options)
 
@@ -72,6 +76,8 @@ def get_explorer_article_detail(
     session: Session = Depends(get_session),
     projection_set: str = DEFAULT_PROJECTION_SET,
 ) -> ExplorerArticleDetail:
+    """Return one explorer article detail payload with neighbors and semantic summary."""
+
     detail = load_explorer_article_detail(
         session,
         article_id=article_id,
@@ -83,6 +89,8 @@ def get_explorer_article_detail(
 
 
 def _to_points_response(page: ExplorerPointsPage) -> ExplorerPointsResponse:
+    """Translate the DB/read-side page object into the API response contract."""
+
     bounds = None
     if page.bounds is not None:
         bounds = ExplorerProjectionBounds(**page.bounds)

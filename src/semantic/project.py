@@ -1,3 +1,5 @@
+"""Projection helpers that turn persisted embeddings into 2D/3D explorer coordinates."""
+
 from __future__ import annotations
 
 import math
@@ -11,6 +13,13 @@ from src.semantic.contracts import EmbeddingArtifact, PointArtifact
 def project_embeddings(
     records: list[EmbeddingArtifact], *, dimensions: int = 3
 ) -> list[PointArtifact]:
+    """Project embedding vectors with PCA while preserving article metadata.
+
+    When there are too few rows to support the requested dimensionality, the
+    function pads missing coordinates with zeros instead of inventing extra
+    structure.
+    """
+
     if not records:
         return []
     if dimensions not in {2, 3}:

@@ -1,3 +1,5 @@
+"""Read-side queries that shape cluster data for the API, not raw ORM dumps."""
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -31,6 +33,8 @@ class ClusterListFilters:
 
 
 def load_story_clusters(session: Session, filters: ClusterListFilters) -> tuple[list[dict], int]:
+    """Load one page of cluster cards plus the total count for the active filter set."""
+
     cluster_ids = _matching_cluster_ids_stmt(filters)
     total = session.execute(select(func.count()).select_from(cluster_ids.subquery())).scalar_one()
     ids = session.execute(
@@ -47,6 +51,8 @@ def load_story_clusters(session: Session, filters: ClusterListFilters) -> tuple[
 
 
 def load_story_cluster_detail(session: Session, cluster_id: int) -> dict | None:
+    """Load one cluster card plus its ordered member article payloads."""
+
     cluster = session.execute(select(StoryClusterORM).where(StoryClusterORM.id == cluster_id)).scalar_one_or_none()
     if cluster is None:
         return None

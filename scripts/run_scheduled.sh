@@ -1,6 +1,9 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+# Scheduler wrapper: run persistent scraping, verify outputs, and keep simple
+# lock/log/state files under var/ so cron can fail loudly instead of lying.
+
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 UV="${UV:-${HOME}/.local/bin/uv}"

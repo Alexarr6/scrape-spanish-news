@@ -1,3 +1,5 @@
+"""Rebuild one persisted semantic projection set and optionally emit artifacts."""
+
 from __future__ import annotations
 
 import argparse
@@ -33,6 +35,8 @@ def parse_args() -> argparse.Namespace:
 
 
 def main() -> int:
+    """Refresh persisted projection rows, then optionally write JSON/HTML outputs."""
+
     args = parse_args()
     window = resolve_semantic_window(
         days_back=args.days_back,

@@ -1,3 +1,5 @@
+"""Heuristic enrichment helpers used as the default analysis fallback path."""
+
 from __future__ import annotations
 
 import re
@@ -125,6 +127,8 @@ def infer_tag_codes(article: ArticleRead) -> tuple[str | None, list[str]]:
 
 
 def heuristic_enrichment(article: ArticleRead) -> ArticleEnrichmentPayload:
+    """Produce a bounded best-effort enrichment payload without any external model call."""
+
     article_type, confidence = infer_article_type(article)
     primary_tag, secondary_tags = infer_tag_codes(article)
     key_phrases = [

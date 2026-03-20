@@ -1,3 +1,5 @@
+"""CLI entrypoint for scraping one source/date and optionally persisting the results."""
+
 from __future__ import annotations
 
 import argparse
@@ -38,6 +40,8 @@ def _validate_date(value: str) -> str:
 
 
 def _persist_articles(articles: list, db_url: str) -> dict[str, int]:
+    """Persist one scrape batch through the shared CRUD layer."""
+
     from src.persistence.contracts import ArticleCreate
     from src.persistence.crud import ArticleCRUD
     from src.persistence.db import create_postgres_engine, init_schema, make_session, resolve_db_url

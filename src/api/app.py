@@ -13,6 +13,8 @@ from src.persistence.db import create_postgres_engine, init_schema, make_session
 
 
 def create_app(db_url: str | None = None) -> FastAPI:
+    """Create the FastAPI app, initialize base schema, and wire shared DB sessions."""
+
     app = FastAPI(title="Spain News Bias Scraper API", version="1.0.0")
 
     engine = create_postgres_engine(resolve_db_url(db_url))
@@ -34,6 +36,8 @@ def create_app(db_url: str | None = None) -> FastAPI:
 
 
 def _mount_frontend_if_built(app: FastAPI) -> None:
+    """Mount the built frontend only when `frontend/dist` exists."""
+
     dist_dir = Path(__file__).resolve().parents[2] / "frontend" / "dist"
     assets_dir = dist_dir / "assets"
     index_file = dist_dir / "index.html"

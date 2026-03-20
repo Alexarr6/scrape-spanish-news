@@ -1,3 +1,5 @@
+"""Canonicalize extracted entities so aliases collapse into stable lookup keys."""
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -30,6 +32,8 @@ class CanonicalEntity:
 
 
 class EntityCanonicalizer:
+    """Apply alias-map rules before falling back to normalized self-canonicalization."""
+
     def canonicalize(self, entity: ArticleAnalysisExtractedEntity) -> CanonicalEntity:
         normalized = normalize_lookup(entity.canonical_name)
         key = (entity.entity_type, normalized)

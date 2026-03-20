@@ -1,3 +1,5 @@
+"""Database-backed semantic storage, projection refresh, and explorer read-side helpers."""
+
 from __future__ import annotations
 
 import hashlib
@@ -34,6 +36,8 @@ MIN_TEXT_LENGTH = 40
 
 @dataclass(frozen=True)
 class SemanticWindow:
+    """Inclusive UTC date window used by semantic sync/project/build flows."""
+
     date_from: str | None = None
     date_to: str | None = None
 
@@ -45,6 +49,14 @@ def resolve_semantic_window(
     date_to: str | None = None,
     today: date | None = None,
 ) -> SemanticWindow | None:
+    """Resolve CLI-style date flags into one validated inclusive window.
+
+    `days_back` means an inclusive UTC range ending on `today`. Explicit
+    `date_from`/`date_to` can be used independently or together, but they cannot
+    be combined with `days_back`. Returning ``None`` keeps the old full-history
+    behavior for callers that want no date filter at all.
+    """
+
     if days_back is not None and days_back < 1:
         raise ValueError("days_back must be >= 1")
     if days_back is not None and (date_from or date_to):
@@ -386,6 +398,8 @@ def get_embedding_vector_dimensions(bind: Engine | Session | Any) -> int | None:
 
 
 def build_candidate(article_row: ArticleORM, *, max_chars: int) -> SemanticCandidate | None:
+    """Build one embedding candidate or skip rows that do not have enough text."""
+
     article = SemanticArticle(
         article_id=article_row.id,
         source=article_row.source,
@@ -407,6 +421,8 @@ def build_candidate(article_row: ArticleORM, *, max_chars: int) -> SemanticCandi
 
 
 def assemble_article_text(article: SemanticArticle, *, max_chars: int) -> str:
+    """Assemble normalized source/context/title/body text for embedding generation."""
+
     context = " | ".join(
         part for part in [normalize_text(article.source), normalize_text(article.section)] if part
     )
@@ -439,6 +455,13 @@ def select_embedding_candidates(
     embedding_model: str = DEFAULT_EMBEDDING_MODEL,
     window: SemanticWindow | None = None,
 ) -> list[SemanticCandidate]:
+    """Select recent articles whose semantic embedding is missing or stale.
+
+    The query intentionally over-fetches recent article rows, then filters in
+    Python so short/empty articles and unchanged content hashes do not consume
+    embedding requests.
+    """
+
     query = session.query(ArticleORM)
     if window and window.date_from:
         query = query.filter(text("date(published_at) >= date(:window_date_from)")).params(window_date_from=window.date_from)
@@ -484,6 +507,8 @@ def upsert_embeddings(
     content_hashes: dict[int, str],
     source_text_chars: dict[int, int],
 ) -> int:
+    """Upsert one embedding batch while enforcing schema/model dimension alignment."""
+
     if not records:
         return 0
     model_names = {record.embedding_model for record in records}
@@ -607,6 +632,13 @@ def refresh_projection_set(
     projection_version: str = DEFAULT_PROJECTION_VERSION,
     window: SemanticWindow | None = None,
 ) -> int:
+    """Rebuild one projection set and replace its derived explorer-side analysis.
+
+    This is destructive per projection set on purpose: persisted coordinates,
+    point-analysis rows, and cluster summaries for the named set are cleared and
+    recomputed from the currently stored embeddings.
+    """
+
     projection_kind = projection_kind_for_set(projection_set)
     embeddings = load_embedding_artifacts(session, window=window)
     points = project_embeddings(
@@ -678,6 +710,8 @@ def load_projected_points(
     neighbor_limit: int = DEFAULT_NEIGHBOR_LIMIT,
     window: SemanticWindow | None = None,
 ) -> list[PointArtifact]:
+    """Load explorer-ready projected points, optionally hydrating nearest neighbors."""
+
     projection_kind = projection_kind_for_set(projection_set)
     sql = """
             SELECT a.id AS article_id, a.source, a.title, a.url,
@@ -926,6 +960,13 @@ def _explorer_published_at_sql(*, dialect_name: str) -> str:
 
 
 def load_explorer_points_page(session: Session, *, filters: ExplorerFilters) -> ExplorerPointsPage:
+    """Return the semantic explorer page payload plus derived filter metadata.
+
+    The response is intentionally richer than a plain point list because the UI
+    expects bounds, available filter values, and cluster summaries in the same
+    request.
+    """
+
     projection_kind = projection_kind_for_set(filters.projection_set)
     where_sql, params = _build_explorer_where_clause(filters, projection_kind=projection_kind)
     published_at_sql = _explorer_published_at_sql(dialect_name=_session_dialect_name(session))

@@ -35,6 +35,8 @@ def list_story_clusters(
     date_to: date | None = None,
     search: str | None = None,
 ) -> StoryClusterListResponse:
+    """List story clusters using filter params already shaped for the read-side."""
+
     items, total = load_story_clusters(
         session,
         ClusterListFilters(
@@ -59,6 +61,8 @@ def get_story_cluster_filters(
     date_to: date | None = None,
     search: str | None = None,
 ) -> StoryClusterFiltersResponse:
+    """Return source, tag, and entity filters for the currently matched cluster set."""
+
     payload = load_story_cluster_filters(
         session,
         ClusterListFilters(source=source, date_from=date_from, date_to=date_to, search=search),
@@ -68,6 +72,8 @@ def get_story_cluster_filters(
 
 @router.get("/{cluster_id}", response_model=StoryClusterDetail)
 def get_story_cluster(cluster_id: int, session: Session = Depends(get_session)) -> StoryClusterDetail:
+    """Return one story cluster detail payload or a 404 when the id is unknown."""
+
     payload = load_story_cluster_detail(session, cluster_id)
     if payload is None:
         raise HTTPException(status_code=404, detail="Story cluster not found")

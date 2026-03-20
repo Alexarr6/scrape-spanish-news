@@ -1,3 +1,5 @@
+"""CLI entrypoint for enriching persisted articles with tags and entities."""
+
 from __future__ import annotations
 
 import argparse

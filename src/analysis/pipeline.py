@@ -1,3 +1,5 @@
+"""Pipelines for article enrichment and same-story cluster rebuilding."""
+
 from __future__ import annotations
 
 import hashlib
@@ -54,6 +56,8 @@ class EnrichedArticle:
 
 
 class AnalysisPipeline:
+    """Enrich persisted articles with tags, entities, and analysis side tables."""
+
     def __init__(self, session: Session, *, llm_settings: OpenRouterSettings | None = None) -> None:
         self.session = session
         self.llm = OpenRouterClient(llm_settings) if llm_settings else None
@@ -82,6 +86,14 @@ class AnalysisPipeline:
         self.session.commit()
 
     def enrich_articles(self, *, days_back: int = 2, limit: int = 150) -> EnrichmentRunMetrics:
+        """Enrich a bounded recent article window and persist the resulting analysis.
+
+        The pipeline always starts with heuristic extraction so there is a stable
+        fallback path even when the optional OpenRouter call is unavailable or
+        returns unusable data. Existing rows are skipped when the content hash has
+        not changed.
+        """
+
         self.seed_tags()
         started_at = datetime.now(UTC)
         settings = self.llm.settings if self.llm else None
@@ -299,12 +311,21 @@ class AnalysisPipeline:
 
 
 class ClusterPipeline:
+    """Rebuild same-story clusters from enriched article state."""
+
     def __init__(self, session: Session) -> None:
         self.session = session
 
     def build_clusters(
         self, *, days_back: int = 3, limit: int = 200, score_threshold: float = 0.68
     ) -> tuple[ClusterRebuildMetrics, list[PairScoreArtifact]]:
+        """Score candidate pairs, accept qualifying edges, and persist components.
+
+        The rebuild is bounded by recency, article count, and threshold so the
+        operator can trade completeness for predictable runtime during repeated
+        refreshes.
+        """
+
         started = datetime.now(UTC)
         articles = self._load_enriched_articles(days_back=days_back, limit=limit)
         metrics = ClusterRebuildMetrics(article_count=len(articles), started_at=started)
@@ -383,6 +404,8 @@ class ClusterPipeline:
         return result
 
     def score_pair(self, left: EnrichedArticle, right: EnrichedArticle) -> StoryClusterMemberReason:
+        """Score whether two enriched articles should belong to the same story cluster."""
+
         semantic_similarity = (
             1.0
             if jaccard_similarity(left.key_phrases, right.key_phrases) > 0.8

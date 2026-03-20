@@ -1,3 +1,5 @@
+"""Cluster and annotate projected semantic points for explorer-facing views."""
+
 from __future__ import annotations
 
 from collections import Counter
@@ -19,6 +21,8 @@ from src.semantic.contracts import (
 
 @dataclass(frozen=True)
 class AnalysisConfig:
+    """Tunable HDBSCAN and neighborhood settings for semantic point analysis."""
+
     min_cluster_size: int = 3
     min_samples: int = 2
     neighbor_k: int = 4
@@ -31,6 +35,13 @@ def analyze_points(
     *,
     config: AnalysisConfig | None = None,
 ) -> SemanticAnalysisArtifact:
+    """Derive cluster, outlier, density, and nearby-source annotations for points.
+
+    The function requires point ids and embedding ids to align exactly because
+    cluster labels and density scores are projected back onto the point payloads
+    returned to the API and offline exports.
+    """
+
     config = config or AnalysisConfig()
     metadata = AnalysisMetadataArtifact(
         distance_basis="normalized_embedding_euclidean",
@@ -162,6 +173,8 @@ def analyze_points(
 
 
 def _cluster_labels(normalized_embeddings: np.ndarray, *, config: AnalysisConfig) -> np.ndarray:
+    """Run HDBSCAN when enough rows exist; otherwise mark everything as noise."""
+
     if len(normalized_embeddings) < config.min_cluster_size:
         return np.full(len(normalized_embeddings), -1, dtype=int)
     estimator = HDBSCAN(

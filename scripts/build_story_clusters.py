@@ -1,3 +1,5 @@
+"""CLI entrypoint for rebuilding same-story clusters from enriched articles."""
+
 from __future__ import annotations
 
 import argparse
