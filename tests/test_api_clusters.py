@@ -77,34 +77,38 @@ def _seed_cluster_data(session: Session) -> None:
     article1 = ArticleORM(source="elpais", title="Sánchez defiende el acuerdo presupuestario", url="https://elpais.com/1", published_at=datetime(2026, 3, 18, 9, 0, tzinfo=UTC), scraped_at=datetime(2026, 3, 18, 9, 5, tzinfo=UTC), section="politica", summary="El Gobierno cierra apoyos clave.", article_text="Texto 1")
     article2 = ArticleORM(source="elmundo", title="Feijóo carga contra el pacto del Gobierno", url="https://elmundo.es/2", published_at=datetime(2026, 3, 18, 10, 0, tzinfo=UTC), scraped_at=datetime(2026, 3, 18, 10, 5, tzinfo=UTC), section="politica", summary="La oposición critica el acuerdo.", article_text="Texto 2")
     article3 = ArticleORM(source="eldiario", title="AEMET activa avisos por una nueva borrasca", url="https://eldiario.es/3", published_at=datetime(2026, 3, 17, 8, 0, tzinfo=UTC), scraped_at=datetime(2026, 3, 17, 8, 5, tzinfo=UTC), section="sociedad", summary="Avisos en varias comunidades.", article_text="Texto 3")
-    session.add_all([article1, article2, article3])
+    article4 = ArticleORM(source="abc", title="Última hora sobre la borrasca y nuevos avisos", url="https://abc.es/4", published_at=datetime(2026, 3, 18, 11, 0, tzinfo=UTC), scraped_at=datetime(2026, 3, 18, 11, 5, tzinfo=UTC), section="sociedad", summary="Nuevos avisos elevan la cobertura del temporal.", article_text="Texto 4")
+    session.add_all([article1, article2, article3, article4])
     session.flush()
 
     session.add_all([
         ArticleAnalysisORM(article_id=article1.id, article_type="news_report", article_type_confidence=0.9, is_event_coverage=True, language="es", extraction_version="v1", content_hash="a"),
         ArticleAnalysisORM(article_id=article2.id, article_type="news_report", article_type_confidence=0.9, is_event_coverage=True, language="es", extraction_version="v1", content_hash="b"),
         ArticleAnalysisORM(article_id=article3.id, article_type="news_report", article_type_confidence=0.9, is_event_coverage=True, language="es", extraction_version="v1", content_hash="c"),
+        ArticleAnalysisORM(article_id=article4.id, article_type="news_report", article_type_confidence=0.9, is_event_coverage=True, language="es", extraction_version="v1", content_hash="d"),
     ])
     session.add_all([
         ArticleTagORM(article_id=article1.id, tag_id=politics.id, assignment_source="test", confidence=0.9, is_primary=True),
         ArticleTagORM(article_id=article2.id, tag_id=politics.id, assignment_source="test", confidence=0.9, is_primary=True),
         ArticleTagORM(article_id=article3.id, tag_id=climate.id, assignment_source="test", confidence=0.9, is_primary=True),
+        ArticleTagORM(article_id=article4.id, tag_id=climate.id, assignment_source="test", confidence=0.9, is_primary=True),
     ])
     session.add_all([
         EntityMentionORM(article_id=article1.id, entity_id=sanchez.id, surface_form="Pedro Sánchez", mention_text_normalized="pedro sanchez", mention_count=3, title_hits=1, summary_hits=1, body_hits=1, relevance_score=0.95),
         EntityMentionORM(article_id=article2.id, entity_id=feijoo.id, surface_form="Alberto Núñez Feijóo", mention_text_normalized="alberto nunez feijoo", mention_count=2, title_hits=1, summary_hits=0, body_hits=1, relevance_score=0.91),
         EntityMentionORM(article_id=article3.id, entity_id=aemet.id, surface_form="AEMET", mention_text_normalized="aemet", mention_count=2, title_hits=1, summary_hits=1, body_hits=0, relevance_score=0.88),
+        EntityMentionORM(article_id=article4.id, entity_id=aemet.id, surface_form="AEMET", mention_text_normalized="aemet", mention_count=1, title_hits=0, summary_hits=1, body_hits=0, relevance_score=0.72),
     ])
 
     cluster1 = StoryClusterORM(cluster_key="story-2026-03-18-budget", status="active", cluster_type="breaking_event", summary_headline="Gobierno y oposición chocan por el pacto presupuestario", summary_text="Cobertura cruzada sobre el acuerdo y la respuesta de la oposición.", primary_tag_id=politics.id, article_count=2, source_count=2, first_article_published_at=article1.published_at, last_article_published_at=article2.published_at, clustering_version="v1")
-    cluster2 = StoryClusterORM(cluster_key="story-2026-03-17-storm", status="active", cluster_type="breaking_event", summary_headline="Nueva borrasca con avisos de AEMET", summary_text="Seguimiento de la tormenta y sus avisos.", primary_tag_id=climate.id, article_count=1, source_count=1, first_article_published_at=article3.published_at, last_article_published_at=article3.published_at, clustering_version="v1")
+    cluster2 = StoryClusterORM(cluster_key="story-2026-03-18-storm", status="active", cluster_type="breaking_event", summary_headline="Nueva borrasca con avisos de AEMET", summary_text="Seguimiento de la tormenta y sus avisos.", primary_tag_id=climate.id, article_count=1, source_count=1, first_article_published_at=article4.published_at, last_article_published_at=article4.published_at, clustering_version="v1")
     session.add_all([cluster1, cluster2])
     session.flush()
 
     session.add_all([
         ClusterMemberORM(cluster_id=cluster1.id, article_id=article1.id, membership_score=0.94, membership_reason_json="{}"),
         ClusterMemberORM(cluster_id=cluster1.id, article_id=article2.id, membership_score=0.88, membership_reason_json="{}"),
-        ClusterMemberORM(cluster_id=cluster2.id, article_id=article3.id, membership_score=1.0, membership_reason_json="{}"),
+        ClusterMemberORM(cluster_id=cluster2.id, article_id=article4.id, membership_score=1.0, membership_reason_json="{}"),
     ])
     session.add_all([
         ClusterEntityORM(cluster_id=cluster1.id, entity_id=sanchez.id, article_coverage_count=1, mention_count=3, aggregate_relevance_score=0.95),
@@ -132,7 +136,7 @@ def test_cluster_list_detail_filters_and_404() -> None:
 
     assert filtered.status_code == 200
     assert filtered.json()["meta"]["total"] == 1
-    assert filtered.json()["items"][0]["cluster_key"] == "story-2026-03-17-storm"
+    assert filtered.json()["items"][0]["cluster_key"] == "story-2026-03-18-storm"
 
     assert detail.status_code == 200
     assert detail.json()["cluster"]["id"] == 1
@@ -141,7 +145,7 @@ def test_cluster_list_detail_filters_and_404() -> None:
     assert detail.json()["members"][0]["entities"]
 
     assert filters.status_code == 200
-    assert {item["value"] for item in filters.json()["sources"]} == {"elpais", "elmundo", "eldiario"}
+    assert {item["value"] for item in filters.json()["sources"]} == {"elpais", "elmundo", "abc"}
     assert {item["value"] for item in filters.json()["tags"]} == {"politics_national", "climate"}
     assert {item["slug"] for item in filters.json()["entities"]} == {"politician-pedro-sanchez", "politician-alberto-nunez-feijoo", "organization-aemet"}
 
@@ -172,14 +176,19 @@ def test_cluster_list_supports_source_entity_and_search_filters() -> None:
 
 def test_cluster_id_query_is_postgres_safe_and_keeps_stable_ordering() -> None:
     stmt = _matching_cluster_ids_stmt(ClusterListFilters()).order_by(
-        StoryClusterORM.last_article_published_at.desc().nullslast(), StoryClusterORM.id.desc()
+        StoryClusterORM.article_count.desc(),
+        StoryClusterORM.source_count.desc(),
+        StoryClusterORM.last_article_published_at.desc().nullslast(),
+        StoryClusterORM.id.desc(),
     )
     compiled = str(stmt.compile(dialect=postgresql.dialect(), compile_kwargs={"literal_binds": True}))
 
     assert "SELECT DISTINCT" not in compiled
-    assert "GROUP BY story_clusters.id, story_clusters.last_article_published_at" in compiled
     assert (
-        "ORDER BY story_clusters.last_article_published_at DESC NULLS LAST, story_clusters.id DESC" in compiled
+        "GROUP BY story_clusters.id, story_clusters.article_count, story_clusters.source_count, story_clusters.last_article_published_at" in compiled
+    )
+    assert (
+        "ORDER BY story_clusters.article_count DESC, story_clusters.source_count DESC, story_clusters.last_article_published_at DESC NULLS LAST, story_clusters.id DESC" in compiled
     )
 
     client = _build_client()
@@ -187,3 +196,5 @@ def test_cluster_id_query_is_postgres_safe_and_keeps_stable_ordering() -> None:
 
     assert response.status_code == 200
     assert [item["id"] for item in response.json()["items"]] == [1, 2]
+    assert response.json()["items"][0]["article_count"] > response.json()["items"][1]["article_count"]
+    assert response.json()["items"][0]["last_article_published_at"] < response.json()["items"][1]["last_article_published_at"]

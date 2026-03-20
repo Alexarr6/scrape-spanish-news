@@ -39,7 +39,10 @@ def load_story_clusters(session: Session, filters: ClusterListFilters) -> tuple[
     total = session.execute(select(func.count()).select_from(cluster_ids.subquery())).scalar_one()
     ids = session.execute(
         cluster_ids.order_by(
-            StoryClusterORM.last_article_published_at.desc().nullslast(), StoryClusterORM.id.desc()
+            StoryClusterORM.article_count.desc(),
+            StoryClusterORM.source_count.desc(),
+            StoryClusterORM.last_article_published_at.desc().nullslast(),
+            StoryClusterORM.id.desc(),
         )
         .offset(filters.offset)
         .limit(filters.limit)
@@ -237,7 +240,12 @@ def _matching_cluster_ids_stmt(filters: ClusterListFilters) -> Select:
         select(StoryClusterORM.id)
         .join(ClusterMemberORM, ClusterMemberORM.cluster_id == StoryClusterORM.id)
         .join(ArticleORM, ArticleORM.id == ClusterMemberORM.article_id)
-        .group_by(StoryClusterORM.id, StoryClusterORM.last_article_published_at)
+        .group_by(
+            StoryClusterORM.id,
+            StoryClusterORM.article_count,
+            StoryClusterORM.source_count,
+            StoryClusterORM.last_article_published_at,
+        )
     )
     if filters.source:
         stmt = stmt.where(ArticleORM.source == filters.source)
