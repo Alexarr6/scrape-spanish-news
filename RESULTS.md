@@ -1,156 +1,137 @@
 # RESULTS.md
 
-## iter/004 — Frontend Rebuild: Complete
+## Documentation overhaul implementation
 
-**Date:** 2026-03-20 UTC
-**Build verification:** ✅ `cd frontend && npm run build` — zero TypeScript errors — 5.07s clean build
-
----
-
-## Implementation summary
-
-### What changed
-
-A complete frontend rebuild of the Spain News Bias Scraper from the old three-column panel template into two distinct, purpose-built product surfaces.
-
-#### The root problem (addressed)
-
-`AppShell.tsx` imposed a generic `filters / main / detail` three-column template on both Stories and Explorer. Both routes felt like the same screen. The shell prop pattern locked routes into a layout they didn't control.
-
-#### What was done
-
-**Shell broken.** `AppShell.tsx` deleted. `Shell.tsx` now provides only a top bar and a main wrapper. Routes compose their own layouts.
-
-**Stories rebuilt as a stream + focus panel.** No permanent filter column. Filter drawer opens on demand. Story cards are headline-dominant with source badges and date range. The focus panel now has four clearly separated sections: story brief → coverage bar → articles by source → article detail.
-
-**CoverageBar added.** New component that computes source share from the existing `members` array (no backend change). The highest-value new element in the rebuild — makes source coverage readable as a quantified visual signal instead of a chip pile.
-
-**Explorer rebuilt with control bar above canvas.** Floating toolbar overlay removed from inside the DeckGL canvas. Controls live in a clean horizontal `ExplorerControlBar` above the map. Canvas is clean semantic signal only. `MapPanel` refactored to `forwardRef` with a `MapPanelHandle` (fitAll / focusSelected) for imperative camera control from the control bar.
-
-**ExplorerContextRail replaces InspectorPanel tabs.** Sections with dividers replace the Article/Cluster/Legend tab structure. No-selection state shows guide + legend + dataset summary. Selection state shows article → cluster context → semantic neighborhood in one scrollable rail.
-
-**"Open in Stories" cross-link implemented.** From Explorer context rail → Stories route with the cluster pre-selected. Uses existing `cluster_id` field on `ExplorerPoint.analysis`. Requires no new API endpoint. `navigation.ts` updated to support `clusterId` param in `buildClusterBrowserHref`.
-
-**Visual system rewritten.** `styles.css` fully replaced with a CSS custom property token system. Three surface levels enforced. Border radius reduced throughout. `.badge` replaces the overused dual `.status-chip` / `.summary-pill` system.
+**Date:** 2026-03-20 UTC  
+**Outcome:** ✅ implemented
 
 ---
 
-### Files created
+## What was accomplished
 
-```
-frontend/src/
-  components/
-    layout/
-      Shell.tsx
-      TopBar.tsx
-      FilterDrawer.tsx
-      SectionDivider.tsx
-    stories/
-      StoryStream.tsx
-      StoryCard.tsx
-      StoryFocusPanel.tsx
-      CoverageBar.tsx
-    explorer/
-      ExplorerControlBar.tsx
-      ExplorerContextRail.tsx
-      MapPanel.tsx
-    system/
-      LoadingState.tsx
-      ErrorState.tsx
-      EmptyState.tsx
-  routes/
-    ClusterBrowserPage.tsx    (rebuilt)
-    ExplorerPage.tsx          (rebuilt)
-  App.tsx                     (simplified)
-  styles.css                  (rewritten)
-lib/navigation.ts             (minor: clusterId param added)
-```
+### 1) README reshaped into the operator front door
+`README.md` now does the job it should have been doing:
+- explains what the repo actually is
+- points to the real command surface
+- documents common operator flows
+- keeps detail in the docs site instead of stuffing everything into one giant page
 
-### Files deleted
+### 2) MkDocs integrated cleanly
+Added:
+- `mkdocs.yml`
+- `make docs-build`
+- `make docs-serve`
+- MkDocs as a dev dependency in `pyproject.toml`
 
-```
-components/AppShell.tsx
-components/ClusterFilterPanel.tsx
-components/ClusterInspectorPanel.tsx
-components/ClusterListPanel.tsx
-components/ClusterStatusBar.tsx
-components/FilterBar.tsx
-components/InspectorPanel.tsx
-components/StatusBar.tsx
-components/MapPanel.tsx       (moved to components/explorer/MapPanel.tsx)
-```
+The docs nav is structured around real repo surfaces instead of turning `docs/` into a random markdown bucket.
 
-### Files preserved unchanged
+### 3) Primary docs written under `docs/`
+New primary sections:
+- docs home
+- getting started
+- operator guide
+- semantic pipeline
+- web app and API
+- architecture
+- testing and quality
+- reference
+- historical notes
 
-```
-hooks/useClusterBrowserData.ts
-hooks/useClusterUrlState.ts
-hooks/useClusterFilters.ts
-hooks/useExplorerData.ts
-hooks/useExplorerUrlState.ts
-hooks/useExplorerFilters.ts
-hooks/useExplorerBootstrap.ts
-lib/api.ts
-lib/types.ts
-lib/format.ts
-lib/query.ts
-```
+Existing review/archive material was preserved and explicitly routed into a historical section rather than being sold as the main documentation path.
+
+### 4) Selective backend/script docstrings added
+Docstrings were added where they materially help comprehension, especially in:
+- semantic storage/projection/read-side code
+- semantic analysis and projection logic
+- analysis enrichment and clustering pipelines
+- cluster read-side payload shaping
+- API entrypoints and response translators
+- key CLI/ops scripts
+
+This was kept selective on purpose. No fake "document every tiny helper" nonsense.
 
 ---
 
-## Backend/API changes
+## Files materially added or changed
 
-**None.** Zero new endpoints. All rebuilt surfaces work against existing API contracts:
-- `/api/v1/clusters` → Stories stream
-- `/api/v1/clusters/{id}` → Story focus detail
-- `/api/v1/clusters/filters` → Filter drawer
-- `/api/v1/semantic/explorer/points` → Explorer canvas
-- `/api/v1/semantic/explorer/filters` → Explorer filter sheet
-- `/api/v1/semantic/explorer/articles/{id}` → Explorer context rail
+### Documentation surface
+- `README.md`
+- `mkdocs.yml`
+- `docs/index.md`
+- `docs/getting-started.md`
+- `docs/operator-guide/commands.md`
+- `docs/operator-guide/workflows.md`
+- `docs/operator-guide/scheduler.md`
+- `docs/operator-guide/troubleshooting.md`
+- `docs/semantic/overview.md`
+- `docs/semantic/workflow.md`
+- `docs/web-app-api.md`
+- `docs/architecture/overview.md`
+- `docs/architecture/analysis-pipeline.md`
+- `docs/architecture/semantic-pipeline.md`
+- `docs/testing-quality.md`
+- `docs/reference/environment.md`
+- `docs/reference/outputs.md`
+- `docs/historical/index.md`
 
-Coverage bar computed client-side from existing `members` array. Explorer→Stories cross-link uses existing `cluster_id` from `ExplorerPoint.analysis`.
+### Supporting repo wiring
+- `Makefile`
+- `pyproject.toml`
+
+### Docstring/code clarity pass
+- `src/semantic/dbstore.py`
+- `src/semantic/analyze.py`
+- `src/semantic/project.py`
+- `src/analysis/pipeline.py`
+- `src/analysis/readside.py`
+- `src/analysis/canonicalization.py`
+- `src/analysis/heuristics.py`
+- `src/api/app.py`
+- `src/api/v1/clusters.py`
+- `src/api/v1/semantic.py`
+- `scripts/semantic_sync.py`
+- `scripts/semantic_project.py`
+- `scripts/build_semantic_map.py`
+- `scripts/build_story_clusters.py`
+- `scripts/enrich_articles.py`
+- `scripts/run_scheduled.sh`
+- `src/main.py`
 
 ---
 
-## Verification
+## Verification run
 
-```bash
-cd frontend && npm run build
-# Result: ✓ built in 5.07s — zero TypeScript errors
-# Pre-existing @loaders.gl/worker-utils warning: unchanged from iter/003 baseline
-```
+### Passed
+- `make sync`
+- `make docs-build`
+- `make frontend-check`
 
----
+### Repo failures found during verification
+- `make test` fails with **3 archived fixture-path failures** unrelated to the documentation work:
+  - `tests/test_comparison_summary_contract.py` (2 failures)
+  - `tests/test_cross_source_output_metrics_contract.py` (1 failure)
+- Common cause: missing `20minutos` fixture JSON candidates under:
+  - `tests/fixtures/evidence/20260314-1212-8ff9`
 
-## Risks and known gaps
-
-| Risk | Severity | Note |
-|---|---|---|
-| Canvas height on some browsers | Low | `min-height: 0` on flex children handles most cases; verify if a parent gains `overflow: hidden` |
-| Mobile Explorer UX | Low | Context rail drops below canvas at <1280px — functional but not polished; mobile is not primary target per spec |
-| StoryFocusPanel sticky | Low | `position: sticky` breaks if any parent has `overflow: hidden` / `overflow: auto` |
-| Source color palette keys | Low | Same keying as iter/003 — verify source slugs match API response keys |
+Recommendation: treat that as a separate fixture-repair task, not as part of the docs branch.
 
 ---
 
-## Optional follow-up (not blocking)
+## Important implementation notes
 
-Per UI_SPEC.md §8.2, the following optional backend enhancements were documented but not implemented:
-
-| Gap | Component | Priority |
-|---|---|---|
-| Dataset scope metadata (freshness, source count, date window) | TopBar scope chip + Stories header | Optional |
-| Server-side source-level article counts per cluster | CoverageBar server validation | Optional — frontend compute is correct |
-
-These are deferred to a follow-up pass if needed. The current rebuild is complete and functional against existing contracts.
+- README commands and operator flows were grounded in the current `Makefile` and actual scripts.
+- Docs avoid claiming workflows that were not clearly supported by code.
+- Historical docs were preserved, not bulldozed.
+- Frontend comments were intentionally not expanded to avoid comment graffiti.
+- `uv.lock` was refreshed by `make sync` after adding MkDocs.
 
 ---
 
-## Architect handoff notes (for reference)
+## Commit shape recommended from this state
 
-The architect pass produced:
-- `UI_SPEC.md` — full route anatomy, layout model, states, interactions, API requirements
-- `DESIGN_TOKENS.md` — color palette, typography, spacing, elevation, component visual rules
-- `COMPONENT_MAP.md` — full component inventory with props, CSS sketch, file migration plan
+1. `docs(readme): reshape README into quickstart/operator guide`
+2. `docs(mkdocs): add MkDocs config and site structure`
+3. `docs(code): add high-value docstrings for semantic/analysis/api entrypoints`
+4. `docs(results): finalize status and handoff notes`
 
-All spec decisions were followed. Deviations from spec: none. One practical addition: `StoriesFilterFields` and `ExplorerFilterFields` defined inline in their route files (not as separate files) since their content is route-specific and small enough to colocate without harm.
+That split matches the actual change boundaries and keeps review sane.

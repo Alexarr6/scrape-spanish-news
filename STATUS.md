@@ -1,58 +1,60 @@
 - State: COMPLETE
-- Current phase: iter/004 frontend rebuild complete
+- Current phase: documentation overhaul implemented
 - Last update: 2026-03-20 UTC
 
-## Iteration focus
-Full frontend rebuild of Spain News Bias Scraper toward a professional analytical / editorial media-intelligence product.
+## Completed deliverables
+- README rewritten into a tighter operator/quickstart guide
+- MkDocs integrated via `mkdocs.yml`
+- new primary docs structure added under `docs/`
+- selective backend/script docstrings added in semantic, analysis, API, and CLI entrypoints
+- `Makefile` updated with `docs-build` and `docs-serve`
+- `pyproject.toml` updated with MkDocs dev dependency
 
-## Pipeline status
-1. planner (GPT-5.4) — ✅ complete
-2. frontend architect 🏗️ (Claude Sonnet 4.6 via OpenRouter) — ✅ complete
-3. frontend.react constructor 👷 (Claude Sonnet 4.6 via OpenRouter) — ✅ complete
+## Implementation scope actually touched
+### README / operator surface
+- `README.md`
+- `Makefile`
+- `pyproject.toml`
+- `mkdocs.yml`
 
-## Build verification
-```
-cd frontend && npm run build
-```
-Result: ✅ `tsc -b && vite build` — zero TypeScript errors — 5.07s clean build
+### Docs IA and content
+- `docs/index.md`
+- `docs/getting-started.md`
+- `docs/operator-guide/*`
+- `docs/semantic/*`
+- `docs/architecture/*`
+- `docs/reference/*`
+- `docs/testing-quality.md`
+- `docs/web-app-api.md`
+- `docs/historical/index.md`
 
-## What was delivered
+### Code docstrings / comments
+- `src/semantic/dbstore.py`
+- `src/semantic/analyze.py`
+- `src/semantic/project.py`
+- `src/analysis/pipeline.py`
+- `src/analysis/readside.py`
+- `src/analysis/canonicalization.py`
+- `src/analysis/heuristics.py`
+- `src/api/app.py`
+- `src/api/v1/clusters.py`
+- `src/api/v1/semantic.py`
+- `scripts/semantic_sync.py`
+- `scripts/semantic_project.py`
+- `scripts/build_semantic_map.py`
+- `scripts/build_story_clusters.py`
+- `scripts/enrich_articles.py`
+- `scripts/run_scheduled.sh`
+- `src/main.py`
 
-### Shell architecture
-- `AppShell.tsx` deleted — replaced by `layout/Shell.tsx` (top bar + main wrapper)
-- `layout/TopBar.tsx` — sticky global nav: wordmark + nav links + optional scope chip
-- Shell no longer imposes any layout on routes — both routes own their layout internally
+## Verification status
+- `make sync` — ✅ passed
+- `make docs-build` — ✅ passed
+- `make frontend-check` — ✅ passed
+- `make test` — ⚠️ repo has 3 pre-existing fixture-path failures in archived evidence tests for missing `20minutos` fixture JSON under `tests/fixtures/evidence/20260314-1212-8ff9`
 
-### Stories route
-- `ClusterBrowserPage.tsx` rebuilt — no shell prop, stories layout, filter drawer toggle
-- `stories/StoryStream.tsx` — ranked story card list + pagination
-- `stories/StoryCard.tsx` — headline-dominant story card with source badges + date range
-- `stories/StoryFocusPanel.tsx` — sectioned detail panel: brief / coverage / articles / article detail
-- `stories/CoverageBar.tsx` — source share visualization (computed client-side from members array)
-- `layout/FilterDrawer.tsx` — shared slide-over filter panel
-
-### Explorer route
-- `ExplorerPage.tsx` rebuilt — no shell prop, explorer layout, control bar + canvas + rail
-- `explorer/ExplorerControlBar.tsx` — horizontal control bar above canvas (2D/3D, color lens, camera, filter trigger)
-- `explorer/ExplorerContextRail.tsx` — sectioned context rail: guide / legend / dataset summary / article / cluster / neighborhood
-- `explorer/MapPanel.tsx` — DeckGL canvas refactored: `forwardRef` + `MapPanelHandle` (fitAll / focusSelected), controls removed from canvas
-- "Open in Stories" cross-link implemented (uses `cluster_id` from Explorer point → Stories URL)
-
-### Shared system
-- `system/LoadingState.tsx`, `system/ErrorState.tsx`, `system/EmptyState.tsx` — unified state components
-- `layout/SectionDivider.tsx` — semantic divider with optional label
-
-### Visual system
-- `styles.css` — full rewrite with CSS custom property token system
-- Three surface levels enforced (page / panel / inset)
-- `.badge` replaces `.status-chip` / `.summary-pill`
-- Border radius reduced from `1rem` → `0.625rem` panels, `0.85rem` → `0.375rem` inputs
-- Responsive breakpoints at 1280px and 768px
-
-### API contract
-No changes. Zero new endpoints. All rebuilt surfaces work against existing API contracts.
-
-## Architect artifacts
-- `UI_SPEC.md` — route anatomy, layout model, states, interactions, API requirements
-- `DESIGN_TOKENS.md` — color palette, typography, spacing, elevation, component rules
-- `COMPONENT_MAP.md` — full component inventory with props, CSS sketch, file migration plan
+## Notes for handoff
+- Docs were written against current `Makefile`, scripts, API app factory, and frontend package commands.
+- Historical docs were kept and clearly demoted to historical context instead of being deleted.
+- Frontend comments were not expanded; existing code was left mostly alone to avoid comment spam.
+- Commit policy target was prepared around atomic slices, but commits themselves were not created in this session yet.
