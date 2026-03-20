@@ -8,11 +8,19 @@ export function isSemanticExplorerMode() {
   return new URLSearchParams(window.location.search).get('view') === 'semantic'
 }
 
-export function buildClusterBrowserHref() {
+export function buildClusterBrowserHref(options?: { clusterId?: number | null }) {
   const params = cloneCurrentParams()
   params.delete('view')
+  if (options?.clusterId != null) {
+    params.set('cluster', String(options.clusterId))
+  }
   const text = params.toString()
   return `${window.location.pathname}${text ? `?${text}` : ''}${window.location.hash}`
+}
+
+export function buildStoriesHref(clusterId: number | null): string | null {
+  if (clusterId == null) return null
+  return buildClusterBrowserHref({ clusterId })
 }
 
 export function buildSemanticExplorerHref(options: {

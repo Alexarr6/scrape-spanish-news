@@ -1,116 +1,156 @@
 # RESULTS.md
 
-## Resumen de entrega
-Se implementó iter/003 como una pasada de **productización del Explorer 3D**, sin volver a rediseñar el shell general. El foco estuvo donde debía: framing de cámara, controles más legibles, leyenda persistente, mejor énfasis visual durante selección, y una right rail con estructura útil en vez de una pila mezclada de cosas.
+## iter/004 — Frontend Rebuild: Complete
 
-## Cambios realizados
+**Date:** 2026-03-20 UTC
+**Build verification:** ✅ `cd frontend && npm run build` — zero TypeScript errors — 5.07s clean build
 
-### 1) Cámara / framing / focus
-Archivos principales:
-- `frontend/src/components/MapPanel.tsx`
+---
 
-Cambios:
-- se reemplazó el framing simple por un cálculo más explícito de **fit-to-bounds con padding y suelo mínimo de span**
-- el Explorer ahora **auto-fit** en carga inicial y cuando cambia el subset visible
-- `Fit all` vuelve al framing calculado del dataset visible
-- `Focus selected` ya no hace un salto bruto: centra y encuadra el artículo seleccionado usando también sus vecinos semánticos cuando existen
-- en 3D se mantiene una órbita deliberada y estable, pero con zoom recalculado de forma más útil para nubes compactas
+## Implementation summary
 
-Resultado:
-- datasets acotados cerca de `-1..1` dejan de abrir tan lejos
-- la cámara se siente más intencional y menos genérica
+### What changed
 
-### 2) Controles / leyenda / énfasis visual
-Archivos principales:
-- `frontend/src/components/MapPanel.tsx`
-- `frontend/src/components/InspectorPanel.tsx`
-- `frontend/src/styles.css`
+A complete frontend rebuild of the Spain News Bias Scraper from the old three-column panel template into two distinct, purpose-built product surfaces.
 
-Cambios:
-- los controles superiores se reagruparon como **Projection / Color by / Frame**
-- se añadió copy más explícito sobre **cuándo usar 2D vs 3D**
-- se añadió guía inline persistente dentro del canvas
-- el panel derecho sin selección ahora arranca con una **Guide + Legend** mucho más útil
-- se mejoró el énfasis visual:
-  - seleccionado = prioridad máxima
-  - vecinos = prioridad secundaria clara
-  - resto de puntos = atenuados cuando hay selección activa
-  - outliers conservan identidad sin gritar demasiado
+#### The root problem (addressed)
 
-Resultado:
-- el Explorer explica mejor qué está mostrando y para qué sirve
-- la selección local ahora se lee bastante mejor dentro de nubes densas
+`AppShell.tsx` imposed a generic `filters / main / detail` three-column template on both Stories and Explorer. Both routes felt like the same screen. The shell prop pattern locked routes into a layout they didn't control.
 
-### 3) Context panel y responsive cleanup
-Archivos principales:
-- `frontend/src/components/InspectorPanel.tsx`
-- `frontend/src/routes/ExplorerPage.tsx`
-- `frontend/src/styles.css`
+#### What was done
 
-Cambios:
-- el panel derecho pasó a tener tabs locales:
-  - sin selección: `Guide`, `Legend`
-  - con selección: `Article`, `Cluster`, `Legend`
-- se separó claramente:
-  - evidencia del artículo
-  - contexto del cluster
-  - referencia persistente de lectura
-- el tab de cluster usa metadata ya disponible para dar contexto sin meter backend nuevo
-- en responsive:
-  - la barra de controles colapsa mejor
-  - el Explorer pasa antes a layout más limpio en anchuras intermedias
-  - el panel de contexto baja de fila antes de que todo se apelotone
+**Shell broken.** `AppShell.tsx` deleted. `Shell.tsx` now provides only a top bar and a main wrapper. Routes compose their own layouts.
 
-Resultado:
-- la right rail ahora tiene jerarquía real
-- el Explorer se degrada bastante mejor en widths intermedios
+**Stories rebuilt as a stream + focus panel.** No permanent filter column. Filter drawer opens on demand. Story cards are headline-dominant with source badges and date range. The focus panel now has four clearly separated sections: story brief → coverage bar → articles by source → article detail.
 
-## Verificación ejecutada
-Comando mínimo requerido ejecutado varias veces durante la implementación y al final:
+**CoverageBar added.** New component that computes source share from the existing `members` array (no backend change). The highest-value new element in the rebuild — makes source coverage readable as a quantified visual signal instead of a chip pile.
+
+**Explorer rebuilt with control bar above canvas.** Floating toolbar overlay removed from inside the DeckGL canvas. Controls live in a clean horizontal `ExplorerControlBar` above the map. Canvas is clean semantic signal only. `MapPanel` refactored to `forwardRef` with a `MapPanelHandle` (fitAll / focusSelected) for imperative camera control from the control bar.
+
+**ExplorerContextRail replaces InspectorPanel tabs.** Sections with dividers replace the Article/Cluster/Legend tab structure. No-selection state shows guide + legend + dataset summary. Selection state shows article → cluster context → semantic neighborhood in one scrollable rail.
+
+**"Open in Stories" cross-link implemented.** From Explorer context rail → Stories route with the cluster pre-selected. Uses existing `cluster_id` field on `ExplorerPoint.analysis`. Requires no new API endpoint. `navigation.ts` updated to support `clusterId` param in `buildClusterBrowserHref`.
+
+**Visual system rewritten.** `styles.css` fully replaced with a CSS custom property token system. Three surface levels enforced. Border radius reduced throughout. `.badge` replaces the overused dual `.status-chip` / `.summary-pill` system.
+
+---
+
+### Files created
+
+```
+frontend/src/
+  components/
+    layout/
+      Shell.tsx
+      TopBar.tsx
+      FilterDrawer.tsx
+      SectionDivider.tsx
+    stories/
+      StoryStream.tsx
+      StoryCard.tsx
+      StoryFocusPanel.tsx
+      CoverageBar.tsx
+    explorer/
+      ExplorerControlBar.tsx
+      ExplorerContextRail.tsx
+      MapPanel.tsx
+    system/
+      LoadingState.tsx
+      ErrorState.tsx
+      EmptyState.tsx
+  routes/
+    ClusterBrowserPage.tsx    (rebuilt)
+    ExplorerPage.tsx          (rebuilt)
+  App.tsx                     (simplified)
+  styles.css                  (rewritten)
+lib/navigation.ts             (minor: clusterId param added)
+```
+
+### Files deleted
+
+```
+components/AppShell.tsx
+components/ClusterFilterPanel.tsx
+components/ClusterInspectorPanel.tsx
+components/ClusterListPanel.tsx
+components/ClusterStatusBar.tsx
+components/FilterBar.tsx
+components/InspectorPanel.tsx
+components/StatusBar.tsx
+components/MapPanel.tsx       (moved to components/explorer/MapPanel.tsx)
+```
+
+### Files preserved unchanged
+
+```
+hooks/useClusterBrowserData.ts
+hooks/useClusterUrlState.ts
+hooks/useClusterFilters.ts
+hooks/useExplorerData.ts
+hooks/useExplorerUrlState.ts
+hooks/useExplorerFilters.ts
+hooks/useExplorerBootstrap.ts
+lib/api.ts
+lib/types.ts
+lib/format.ts
+lib/query.ts
+```
+
+---
+
+## Backend/API changes
+
+**None.** Zero new endpoints. All rebuilt surfaces work against existing API contracts:
+- `/api/v1/clusters` → Stories stream
+- `/api/v1/clusters/{id}` → Story focus detail
+- `/api/v1/clusters/filters` → Filter drawer
+- `/api/v1/semantic/explorer/points` → Explorer canvas
+- `/api/v1/semantic/explorer/filters` → Explorer filter sheet
+- `/api/v1/semantic/explorer/articles/{id}` → Explorer context rail
+
+Coverage bar computed client-side from existing `members` array. Explorer→Stories cross-link uses existing `cluster_id` from `ExplorerPoint.analysis`.
+
+---
+
+## Verification
 
 ```bash
 cd frontend && npm run build
+# Result: ✓ built in 5.07s — zero TypeScript errors
+# Pre-existing @loaders.gl/worker-utils warning: unchanged from iter/003 baseline
 ```
 
-Resultado final:
-- PASS
+---
 
-Notas del build:
-- sigue apareciendo el warning no bloqueante de `@loaders.gl/worker-utils` / browser external `spawn`
-- sigue apareciendo el warning no bloqueante de chunk grande (~914 kB minificado)
-- no hizo falta tocar backend ni estructuras API compartidas, así que no corrí `pytest`
+## Risks and known gaps
 
-## Pendientes / no resueltos
-- hotfix posterior: el rediseño dejó el viewport del Explorer sin una altura explícita/flexible fiable (`.map-canvas` dependía de `min-height: 100%`), así que DeckGL podía quedarse con un canvas colapsado o invisiblemente pequeño pese a que el shell sí se veía
-- fix aplicado en `frontend/src/styles.css`: `map-frame` ahora actúa como contenedor flex vertical y `map-canvas` recibe un viewport explícito (`flex: 1` + `min-height: 42rem`, con el hijo directo ocupando `height: 100%`)
-- el warning de chunk grande sigue vivo; eso encaja bien como **iteración opcional de performance** con lazy-loading o code-splitting del Explorer
-- el tab de cluster es útil, pero todavía es derivado de metadata existente; una iteración futura podría enriquecerlo con más narrativa o métricas específicas si de verdad aportan valor
-- la experiencia visual ya es bastante más analítica, pero aún podría afinarse con una pasada de microcopy y validación manual sobre datasets especialmente raros o dispersos
+| Risk | Severity | Note |
+|---|---|---|
+| Canvas height on some browsers | Low | `min-height: 0` on flex children handles most cases; verify if a parent gains `overflow: hidden` |
+| Mobile Explorer UX | Low | Context rail drops below canvas at <1280px — functional but not polished; mobile is not primary target per spec |
+| StoryFocusPanel sticky | Low | `position: sticky` breaks if any parent has `overflow: hidden` / `overflow: auto` |
+| Source color palette keys | Low | Same keying as iter/003 — verify source slugs match API response keys |
 
-## Commits atómicos creados
-1. `52deeb6` — `feat(explorer): improve semantic camera fit and selection framing`
-2. `dc6a254` — `feat(explorer): clarify controls legend and point emphasis`
-3. latest HEAD on `iter/003` — `feat(explorer): reorganize side-panel context and responsive layout`
+---
 
-## Git summary
-- branch: `iter/003`
-- repo verified with:
+## Optional follow-up (not blocking)
 
-```bash
-git rev-parse --is-inside-work-tree
-git branch --show-current
-```
+Per UI_SPEC.md §8.2, the following optional backend enhancements were documented but not implemented:
 
-### Recent relevant commits
-```bash
-git log --oneline -n 6
-```
+| Gap | Component | Priority |
+|---|---|---|
+| Dataset scope metadata (freshness, source count, date window) | TopBar scope chip + Stories header | Optional |
+| Server-side source-level article counts per cluster | CoverageBar server validation | Optional — frontend compute is correct |
 
-### Rollback / review hint
-Para revisar por fases:
-- cámara / framing: `52deeb6`
-- controles / leyenda / énfasis: `dc6a254`
-- side-panel / responsive: usar el siguiente commit de esta iteración
+These are deferred to a follow-up pass if needed. The current rebuild is complete and functional against existing contracts.
 
-Rollback razonable si hubiera que deshacer iter/003 completo:
-- volver al commit inmediatamente anterior a `52deeb6`
+---
+
+## Architect handoff notes (for reference)
+
+The architect pass produced:
+- `UI_SPEC.md` — full route anatomy, layout model, states, interactions, API requirements
+- `DESIGN_TOKENS.md` — color palette, typography, spacing, elevation, component visual rules
+- `COMPONENT_MAP.md` — full component inventory with props, CSS sketch, file migration plan
+
+All spec decisions were followed. Deviations from spec: none. One practical addition: `StoriesFilterFields` and `ExplorerFilterFields` defined inline in their route files (not as separate files) since their content is route-specific and small enough to colocate without harm.

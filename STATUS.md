@@ -1,49 +1,58 @@
-- State: DONE
-- Current phase: iter/003 hotfix complete — restored explicit Explorer map viewport sizing after the UI pass left the DeckGL surface without a reliable rendered height
-- Last update: 2026-03-19 22:15 UTC
+- State: COMPLETE
+- Current phase: iter/004 frontend rebuild complete
+- Last update: 2026-03-20 UTC
 
 ## Iteration focus
-Upgrade the Explorer from a merely functional 2D/3D scatterplot workspace into a more deliberate semantic analysis tool, with emphasis on:
-1. useful first-load framing / camera behavior
-2. stronger 3D interaction model
-3. clearer legend and control grouping
-4. better separation of article context, cluster context, and help/explanation
-5. responsive cleanup where Explorer currently feels cramped
+Full frontend rebuild of Spain News Bias Scraper toward a professional analytical / editorial media-intelligence product.
 
-## What is already complete from iter/002
-- light analytical theme foundations
-- app shell + primary navigation
-- Stories as the default story-first workspace
-- Explorer as a dedicated workspace
-- general state consistency improvements
-- build verification passed previously via `cd frontend && npm run build`
+## Pipeline status
+1. planner (GPT-5.4) — ✅ complete
+2. frontend architect 🏗️ (Claude Sonnet 4.6 via OpenRouter) — ✅ complete
+3. frontend.react constructor 👷 (Claude Sonnet 4.6 via OpenRouter) — ✅ complete
 
-## Planner conclusions for iter/003
-- The biggest remaining product weakness is Explorer framing and self-explanation, not the overall shell.
-- 3D should remain in the product, but it must become a deliberate semantic analysis mode rather than a flashy alternate view.
-- Explorer should auto-fit to visible data on load and after scope changes.
-- The no-selection state needs a stronger legend/help panel.
-- The right rail needs local information architecture, not one long mixed-content stack.
-- Performance/code-splitting is a follow-up option, not the primary objective.
-
-## Planned implementation phases
-1. camera fit / framing / focus behavior
-2. control regrouping + legend/help + point emphasis tuning
-3. side-panel information architecture + responsive cleanup
-4. optional bundle-weight follow-up
-
-## Required implementer verification
-```bash
+## Build verification
+```
 cd frontend && npm run build
 ```
+Result: ✅ `tsc -b && vite build` — zero TypeScript errors — 5.07s clean build
 
-If shared API/data behavior changes:
-```bash
-cd /home/node/.openclaw/workspace/repos/spain-news-bias-scraper && pytest
-```
+## What was delivered
 
-## Atomic commit expectation
-1. `feat(explorer): improve semantic camera fit and selection framing`
-2. `feat(explorer): clarify controls legend and point emphasis`
-3. `feat(explorer): reorganize side-panel context and responsive layout`
-4. optional: `perf(frontend): reduce explorer bundle weight`
+### Shell architecture
+- `AppShell.tsx` deleted — replaced by `layout/Shell.tsx` (top bar + main wrapper)
+- `layout/TopBar.tsx` — sticky global nav: wordmark + nav links + optional scope chip
+- Shell no longer imposes any layout on routes — both routes own their layout internally
+
+### Stories route
+- `ClusterBrowserPage.tsx` rebuilt — no shell prop, stories layout, filter drawer toggle
+- `stories/StoryStream.tsx` — ranked story card list + pagination
+- `stories/StoryCard.tsx` — headline-dominant story card with source badges + date range
+- `stories/StoryFocusPanel.tsx` — sectioned detail panel: brief / coverage / articles / article detail
+- `stories/CoverageBar.tsx` — source share visualization (computed client-side from members array)
+- `layout/FilterDrawer.tsx` — shared slide-over filter panel
+
+### Explorer route
+- `ExplorerPage.tsx` rebuilt — no shell prop, explorer layout, control bar + canvas + rail
+- `explorer/ExplorerControlBar.tsx` — horizontal control bar above canvas (2D/3D, color lens, camera, filter trigger)
+- `explorer/ExplorerContextRail.tsx` — sectioned context rail: guide / legend / dataset summary / article / cluster / neighborhood
+- `explorer/MapPanel.tsx` — DeckGL canvas refactored: `forwardRef` + `MapPanelHandle` (fitAll / focusSelected), controls removed from canvas
+- "Open in Stories" cross-link implemented (uses `cluster_id` from Explorer point → Stories URL)
+
+### Shared system
+- `system/LoadingState.tsx`, `system/ErrorState.tsx`, `system/EmptyState.tsx` — unified state components
+- `layout/SectionDivider.tsx` — semantic divider with optional label
+
+### Visual system
+- `styles.css` — full rewrite with CSS custom property token system
+- Three surface levels enforced (page / panel / inset)
+- `.badge` replaces `.status-chip` / `.summary-pill`
+- Border radius reduced from `1rem` → `0.625rem` panels, `0.85rem` → `0.375rem` inputs
+- Responsive breakpoints at 1280px and 768px
+
+### API contract
+No changes. Zero new endpoints. All rebuilt surfaces work against existing API contracts.
+
+## Architect artifacts
+- `UI_SPEC.md` — route anatomy, layout model, states, interactions, API requirements
+- `DESIGN_TOKENS.md` — color palette, typography, spacing, elevation, component rules
+- `COMPONENT_MAP.md` — full component inventory with props, CSS sketch, file migration plan

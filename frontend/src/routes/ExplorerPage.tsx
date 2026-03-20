@@ -1,38 +1,27 @@
-import { useState, type ComponentType, type ReactNode } from 'react'
-import { FilterBar } from '../components/FilterBar'
-import { InspectorPanel } from '../components/InspectorPanel'
-import { MapPanel } from '../components/MapPanel'
-import { StatusBar } from '../components/StatusBar'
+import { useRef, useState, type ChangeEvent } from 'react'
+import { ExplorerControlBar } from '../components/explorer/ExplorerControlBar'
+import { ExplorerContextRail } from '../components/explorer/ExplorerContextRail'
+import { MapPanel, type MapPanelHandle } from '../components/explorer/MapPanel'
+import { FilterDrawer } from '../components/layout/FilterDrawer'
 import { useExplorerData } from '../hooks/useExplorerData'
 import { useExplorerUrlState } from '../hooks/useExplorerUrlState'
-import type { ExplorerColorMode, ExplorerViewMode } from '../lib/types'
+import type { ExplorerColorMode, ExplorerFiltersResponse, ExplorerQuery, ExplorerViewMode } from '../lib/types'
 
-type ShellProps = {
-  section: string
-  title: string
-  description: string
-  summary?: ReactNode
-  actions?: ReactNode
-  navItems: Array<{ key: string; label: string; description: string; href: string; active?: boolean }>
-  status?: ReactNode
-  filters?: ReactNode
-  filtersTitle?: string
-  main: ReactNode
-  detail?: ReactNode
-  detailTitle?: string
-  contentClassName?: string
-  mainClassName?: string
-}
-
-type Props = {
-  navItems: ShellProps['navItems']
-  shell: ComponentType<ShellProps>
-}
-
-export function ExplorerPage({ navItems, shell: Shell }: Props) {
+export function ExplorerPage() {
   const [viewMode, setViewMode] = useState<ExplorerViewMode>('2d')
   const [colorMode, setColorMode] = useState<ExplorerColorMode>('neutral')
-  const { query, selectedArticleId, activeFilterCount, updateQuery, resetQuery, setSelectedArticleId } = useExplorerUrlState()
+  const [filtersOpen, setFiltersOpen] = useState(false)
+  const mapRef = useRef<MapPanelHandle>(null)
+
+  const {
+    query,
+    selectedArticleId,
+    activeFilterCount,
+    updateQuery,
+    resetQuery,
+    setSelectedArticleId,
+  } = useExplorerUrlState()
+
   const {
     pointsState,
     filtersState,
@@ -45,71 +34,193 @@ export function ExplorerPage({ navItems, shell: Shell }: Props) {
   } = useExplorerData(query, selectedArticleId, setSelectedArticleId)
 
   return (
-    <Shell
-      section="Explorer"
-      title="Semantic workspace"
-      description="Use this when you need semantic shape: isolate outliers, inspect cluster topology, and trace how close different outlets sit in embedding space."
-      summary={
-        <>
-          <span className="summary-pill emphasis">{viewMode.toUpperCase()} view</span>
-          <span className="summary-pill">{colorMode} encoding</span>
-          <span className="summary-pill">{pointsState.data?.meta.returned ?? 0} visible points</span>
-          <span className="summary-pill subtle">{activeFilterCount} active filters</span>
-        </>
-      }
-      navItems={navItems}
-      status={
-        <StatusBar
-          meta={pointsState.data?.meta ?? null}
-          activeFilterCount={activeFilterCount}
-          selectedArticleId={selectedArticleId}
-          viewMode={viewMode}
-          colorMode={colorMode}
-          onResetFilters={resetQuery}
-        />
-      }
-      filtersTitle="Explorer filters"
-      filters={
-        <FilterBar
-          filters={filtersState.data}
-          query={query}
-          onQueryChange={updateQuery}
-          onReset={resetQuery}
-          disabled={pointsState.loading && !pointsState.data}
-        />
-      }
-      contentClassName="workspace-grid explorer-grid"
-      mainClassName="workspace-panel workspace-panel-main explorer-main"
-      main={
-        <MapPanel
-          points={pointsState.data}
-          loading={pointsState.loading}
-          error={pointsState.error}
-          selectedArticleId={selectedArticleId}
-          hoveredArticleId={hoveredArticleId}
-          neighborIds={neighborIds}
-          viewMode={viewMode}
-          colorMode={colorMode}
-          onViewModeChange={setViewMode}
-          onColorModeChange={setColorMode}
-          onHoverArticle={setHoveredArticleId}
-          onSelectArticle={setSelectedArticleId}
-        />
-      }
-      detailTitle="Selection"
-      detail={
-        <InspectorPanel
+    <div className="explorer-layout">
+      {/* Control bar above canvas */}
+      <ExplorerControlBar
+        viewMode={viewMode}
+        colorMode={colorMode}
+        pointCount={pointsState.data?.meta.returned ?? 0}
+        activeFilterCount={activeFilterCount}
+        loading={pointsState.loading}
+        hasSelection={selectedArticleId !== null}
+        onViewModeChange={setViewMode}
+        onColorModeChange={setColorMode}
+        onFitAll={() => mapRef.current?.fitAll()}
+        onFocusSelected={() => mapRef.current?.focusSelected()}
+        onOpenFilters={() => setFiltersOpen(true)}
+      />
+
+      {/* Canvas + context rail */}
+      <div className="explorer-workspace">
+        <div className="explorer-canvas-area">
+          <MapPanel
+            ref={mapRef}
+            points={pointsState.data}
+            loading={pointsState.loading}
+            error={pointsState.error}
+            selectedArticleId={selectedArticleId}
+            hoveredArticleId={hoveredArticleId}
+            neighborIds={neighborIds}
+            viewMode={viewMode}
+            colorMode={colorMode}
+            onHoverArticle={setHoveredArticleId}
+            onSelectArticle={setSelectedArticleId}
+          />
+        </div>
+
+        <ExplorerContextRail
           selectedPoint={selectedPoint}
           detail={detailState.data}
           loading={detailState.loading}
           error={detailState.error}
-          clusterSummaries={pointsState.data?.meta.cluster_summaries ?? filtersState.data?.cluster_summaries ?? []}
+          clusterSummaries={
+            pointsState.data?.meta.cluster_summaries ??
+            filtersState.data?.cluster_summaries ??
+            []
+          }
           viewMode={viewMode}
           colorMode={colorMode}
           onClearSelection={clearSelectedArticle}
           onSelectArticle={setSelectedArticleId}
         />
-      }
-    />
+      </div>
+
+      {/* Filter drawer */}
+      <FilterDrawer
+        open={filtersOpen}
+        onClose={() => setFiltersOpen(false)}
+        title="Refine Explorer"
+        activeCount={activeFilterCount}
+        onReset={resetQuery}
+      >
+        <ExplorerFilterFields
+          filters={filtersState.data}
+          query={query}
+          onQueryChange={updateQuery}
+          disabled={pointsState.loading && !pointsState.data}
+        />
+      </FilterDrawer>
+    </div>
+  )
+}
+
+/* ─── Explorer filter fields ────────────────────────────────────────────── */
+function ExplorerFilterFields({
+  filters,
+  query,
+  onQueryChange,
+  disabled,
+}: {
+  filters: ExplorerFiltersResponse | null
+  query: ExplorerQuery
+  onQueryChange: (patch: Partial<ExplorerQuery>) => void
+  disabled?: boolean
+}) {
+  const onTextChange = (event: ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
+    const { name, value } = event.target
+    onQueryChange({ [name]: value })
+  }
+
+  return (
+    <>
+      <div className="filter-group">
+        <div className="filter-group-label">Subset</div>
+        <label className="field">
+          <span>Search title or summary</span>
+          <input
+            name="search"
+            value={query.search}
+            onChange={onTextChange}
+            placeholder="energy, election, housing…"
+            disabled={disabled}
+          />
+        </label>
+        <label className="field">
+          <span>Source</span>
+          <select name="source" value={query.source} onChange={onTextChange} disabled={disabled}>
+            <option value="">All sources</option>
+            {(filters?.available_sources ?? []).map((source) => (
+              <option key={source} value={source}>{source}</option>
+            ))}
+          </select>
+        </label>
+        <label className="field">
+          <span>Section</span>
+          <select name="section" value={query.section} onChange={onTextChange} disabled={disabled}>
+            <option value="">All sections</option>
+            {(filters?.available_sections ?? []).map((section) => (
+              <option key={section} value={section}>{section}</option>
+            ))}
+          </select>
+        </label>
+      </div>
+
+      <div className="filter-group">
+        <div className="filter-group-label">Semantic structure</div>
+        <label className="field">
+          <span>Cluster</span>
+          <select name="clusterId" value={query.clusterId} onChange={onTextChange} disabled={disabled}>
+            <option value="">All clusters</option>
+            {(filters?.cluster_summaries ?? []).map((cluster) => (
+              <option key={cluster.cluster_id} value={String(cluster.cluster_id)}>
+                Cluster {cluster.cluster_id} · {cluster.size} articles
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="checkbox-row">
+          <input
+            type="checkbox"
+            checked={query.outlierOnly}
+            onChange={(event) => onQueryChange({ outlierOnly: event.target.checked })}
+            disabled={disabled}
+          />
+          <span>Show only outliers</span>
+        </label>
+      </div>
+
+      <div className="filter-group">
+        <div className="filter-group-label">Date window</div>
+        <div className="field-row">
+          <label className="field">
+            <span>From</span>
+            <input
+              type="date"
+              name="dateFrom"
+              value={query.dateFrom}
+              onChange={onTextChange}
+              disabled={disabled}
+            />
+          </label>
+          <label className="field">
+            <span>To</span>
+            <input
+              type="date"
+              name="dateTo"
+              value={query.dateTo}
+              onChange={onTextChange}
+              disabled={disabled}
+            />
+          </label>
+        </div>
+      </div>
+
+      <div className="filter-group">
+        <div className="filter-group-label">Point volume</div>
+        <label className="field">
+          <span>Point limit</span>
+          <select
+            name="limit"
+            value={String(query.limit)}
+            onChange={(event) => onQueryChange({ limit: Number(event.target.value) })}
+            disabled={disabled}
+          >
+            {[100, 250, 500].map((limit) => (
+              <option key={limit} value={limit}>{limit}</option>
+            ))}
+          </select>
+        </label>
+      </div>
+    </>
   )
 }
