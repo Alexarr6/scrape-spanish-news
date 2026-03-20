@@ -1,3 +1,12 @@
+/**
+ * ExplorerControlBar.tsx — Compact horizontal control bar for the Explorer.
+ *
+ * iter/005 changes:
+ *  - Color mode labels: 'By source' / 'By cluster' instead of raw 'source' / 'cluster'
+ *  - Tooltip hints on 2D/3D buttons
+ *  - Loading indicator shows "{N} points (updating)" during filter-change refetch
+ */
+
 import type { ExplorerColorMode, ExplorerViewMode } from '../../lib/types'
 
 type Props = {
@@ -14,6 +23,12 @@ type Props = {
   onOpenFilters: () => void
 }
 
+const COLOR_MODE_LABELS: Record<ExplorerColorMode, string> = {
+  neutral: 'Neutral',
+  source: 'By source',
+  cluster: 'By cluster',
+}
+
 export function ExplorerControlBar({
   viewMode,
   colorMode,
@@ -27,6 +42,12 @@ export function ExplorerControlBar({
   onFocusSelected,
   onOpenFilters,
 }: Props) {
+  const pointCountLabel = loading
+    ? pointCount === 0
+      ? 'Loading…'
+      : `${pointCount} points (updating)`
+    : `${pointCount} points`
+
   return (
     <div className="explorer-control-bar">
       <div className="explorer-controls-left">
@@ -35,6 +56,7 @@ export function ExplorerControlBar({
           <button
             type="button"
             className={`segmented-button${viewMode === '2d' ? ' active' : ''}`}
+            title="2D: flat layout for broad comparison"
             onClick={() => onViewModeChange('2d')}
           >
             2D
@@ -42,6 +64,7 @@ export function ExplorerControlBar({
           <button
             type="button"
             className={`segmented-button${viewMode === '3d' ? ' active' : ''}`}
+            title="3D: depth view for cluster overlap inspection"
             onClick={() => onViewModeChange('3d')}
           >
             3D
@@ -57,7 +80,7 @@ export function ExplorerControlBar({
               className={`segmented-button${colorMode === mode ? ' active' : ''}`}
               onClick={() => onColorModeChange(mode)}
             >
-              {mode}
+              {COLOR_MODE_LABELS[mode]}
             </button>
           ))}
         </div>
@@ -74,9 +97,7 @@ export function ExplorerControlBar({
       </div>
 
       <div className="explorer-controls-right">
-        <span className="explorer-point-count">
-          {loading && pointCount === 0 ? 'Loading…' : `${pointCount} points`}
-        </span>
+        <span className="explorer-point-count">{pointCountLabel}</span>
         {activeFilterCount > 0 && (
           <span className="badge accent">{activeFilterCount} filters</span>
         )}

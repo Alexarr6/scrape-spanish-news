@@ -1,4 +1,18 @@
+/**
+ * ExplorerContextRail.tsx — Right-rail context panel for the Explorer.
+ *
+ * iter/005 additions:
+ *  - Seeded context chip (Stories → Explorer handoff visibility)
+ *  - "How to read this space" onboarding guide block (no-selection state)
+ *  - Mode-sensitive ColorLegend (source swatches, cluster list, neutral dot)
+ *  - Outlier badge in selection state
+ */
+
 import { useMemo } from 'react'
+import {
+  CLUSTER_PALETTE,
+  SOURCE_COLORS_HEX,
+} from '../../lib/explorerColors'
 import { clampText, formatDate, formatSimilarity } from '../../lib/format'
 import { buildStoriesHref } from '../../lib/navigation'
 import type {
@@ -11,6 +25,12 @@ import type {
 import { SectionDivider } from '../layout/SectionDivider'
 import { LoadingState } from '../system/LoadingState'
 
+// ─── Seeded context type (derived in ExplorerPage from query) ─────────────────
+export type SeedContext =
+  | { type: 'cluster'; clusterId: number }
+  | { type: 'search'; query: string }
+  | null
+
 type Props = {
   selectedPoint: ExplorerPoint | null
   detail: ExplorerArticleDetail | null
@@ -21,6 +41,10 @@ type Props = {
   colorMode: ExplorerColorMode
   onClearSelection: () => void
   onSelectArticle: (articleId: number) => void
+  /** Non-null when Explorer was opened from Stories with a pre-applied filter */
+  seedContext: SeedContext
+  /** Called when the user clears the seeded filter chip */
+  onClearSeed: () => void
 }
 
 export function ExplorerContextRail({
@@ -33,6 +57,8 @@ export function ExplorerContextRail({
   colorMode,
   onClearSelection,
   onSelectArticle,
+  seedContext,
+  onClearSeed,
 }: Props) {
   const selectedCluster = useMemo(() => {
     const clusterId =
@@ -41,16 +67,42 @@ export function ExplorerContextRail({
     return clusterSummaries.find((c) => c.cluster_id === clusterId) ?? null
   }, [clusterSummaries, detail?.semantic_summary.cluster_id, selectedPoint?.analysis.cluster_id])
 
-  // No selection state
+  // ─── No-selection state ──────────────────────────────────────────────────
   if (!selectedPoint) {
     return (
       <div className="context-rail">
+        {/* Seeded context chip — visible when Explorer was opened from Stories */}
+        {seedContext && (
+          <div className="context-seed-chip">
+            <span className="context-seed-chip-label">
+              {seedContext.type === 'cluster'
+                ? `📍 Cluster ${seedContext.clusterId}`
+                : `🔍 "${seedContext.query}"`}
+            </span>
+            <button
+              className="context-seed-chip-clear"
+              type="button"
+              onClick={onClearSeed}
+            >
+              Clear ×
+            </button>
+          </div>
+        )}
+
         <p className="context-guide-text">
           Click any point to inspect an article and its semantic neighborhood.
         </p>
 
+        {/* How to read this space — onboarding guide */}
+        <div className="context-guide-explainer">
+          <p className="context-guide-explainer-text">
+            Proximity = semantic similarity. Clusters group articles the model found coherent.
+            Outliers (red) sit outside all clusters.
+          </p>
+        </div>
+
         <SectionDivider label="Legend" />
-        <ColorLegend colorMode={colorMode} />
+        <ColorLegend colorMode={colorMode} clusterSummaries={clusterSummaries} />
 
         <SectionDivider label="Dataset" />
         <DatasetSummary clusterSummaries={clusterSummaries} viewMode={viewMode} />
@@ -58,6 +110,7 @@ export function ExplorerContextRail({
     )
   }
 
+  // ─── Selection state ─────────────────────────────────────────────────────
   const storiesHref = buildStoriesHref(
     detail?.semantic_summary.cluster_id ?? selectedPoint.analysis.cluster_id ?? null,
   )
@@ -69,6 +122,9 @@ export function ExplorerContextRail({
         <button className="btn-text" type="button" onClick={onClearSelection}>
           ← Clear
         </button>
+        {selectedPoint.analysis.is_outlier && (
+          <span className="context-outlier-badge">Outlier</span>
+        )}
       </div>
 
       {/* Article section */}
@@ -111,7 +167,7 @@ export function ExplorerContextRail({
           </div>
         </div>
       ) : (
-        // Point selected but detail not loaded yet — show title from point data
+        // Point selected but detail not loaded yet — show from point data
         <div className="context-article">
           <span className="context-article-eyebrow">
             {selectedPoint.source}
@@ -167,10 +223,18 @@ export function ExplorerContextRail({
   )
 }
 
-/* ─── Color legend ──────────────────────────────────────────────────────── */
-function ColorLegend({ colorMode }: { colorMode: ExplorerColorMode }) {
+// ─── Color legend (mode-sensitive) ───────────────────────────────────────────
+
+function ColorLegend({
+  colorMode,
+  clusterSummaries,
+}: {
+  colorMode: ExplorerColorMode
+  clusterSummaries: ExplorerClusterSummary[]
+}) {
   return (
     <ul className="legend-list">
+      {/* Fixed entries — always visible */}
       <li className="legend-item">
         <span className="legend-dot" style={{ background: '#0ea5e9' }} />
         <span>Selected article</span>
@@ -180,24 +244,56 @@ function ColorLegend({ colorMode }: { colorMode: ExplorerColorMode }) {
         <span>Semantic neighbors</span>
       </li>
       <li className="legend-item">
-        <span className="legend-dot" style={{ background: '#ef4444' }} />
+        <span className="legend-dot" style={{ background: '#dc2626' }} />
         <span>Outliers</span>
       </li>
-      <li className="legend-item">
-        <span className="legend-dot" style={{ background: '#4338ca' }} />
-        <span>
-          {colorMode === 'source'
-            ? 'Color by source outlet'
-            : colorMode === 'cluster'
-              ? 'Color by cluster assignment'
-              : 'Neutral (structural baseline)'}
-        </span>
-      </li>
+
+      {/* Mode-specific entries */}
+      {colorMode === 'neutral' && (
+        <li className="legend-item">
+          <span className="legend-dot" style={{ background: '#4338ca' }} />
+          <span>Articles (neutral field)</span>
+        </li>
+      )}
+
+      {colorMode === 'source' && (
+        <>
+          <li className="legend-item legend-item-header">Color by source</li>
+          {Object.entries(SOURCE_COLORS_HEX).map(([source, color]) => (
+            <li key={source} className="legend-item legend-item-indent">
+              <span className="legend-dot" style={{ background: color }} />
+              <span>{source}</span>
+            </li>
+          ))}
+        </>
+      )}
+
+      {colorMode === 'cluster' && (
+        <>
+          <li className="legend-item legend-item-header">Color by cluster</li>
+          {clusterSummaries.length === 0 && (
+            <li className="legend-item legend-item-indent">
+              <span className="legend-dot" style={{ background: '#94a3b8' }} />
+              <span>No clusters loaded</span>
+            </li>
+          )}
+          {clusterSummaries.slice(0, 6).map((cluster, idx) => {
+            const [r, g, b] = CLUSTER_PALETTE[idx % CLUSTER_PALETTE.length]
+            return (
+              <li key={cluster.cluster_id} className="legend-item legend-item-indent">
+                <span className="legend-dot" style={{ background: `rgb(${r},${g},${b})` }} />
+                <span>Cluster {cluster.cluster_id} · {cluster.size}</span>
+              </li>
+            )
+          })}
+        </>
+      )}
     </ul>
   )
 }
 
-/* ─── Dataset summary ───────────────────────────────────────────────────── */
+// ─── Dataset summary ──────────────────────────────────────────────────────────
+
 function DatasetSummary({
   clusterSummaries,
   viewMode,
@@ -220,14 +316,15 @@ function DatasetSummary({
       )}
       <div className="context-dataset-row" style={{ color: 'var(--color-text-muted)' }}>
         {viewMode === '3d'
-          ? '3D: better for overlap and cluster depth inspection.'
-          : '2D: faster for layout scanning and broad comparison.'}
+          ? '3D: inspect depth / overlap.'
+          : '2D: compare layout.'}
       </div>
     </div>
   )
 }
 
-/* ─── Cluster context ───────────────────────────────────────────────────── */
+// ─── Cluster context ──────────────────────────────────────────────────────────
+
 function ClusterContextSection({
   summary,
   selectedCluster,
@@ -256,7 +353,7 @@ function ClusterContextSection({
       <div className="context-metrics">
         <MetricItem label="Outlier" value={summary.is_outlier ? 'Yes' : 'No'} />
         <MetricItem label="Neighbors" value={String(summary.neighbor_count)} />
-        <MetricItem label="Src diversity" value={String(summary.source_neighbor_diversity ?? 0)} />
+        <MetricItem label="Src diversity" value={String(summary.source_neighbor_diversity ?? '--')} />
         {summary.local_density_distance != null && (
           <MetricItem label="Density dist." value={summary.local_density_distance.toFixed(3)} />
         )}

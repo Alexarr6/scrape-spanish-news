@@ -1,11 +1,24 @@
-import { useRef, useState, type ChangeEvent } from 'react'
+/**
+ * ExplorerPage.tsx — Explorer route composition.
+ *
+ * iter/005 additions:
+ *  - seedContext derived from query (Stories → Explorer handoff chip)
+ *  - seedContext + onClearSeed passed to ExplorerContextRail
+ */
+
+import { useMemo, useRef, useState, type ChangeEvent } from 'react'
 import { ExplorerControlBar } from '../components/explorer/ExplorerControlBar'
-import { ExplorerContextRail } from '../components/explorer/ExplorerContextRail'
+import { ExplorerContextRail, type SeedContext } from '../components/explorer/ExplorerContextRail'
 import { MapPanel, type MapPanelHandle } from '../components/explorer/MapPanel'
 import { FilterDrawer } from '../components/layout/FilterDrawer'
 import { useExplorerData } from '../hooks/useExplorerData'
 import { useExplorerUrlState } from '../hooks/useExplorerUrlState'
-import type { ExplorerColorMode, ExplorerFiltersResponse, ExplorerQuery, ExplorerViewMode } from '../lib/types'
+import type {
+  ExplorerColorMode,
+  ExplorerFiltersResponse,
+  ExplorerQuery,
+  ExplorerViewMode,
+} from '../lib/types'
 
 export function ExplorerPage() {
   const [viewMode, setViewMode] = useState<ExplorerViewMode>('2d')
@@ -32,6 +45,13 @@ export function ExplorerPage() {
     clearSelectedArticle,
     setHoveredArticleId,
   } = useExplorerData(query, selectedArticleId, setSelectedArticleId)
+
+  // Seeded context chip: visible when Explorer was opened from Stories with a pre-applied filter
+  const seedContext = useMemo<SeedContext>(() => {
+    if (query.clusterId) return { type: 'cluster', clusterId: Number(query.clusterId) }
+    if (query.search.trim()) return { type: 'search', query: query.search.trim() }
+    return null
+  }, [query.clusterId, query.search])
 
   return (
     <div className="explorer-layout">
@@ -82,6 +102,8 @@ export function ExplorerPage() {
           colorMode={colorMode}
           onClearSelection={clearSelectedArticle}
           onSelectArticle={setSelectedArticleId}
+          seedContext={seedContext}
+          onClearSeed={resetQuery}
         />
       </div>
 
@@ -104,7 +126,8 @@ export function ExplorerPage() {
   )
 }
 
-/* ─── Explorer filter fields ────────────────────────────────────────────── */
+// ─── Explorer filter fields ───────────────────────────────────────────────────
+
 function ExplorerFilterFields({
   filters,
   query,
