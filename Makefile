@@ -36,7 +36,7 @@ LOCAL_DB_USER ?= spain_news
 LOCAL_DB_PASSWORD ?= spain_news_dev
 LOCAL_DATABASE_URL := postgresql+psycopg://$(LOCAL_DB_USER):$(LOCAL_DB_PASSWORD)@$(LOCAL_DB_HOST):$(LOCAL_DB_PORT)/$(LOCAL_DB_NAME)
 
-.PHONY: help print-app-root preflight sync pre-commit lint check test docs-build docs-serve smoke run-source run-source-persist run-all run-all-persist api analysis-db-init enrich-articles build-story-clusters story-cluster-report semantic-db-init semantic-sync semantic-project semantic-neighbors semantic-build semantic-smoke scheduler-once scheduler-dry-run status tail-log verify-output verify-db db-url db-up db-down db-logs db-psql db-check clean-state
+.PHONY: help print-app-root preflight sync pre-commit lint check test docs-build docs-serve smoke run-source run-source-persist run-all run-all-persist api analysis-db-init enrich-articles build-story-clusters story-cluster-report semantic-db-init semantic-sync semantic-project semantic-neighbors semantic-build semantic-smoke scheduler-once scheduler-dry-run stories-refresh-once explorer-refresh-once status tail-log verify-output verify-db db-url db-up db-down db-logs db-psql db-check clean-state
 
 help:
 	@printf '%s\n' \
@@ -71,10 +71,12 @@ help:
 	  '  make semantic-smoke DATABASE_URL=...             Export a bounded semantic smoke artifact set' \
 	  '' \
 	  'Scheduler + verification:' \
-	  '  make scheduler-dry-run        Show scheduled execution plan' \
-	  '  make scheduler-once           Run the scheduler wrapper once' \
-	  '  make status                   Show scheduler state files' \
-	  '  make tail-log                 Tail scheduler log' \
+	  '  make scheduler-dry-run        Show legacy scheduled execution plan' \
+	  '  make scheduler-once           Run the legacy scrape-only scheduler wrapper once' \
+	  '  make stories-refresh-once     Run scrape + analysis + clustering refresh once' \
+	  '  make explorer-refresh-once    Run semantic explorer refresh once' \
+	  '  make status                   Show legacy scheduler state files' \
+	  '  make tail-log                 Tail legacy scheduler log' \
 	  '  make verify-output            Check expected JSON/metrics files for DATE' \
 	  '  make verify-db DATABASE_URL=postgresql+psycopg://...  Check article row count' \
 	  '' \
@@ -228,6 +230,12 @@ scheduler-dry-run:
 
 scheduler-once:
 	@DATABASE_URL="$(DATABASE_URL)" UV="$(UV)" bash "$(SCHEDULER_SCRIPT)"
+
+stories-refresh-once:
+	@DATABASE_URL="$(DATABASE_URL)" UV="$(UV)" bash scripts/run_stories_refresh.sh
+
+explorer-refresh-once:
+	@DATABASE_URL="$(DATABASE_URL)" OPENAI_API_KEY="$(OPENAI_API_KEY)" UV="$(UV)" bash scripts/run_explorer_refresh.sh
 
 status:
 	@set -euo pipefail; \
