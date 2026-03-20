@@ -1,5 +1,75 @@
 # RESULTS.md
 
+## iter/006 — Explorer framing, axes & 3D point implementation
+
+**Date:** 2026-03-20 UTC
+**Iteration:** iter/006
+**Role:** `frontend.react` builder 👷
+**Outcome:** ✅ Complete — build passes, 3 improvements implemented
+
+---
+
+### Problem statement
+
+Three UX issues observed after iter/005 render fix:
+
+1. **Zoom too low** — points in `[-1, 1]` space require manual zoom to ~8 to read; initial view shows them as a tiny dot cluster
+2. **No orientation** — no visual reference for the coordinate space; users can't tell left from right or up from down
+3. **3D points look flat** — `ScatterplotLayer` renders flat discs; at orbit angles they appear as distorted ovals, not volumetric points
+
+---
+
+### Decisions
+
+| Issue | Fix | Key constraint |
+|---|---|---|
+| Zoom | Pixel-aware formula: `log2(canvasPx / paddedSpan)` | No hardcoded scale assumption |
+| Axes | `LineLayer` in both 2D + 3D | No new npm packages; `LineLayer` already in `@deck.gl/layers` |
+| 3D points | `PointCloudLayer` tiers by priority | `material: false`; no 2D changes; 5 layers for per-tier sizing |
+
+---
+
+### What was implemented
+
+**File: `frontend/src/lib/explorerColors.ts`**
+Appended 10 new constants: axis colors × 5 (AXIS_COLOR_2D, AXIS_X/Y/Z_COLOR_3D, AXIS_GRID_COLOR_3D) and PC sizes × 5 (PC_SIZE_REGULAR/OUTLIER/NEIGHBOR/HOVERED/SELECTED).
+
+**File: `frontend/src/components/explorer/MapPanel.tsx`**
+Three changes implemented:
+
+1. **Pixel-aware zoom formula** — `build2dViewState(bounds, canvasPx)` and `build3dViewState(bounds, canvasPx, current?)` now compute `zoom = log2(canvasPx / paddedSpan)`. Helper `getCanvasPx(canvasRef)` reads real DOM size at call time. Default zoom 8.5 (was 1.8/1.9). Clamp changed from [1.4,7.2] to [1.0,14.0]. `buildInitialViewState`, `fitAll()`, `focusSelected()` all updated to pass `canvasPx`.
+
+2. **`buildAxisLayers(viewMode, bounds)`** — produces `LineLayer`-based axis layers. 2D: one layer with two grey lines. 3D: faint XY grid layer + RGB XYZ axis layer. Always prepended to layer stack.
+
+3. **3D PointCloudLayer tiers** — `viewMode === '3d'` branch in `layers` useMemo creates 5 `PointCloudLayer` instances (regular/outlier/neighbor/hovered/selected) with fixed `pointSize` per tier, `material: false`, billboarded normals. `ScatterplotLayer` retained for 2D only.
+
+**Build:**
+```
+✓ tsc -b — 0 type errors
+✓ vite build — 711 modules transformed, 0 build errors
+dist/assets/index-CRIiqvoD.js  936.66 kB (was 903.68 — +33KB from PointCloudLayer)
+✓ built in 4.99s
+```
+
+**Commit:** `feat(explorer): iter/006 — pixel-aware zoom, axes, 3D PointCloudLayer`
+
+---
+
+### Files changed in this pass
+
+| File | Change |
+|---|---|
+| `frontend/src/lib/explorerColors.ts` | Appended 10 new constants (axis colors + PC sizes) |
+| `frontend/src/components/explorer/MapPanel.tsx` | New zoom formula, buildAxisLayers, 3D PointCloudLayer tiers |
+| `STATUS.md` | Updated to BUILD_PASS |
+| `RESULTS.md` | This entry |
+
+No other files modified.
+
+---
+
+## Previous pass
+
 ## Explorer improvement pass — implementation handoff
 
 **Date:** 2026-03-20 UTC
