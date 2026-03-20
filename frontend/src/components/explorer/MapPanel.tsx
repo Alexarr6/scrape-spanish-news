@@ -1,8 +1,58 @@
+/**
+ * MapPanel.tsx — DeckGL semantic canvas.
+ *
+ * Bug fixes applied in iter/005:
+ *  BUG-1: flex/grid height chain — fixed in styles.css (min-height: 0)
+ *  BUG-2: StrictMode double-mount — stable key="explorer-deck" on <DeckGL>
+ *  BUG-4: Named view IDs mismatch — removed view IDs (unnamed single-view)
+ *  BUG-5: Layer ID changes on every toggle — stable id: 'semantic-points'
+ *  BUG-6: !important overrides — removed from styles.css
+ *
+ * Camera hardening:
+ *  - Auto-fit only fires on first data load (null → data) or explicit fitAll()
+ *  - Subsequent filter changes preserve the user's camera position
+ *  - 3D orbit angles preserved across focusSelected() calls
+ */
+
 import { OrbitView, OrthographicView } from '@deck.gl/core'
 import { ScatterplotLayer } from '@deck.gl/layers'
 import DeckGL from '@deck.gl/react'
-import { forwardRef, useEffect, useImperativeHandle, useMemo, useState } from 'react'
+import { forwardRef, useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react'
 import { formatDate } from '../../lib/format'
+import {
+  CLUSTER_NULL_COLOR,
+  CLUSTER_OUTLIER_COLOR,
+  CLUSTER_PALETTE,
+  POINT_DEFAULT_STROKE,
+  POINT_DEFAULT_STROKE_WIDTH,
+  POINT_HOVERED_FILL,
+  POINT_HOVERED_RADIUS_2D,
+  POINT_HOVERED_RADIUS_3D,
+  POINT_HOVERED_STROKE,
+  POINT_HOVERED_STROKE_WIDTH,
+  POINT_NEIGHBOR_FILL,
+  POINT_NEIGHBOR_RADIUS_2D,
+  POINT_NEIGHBOR_RADIUS_3D,
+  POINT_NEIGHBOR_STROKE,
+  POINT_NEIGHBOR_STROKE_WIDTH,
+  POINT_OUTLIER_ALPHA_NO_SELECTION,
+  POINT_OUTLIER_ALPHA_UNDER_SELECTION,
+  POINT_OUTLIER_RADIUS_2D,
+  POINT_OUTLIER_RADIUS_3D,
+  POINT_RECEDING_STROKE,
+  POINT_RECEDING_STROKE_WIDTH,
+  POINT_REGULAR_ALPHA_NO_SELECTION,
+  POINT_REGULAR_ALPHA_UNDER_SELECTION,
+  POINT_REGULAR_RADIUS_2D,
+  POINT_REGULAR_RADIUS_3D,
+  POINT_SELECTED_FILL,
+  POINT_SELECTED_RADIUS_2D,
+  POINT_SELECTED_RADIUS_3D,
+  POINT_SELECTED_STROKE,
+  POINT_SELECTED_STROKE_WIDTH,
+  SOURCE_COLORS,
+  SOURCE_FALLBACK_COLOR,
+} from '../../lib/explorerColors'
 import type {
   ExplorerColorMode,
   ExplorerPoint,
@@ -33,7 +83,7 @@ type TooltipState = { x: number; y: number; point: ExplorerPoint } | null
 type PickingInfoLike = { object?: ExplorerPoint; x?: number; y?: number }
 type ViewState2D = { target: [number, number, number]; zoom: number }
 type ViewState3D = { target: [number, number, number]; zoom: number; rotationOrbit: number; rotationX: number }
-type ViewStateMap = { 'semantic-2d': ViewState2D; 'semantic-3d': ViewState3D }
+type ViewStateMap = { '2d': ViewState2D; '3d': ViewState3D }
 type PointBounds = {
   minX: number; maxX: number; minY: number; maxY: number; minZ: number; maxZ: number
 }
@@ -41,9 +91,15 @@ type PointBounds = {
 const DEFAULT_3D_ORBIT = 28
 const DEFAULT_3D_TILT = 32
 
+// ─── Bounds helpers ──────────────────────────────────────────────────────────
+
 function normalizeBounds(bounds: ExplorerProjectionBounds | null): PointBounds | null {
   if (!bounds) return null
-  return { minX: bounds.min_x, maxX: bounds.max_x, minY: bounds.min_y, maxY: bounds.max_y, minZ: bounds.min_z, maxZ: bounds.max_z }
+  return {
+    minX: bounds.min_x, maxX: bounds.max_x,
+    minY: bounds.min_y, maxY: bounds.max_y,
+    minZ: bounds.min_z, maxZ: bounds.max_z,
+  }
 }
 
 function boundsFromPoints(items: ExplorerPoint[]): PointBounds | null {
@@ -58,6 +114,8 @@ function boundsFromPoints(items: ExplorerPoint[]): PointBounds | null {
   )
 }
 
+// ─── ViewState builders ──────────────────────────────────────────────────────
+
 function build2dViewState(bounds: PointBounds | null): ViewState2D {
   if (!bounds) return { target: [0, 0, 0], zoom: 1.8 }
   const spanX = bounds.maxX - bounds.minX
@@ -71,7 +129,12 @@ function build2dViewState(bounds: PointBounds | null): ViewState2D {
 }
 
 function build3dViewState(bounds: PointBounds | null, current?: ViewState3D): ViewState3D {
-  if (!bounds) return { target: [0, 0, 0], zoom: 1.9, rotationOrbit: current?.rotationOrbit ?? DEFAULT_3D_ORBIT, rotationX: current?.rotationX ?? DEFAULT_3D_TILT }
+  if (!bounds) return {
+    target: [0, 0, 0],
+    zoom: 1.9,
+    rotationOrbit: current?.rotationOrbit ?? DEFAULT_3D_ORBIT,
+    rotationX: current?.rotationX ?? DEFAULT_3D_TILT,
+  }
   const spanX = bounds.maxX - bounds.minX
   const spanY = bounds.maxY - bounds.minY
   const spanZ = bounds.maxZ - bounds.minZ
@@ -87,47 +150,44 @@ function build3dViewState(bounds: PointBounds | null, current?: ViewState3D): Vi
 
 function buildInitialViewState(points: ExplorerPointsResponse | null, current?: ViewStateMap): ViewStateMap {
   const bounds = normalizeBounds(points?.meta.bounds ?? null)
-  return { 'semantic-2d': build2dViewState(bounds), 'semantic-3d': build3dViewState(bounds, current?.['semantic-3d']) }
+  return {
+    '2d': build2dViewState(bounds),
+    '3d': build3dViewState(bounds, current?.['3d']),
+  }
 }
 
 function buildSelectionBounds(selectedPoint: ExplorerPoint, items: ExplorerPoint[], neighborIds: Set<number>): PointBounds {
-  const related = items.filter((item) => item.article_id === selectedPoint.article_id || neighborIds.has(item.article_id))
+  const related = items.filter((item) =>
+    item.article_id === selectedPoint.article_id || neighborIds.has(item.article_id),
+  )
   const selectionBounds = boundsFromPoints(related.length > 0 ? related : [selectedPoint])
-  if (!selectionBounds) return { minX: selectedPoint.x, maxX: selectedPoint.x, minY: selectedPoint.y, maxY: selectedPoint.y, minZ: selectedPoint.z, maxZ: selectedPoint.z }
+  if (!selectionBounds) {
+    return {
+      minX: selectedPoint.x, maxX: selectedPoint.x,
+      minY: selectedPoint.y, maxY: selectedPoint.y,
+      minZ: selectedPoint.z, maxZ: selectedPoint.z,
+    }
+  }
   return selectionBounds
 }
 
-const SOURCE_COLORS: Record<string, [number, number, number, number]> = {
-  elpais: [59, 130, 246, 220],
-  elmundo: [16, 185, 129, 220],
-  abc: [249, 115, 22, 220],
-  eldiario: [168, 85, 247, 220],
-  lavanguardia: [236, 72, 153, 220],
-  '20minutos': [251, 191, 36, 220],
-}
+// ─── Color helpers ───────────────────────────────────────────────────────────
 
-const CLUSTER_PALETTE: Array<[number, number, number, number]> = [
-  [67, 56, 202, 220],
-  [3, 105, 161, 220],
-  [4, 120, 87, 220],
-  [180, 83, 9, 220],
-  [157, 23, 77, 220],
-  [109, 40, 217, 220],
-]
-
-function colorForPoint(point: ExplorerPoint, mode: ExplorerColorMode): [number, number, number, number] {
-  if (mode === 'source') return SOURCE_COLORS[point.source] ?? [100, 116, 139, 210]
+function colorForPoint(point: ExplorerPoint, mode: ExplorerColorMode): [number, number, number] {
+  if (mode === 'source') {
+    return SOURCE_COLORS[point.source] ?? SOURCE_FALLBACK_COLOR
+  }
   if (mode === 'cluster') {
-    if (point.analysis.cluster_id == null)
-      return point.analysis.is_outlier ? [220, 38, 38, 230] : [148, 163, 184, 200]
+    if (point.analysis.cluster_id == null) {
+      return point.analysis.is_outlier ? CLUSTER_OUTLIER_COLOR : CLUSTER_NULL_COLOR
+    }
     return CLUSTER_PALETTE[(point.analysis.cluster_id - 1) % CLUSTER_PALETTE.length]
   }
-  return [67, 56, 202, 200]
+  // neutral
+  return [67, 56, 202] // indigo-700
 }
 
-function withAlpha(color: [number, number, number, number], alpha: number): [number, number, number, number] {
-  return [color[0], color[1], color[2], alpha]
-}
+// ─── Component ───────────────────────────────────────────────────────────────
 
 export const MapPanel = forwardRef<MapPanelHandle, Props>(function MapPanel(
   {
@@ -146,103 +206,165 @@ export const MapPanel = forwardRef<MapPanelHandle, Props>(function MapPanel(
 ) {
   const [tooltip, setTooltip] = useState<TooltipState>(null)
   const [viewState, setViewState] = useState<ViewStateMap>(() => buildInitialViewState(points))
+  const [dataLoaded, setDataLoaded] = useState(false)
+  const canvasRef = useRef<HTMLDivElement>(null)
+
   const neighborKey = Array.from(neighborIds).sort((a, b) => a - b).join(',')
-  const bounds = points?.meta.bounds ?? null
+
   const selectedPoint = useMemo(
     () => points?.items.find((item) => item.article_id === selectedArticleId) ?? null,
     [points, selectedArticleId],
   )
   const hasSelection = selectedArticleId != null
 
+  // ─── Camera auto-fit: ONLY fires on first data load (null → populated)
+  // Subsequent filter changes preserve user camera position.
+  const projectionSet = points?.meta.projection_set
   useEffect(() => {
-    setViewState((current) => buildInitialViewState(points, current))
-  }, [
-    bounds?.min_x, bounds?.max_x, bounds?.min_y, bounds?.max_y, bounds?.min_z, bounds?.max_z,
-    points?.meta.projection_set, points?.items.length,
-  ])
+    if (!points?.items.length) {
+      setDataLoaded(false)
+      return
+    }
+    if (!dataLoaded) {
+      // First load or after a full reset — fit to all points
+      setViewState((current) => buildInitialViewState(points, current))
+      setDataLoaded(true)
+    }
+    // Subsequent filter changes: do NOT reset camera — user's pan/zoom is preserved
+  }, [points?.items.length, projectionSet]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  const fitAll = () => setViewState((current) => buildInitialViewState(points, current))
+  // ─── Imperative camera controls ──────────────────────────────────────────
+  const fitAll = () => {
+    setViewState((current) => buildInitialViewState(points, current))
+  }
 
   const focusSelected = () => {
     if (!selectedPoint) return
     const selectionBounds = buildSelectionBounds(selectedPoint, points?.items ?? [], neighborIds)
     const focused2d = build2dViewState(selectionBounds)
-    const focused3d = build3dViewState(selectionBounds, viewState['semantic-3d'])
+    const focused3d = build3dViewState(selectionBounds, viewState['3d'])
     setViewState((current) => ({
-      ...current,
-      'semantic-2d': { ...focused2d, zoom: Math.max(current['semantic-2d'].zoom, Math.min(focused2d.zoom + 0.25, 6.8)) },
-      'semantic-3d': { ...focused3d, zoom: Math.max(current['semantic-3d'].zoom, Math.min(focused3d.zoom + 0.2, 6.2)) },
+      '2d': { ...focused2d, zoom: Math.min(focused2d.zoom + 0.25, 6.8) },
+      '3d': {
+        ...focused3d,
+        zoom: Math.min(focused3d.zoom + 0.2, 6.2),
+        // Preserve user's orbital angles — do not reset tilt/orbit on focus
+        rotationOrbit: current['3d'].rotationOrbit,
+        rotationX: current['3d'].rotationX,
+      },
     }))
   }
 
-  // Expose imperative handle for ExplorerPage to wire to ExplorerControlBar
   useImperativeHandle(ref, () => ({ fitAll, focusSelected }))
 
+  // ─── Dev diagnostic (mount only) ─────────────────────────────────────────
+  useEffect(() => {
+    if (!import.meta.env.DEV) return
+    const el = canvasRef.current
+    // eslint-disable-next-line no-console
+    console.debug(
+      '[MapPanel] mount diagnostic:',
+      '\n  canvas clientHeight:', el?.clientHeight ?? 'NOT FOUND',
+      '\n  canvas clientWidth:', el?.clientWidth ?? 'NOT FOUND',
+      '\n  points count:', points?.items.length ?? 0,
+      '\n  viewState 2d:', viewState['2d'],
+      '\n  bounds:', points?.meta.bounds,
+    )
+  }, []) // intentionally run once on mount only
+
+  // ─── Layer ───────────────────────────────────────────────────────────────
   const layers = useMemo(() => {
     const items = points?.items ?? []
     const is3d = viewMode === '3d'
+
     return [
       new ScatterplotLayer<ExplorerPoint>({
-        id: `semantic-points-${viewMode}-${colorMode}`,
+        id: 'semantic-points', // stable ID — updateTriggers handle all changes (BUG-5 fix)
         data: items,
         pickable: true,
         filled: true,
         stroked: true,
         opacity: is3d ? 0.94 : 0.9,
         radiusUnits: 'pixels',
-        getPosition: (point: ExplorerPoint) => (is3d ? [point.x, point.y, point.z] : [point.x, point.y]),
-        getRadius: (point: ExplorerPoint) => {
-          if (point.article_id === selectedArticleId) return is3d ? 10 : 8.8
-          if (neighborIds.has(point.article_id)) return is3d ? 7.6 : 6.8
-          if (point.article_id === hoveredArticleId) return is3d ? 6.4 : 5.8
-          if (point.analysis.is_outlier) return is3d ? 5.6 : 5.1
-          return is3d ? 4.4 : 3.9
-        },
-        radiusScale: is3d ? 1 : 1.1,
-        radiusMinPixels: 3,
-        radiusMaxPixels: 18,
         lineWidthUnits: 'pixels',
-        getLineWidth: (point: ExplorerPoint) => {
-          if (point.article_id === selectedArticleId) return 2.8
-          if (neighborIds.has(point.article_id)) return 1.5
-          return 0.8
+        radiusMinPixels: 2,
+        radiusMaxPixels: 18,
+
+        getPosition: (point: ExplorerPoint) =>
+          is3d ? [point.x, point.y, point.z] : [point.x, point.y],
+
+        getRadius: (point: ExplorerPoint) => {
+          if (point.article_id === selectedArticleId)
+            return is3d ? POINT_SELECTED_RADIUS_3D : POINT_SELECTED_RADIUS_2D
+          if (neighborIds.has(point.article_id))
+            return is3d ? POINT_NEIGHBOR_RADIUS_3D : POINT_NEIGHBOR_RADIUS_2D
+          if (point.article_id === hoveredArticleId)
+            return is3d ? POINT_HOVERED_RADIUS_3D : POINT_HOVERED_RADIUS_2D
+          if (point.analysis.is_outlier)
+            return is3d ? POINT_OUTLIER_RADIUS_3D : POINT_OUTLIER_RADIUS_2D
+          return is3d ? POINT_REGULAR_RADIUS_3D : POINT_REGULAR_RADIUS_2D
         },
+
         getFillColor: (point: ExplorerPoint) => {
-          if (point.article_id === selectedArticleId) return [14, 165, 233, 255]
-          if (neighborIds.has(point.article_id)) return [34, 197, 94, 235]
-          if (point.article_id === hoveredArticleId) return [125, 211, 252, 235]
-          const base = colorForPoint(point, colorMode)
-          if (!hasSelection) return base
-          if (point.analysis.is_outlier) return withAlpha(base, 150)
-          return withAlpha(base, 78)
+          if (point.article_id === selectedArticleId) return POINT_SELECTED_FILL
+          if (neighborIds.has(point.article_id)) return POINT_NEIGHBOR_FILL
+          if (point.article_id === hoveredArticleId) return POINT_HOVERED_FILL
+          const [r, g, b] = colorForPoint(point, colorMode)
+          const alpha = hasSelection
+            ? point.analysis.is_outlier
+              ? POINT_OUTLIER_ALPHA_UNDER_SELECTION
+              : POINT_REGULAR_ALPHA_UNDER_SELECTION
+            : point.analysis.is_outlier
+              ? POINT_OUTLIER_ALPHA_NO_SELECTION
+              : POINT_REGULAR_ALPHA_NO_SELECTION
+          return [r, g, b, alpha] as [number, number, number, number]
         },
+
         getLineColor: (point: ExplorerPoint) => {
-          if (point.article_id === selectedArticleId) return [255, 255, 255, 255]
-          if (neighborIds.has(point.article_id)) return [236, 253, 245, 240]
-          return hasSelection ? [226, 232, 240, 90] : [248, 250, 252, 190]
+          if (point.article_id === selectedArticleId) return POINT_SELECTED_STROKE
+          if (neighborIds.has(point.article_id)) return POINT_NEIGHBOR_STROKE
+          if (point.article_id === hoveredArticleId) return POINT_HOVERED_STROKE
+          if (hasSelection) return POINT_RECEDING_STROKE
+          return POINT_DEFAULT_STROKE
         },
+
+        getLineWidth: (point: ExplorerPoint) => {
+          if (point.article_id === selectedArticleId) return POINT_SELECTED_STROKE_WIDTH
+          if (neighborIds.has(point.article_id)) return POINT_NEIGHBOR_STROKE_WIDTH
+          if (point.article_id === hoveredArticleId) return POINT_HOVERED_STROKE_WIDTH
+          if (hasSelection) return POINT_RECEDING_STROKE_WIDTH
+          return POINT_DEFAULT_STROKE_WIDTH
+        },
+
         onHover: (info: PickingInfoLike) => {
           const point = info.object
           onHoverArticle(point?.article_id ?? null)
-          if (point && info.x != null && info.y != null) setTooltip({ x: info.x, y: info.y, point })
-          else setTooltip(null)
+          if (point && info.x != null && info.y != null) {
+            setTooltip({ x: info.x, y: info.y, point })
+          } else {
+            setTooltip(null)
+          }
         },
+
         onClick: (info: PickingInfoLike) => onSelectArticle(info.object?.article_id ?? null),
+
         updateTriggers: {
           getPosition: [viewMode],
           getRadius: [viewMode, selectedArticleId, hoveredArticleId, neighborKey],
           getFillColor: [viewMode, colorMode, selectedArticleId, hoveredArticleId, neighborKey],
-          getLineColor: [selectedArticleId, neighborKey],
+          getLineColor: [selectedArticleId, neighborKey, hasSelection],
+          getLineWidth: [selectedArticleId, neighborKey, hasSelection],
         },
       }),
     ]
   }, [points, viewMode, colorMode, selectedArticleId, hoveredArticleId, neighborIds, neighborKey, onHoverArticle, onSelectArticle, hasSelection])
 
-  const activeViewState = viewState[viewMode === '3d' ? 'semantic-3d' : 'semantic-2d']
+  const activeViewState = viewState[viewMode]
 
   return (
     <div className="map-frame">
-      {loading && (
+      {/* Initial load overlay */}
+      {loading && !points && (
         <div className="map-loading-overlay">
           <div style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-muted)' }}>
             Loading semantic projection…
@@ -250,13 +372,16 @@ export const MapPanel = forwardRef<MapPanelHandle, Props>(function MapPanel(
         </div>
       )}
 
-      <div className="map-canvas">
+      <div
+        ref={canvasRef}
+        className={`map-canvas${loading && points ? ' loading-update' : ''}`}
+      >
+        {/* BUG-2 fix: key="explorer-deck" prevents StrictMode double-mount identity loss.
+            BUG-4 fix: OrthographicView/OrbitView with no id (unnamed single-view mode);
+                       viewState is passed as a plain object — DeckGL handles it correctly. */}
         <DeckGL
-          views={
-            viewMode === '3d'
-              ? [new OrbitView({ id: 'semantic-3d' })]
-              : [new OrthographicView({ id: 'semantic-2d' })]
-          }
+          key="explorer-deck"
+          views={viewMode === '3d' ? [new OrbitView()] : [new OrthographicView()]}
           controller={
             viewMode === '3d'
               ? { dragMode: 'rotate', inertia: true }
@@ -267,8 +392,7 @@ export const MapPanel = forwardRef<MapPanelHandle, Props>(function MapPanel(
           onViewStateChange={({ viewState: nextViewState }) => {
             setViewState((current) => ({
               ...current,
-              [viewMode === '3d' ? 'semantic-3d' : 'semantic-2d']:
-                nextViewState as ViewStateMap[keyof ViewStateMap],
+              [viewMode]: nextViewState as ViewStateMap[typeof viewMode],
             }))
           }}
         >
@@ -284,22 +408,86 @@ export const MapPanel = forwardRef<MapPanelHandle, Props>(function MapPanel(
               <p>Broaden the source or date scope, or clear the cluster filter.</p>
             </div>
           )}
-          {tooltip && <Tooltip tooltip={tooltip} />}
+          {tooltip && (
+            <Tooltip
+              tooltip={tooltip}
+              canvasWidth={canvasRef.current?.clientWidth ?? 9999}
+              canvasHeight={canvasRef.current?.clientHeight ?? 9999}
+            />
+          )}
         </DeckGL>
+
+        {/* Dev diagnostic overlay — stripped in production builds */}
+        {import.meta.env.DEV && (
+          <DevDiagnostic
+            points={points}
+            activeViewState={activeViewState}
+            canvasEl={canvasRef.current}
+          />
+        )}
       </div>
     </div>
   )
 })
 
-function Tooltip({ tooltip }: { tooltip: NonNullable<TooltipState> }) {
+// ─── Tooltip ─────────────────────────────────────────────────────────────────
+
+const TOOLTIP_WIDTH = 288  // max-width: 18rem ≈ 288px
+const TOOLTIP_HEIGHT = 120 // approximate
+
+function Tooltip({
+  tooltip,
+  canvasWidth,
+  canvasHeight,
+}: {
+  tooltip: NonNullable<TooltipState>
+  canvasWidth: number
+  canvasHeight: number
+}) {
+  const point = tooltip.point
+  // Clamp tooltip so it doesn't overflow canvas edges
+  const left = Math.min(tooltip.x + 14, canvasWidth - TOOLTIP_WIDTH - 8)
+  const top = Math.min(tooltip.y + 14, canvasHeight - TOOLTIP_HEIGHT - 8)
+
   return (
-    <div className="tooltip-card" style={{ left: tooltip.x + 14, top: tooltip.y + 14 }}>
-      <strong>{tooltip.point.title}</strong>
-      <div className="tooltip-meta">{tooltip.point.source} · {tooltip.point.section || 'no section'}</div>
-      <div className="tooltip-meta">{formatDate(tooltip.point.published_at)}</div>
-      {tooltip.point.summary_snippet && (
-        <p>{tooltip.point.summary_snippet}</p>
-      )}
+    <div className="tooltip-card" style={{ left, top }}>
+      <div className="tooltip-eyebrow">
+        <span>{point.source}{point.section ? ` · ${point.section}` : ''}</span>
+        {point.analysis.is_outlier && (
+          <span className="tooltip-outlier-badge">Outlier</span>
+        )}
+      </div>
+      <strong>{point.title}</strong>
+      <div className="tooltip-meta">{formatDate(point.published_at)}</div>
+      <div className="tooltip-cluster-meta">
+        {point.analysis.cluster_id != null
+          ? `Cluster ${point.analysis.cluster_id}`
+          : 'No cluster'}
+      </div>
+      {point.summary_snippet && <p>{point.summary_snippet}</p>}
+    </div>
+  )
+}
+
+// ─── Dev diagnostic overlay ───────────────────────────────────────────────────
+
+function DevDiagnostic({
+  points,
+  activeViewState,
+  canvasEl,
+}: {
+  points: ExplorerPointsResponse | null
+  activeViewState: { zoom: number; target: [number, number, number] }
+  canvasEl: HTMLDivElement | null
+}) {
+  const b = points?.meta.bounds
+  const boundsStr = b
+    ? `[${b.min_x.toFixed(2)},${b.max_x.toFixed(2)},${b.min_y.toFixed(2)},${b.max_y.toFixed(2)}]`
+    : 'null'
+
+  return (
+    <div className="map-debug-overlay">
+      {`pts:${points?.items.length ?? 0} | canvas:${canvasEl?.clientWidth ?? '?'}×${canvasEl?.clientHeight ?? '?'} | zoom:${activeViewState.zoom.toFixed(2)} | bounds:${boundsStr}`}
     </div>
   )
 }
