@@ -170,7 +170,7 @@ Use the same embedding model for schema init and sync. `text-embedding-3-small` 
 
 ### Scheduler and verification
 
-Legacy scrape-only scheduler:
+Legacy scrape-only scheduler (deprecated; keeps scrape + verify only, no enrichment or clustering):
 
 ```bash
 export DATABASE_URL='postgresql+psycopg://user:pass@host:5432/dbname'
@@ -192,11 +192,23 @@ make verify-db
 ```
 
 Entrypoints:
-- `bash scripts/run_scheduled.sh` — legacy scrape + verify wrapper
+- `bash scripts/run_scheduled.sh` — deprecated legacy scrape + verify wrapper; does **not** run analysis or clustering
 - `bash scripts/run_stories_refresh.sh` — scrape + persist + analysis + clustering
 - `bash scripts/run_explorer_refresh.sh` — semantic sync + projection + explorer export
 
-The new wrappers keep separate lock, log, and state files under `var/` and are the right surface for recurring 6-hour jobs.
+The new wrappers keep separate lock, log, and state files under `var/` and are the right surface for recurring 6-hour jobs. If you want fresh story clusters, using `run_scheduled.sh` is the wrong hammer.
+
+Default stories wrapper tuning:
+- `DAYS_BACK=3`
+- `ENRICH_LIMIT=300`
+- `CLUSTER_LIMIT=1000`
+- `SCORE_THRESHOLD=0.45`
+
+You can override these per run, for example:
+
+```bash
+ENRICH_LIMIT=400 CLUSTER_LIMIT=1200 bash scripts/run_stories_refresh.sh
+```
 
 ### Optional local Postgres via Docker
 

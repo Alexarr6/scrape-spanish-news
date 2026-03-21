@@ -25,7 +25,7 @@ make explorer-refresh-once
 ## Job split
 
 ### Legacy wrapper
-`run_scheduled.sh` is the old scrape-only scheduler. It keeps its retry/alert behavior and still runs:
+`run_scheduled.sh` is the deprecated scrape-only scheduler. It keeps its retry/alert behavior, but it does **not** run enrichment or cluster rebuilds, so it is the wrong entrypoint for the main stories product. It still runs:
 
 1. `make preflight`
 2. `make run-all-persist`

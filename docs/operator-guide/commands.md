@@ -100,16 +100,16 @@ Smaller semantic artifact export for a bounded check.
 ## Scheduler and state
 
 ### `make scheduler-dry-run`
-Show the scheduler plan without running scraping.
+Show the deprecated legacy scrape-only scheduler plan without running scraping.
 
 ### `make scheduler-once`
-Run the scheduler wrapper once.
+Run the deprecated legacy scrape-only scheduler wrapper once.
 
 ### `make status`
-Print scheduler state files from `var/state/`.
+Print legacy scheduler state files from `var/state/`.
 
 ### `make tail-log`
-Tail `var/log/scheduler.log`.
+Tail the legacy scheduler log at `var/log/scheduler.log`.
 
 ### `make verify-output [SOURCE=...] [DATE=...] [OUT_PREFIX=...]`
 Verify expected JSON and metrics artifacts exist for the run window.

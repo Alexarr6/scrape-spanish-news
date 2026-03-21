@@ -27,6 +27,7 @@ LAST_ERROR_FILE="$STATE_DIR/last_error"
 LAST_STATUS_FILE="$STATE_DIR/last_status"
 LAST_RUN_FILE="$STATE_DIR/last_run_utc"
 LAST_SUCCESS_FILE="$STATE_DIR/last_success_utc"
+LEGACY_WARNING="LEGACY scrape-only wrapper: this script does not run enrich-articles or build-story-clusters. Prefer 'bash scripts/run_stories_refresh.sh' for the full pipeline."
 
 mkdir -p "$LOCK_DIR" "$LOG_DIR" "$STATE_DIR"
 exec >>"$LOG_FILE" 2>&1
@@ -88,6 +89,7 @@ run_attempt() {
 }
 
 if [[ "$DRY_RUN" == "1" ]]; then
+  log "$LEGACY_WARNING"
   log "dry-run app_root=$REPO_ROOT date=$DATE_LOCAL max_retries=$SCHEDULER_MAX_RETRIES uv=$UV"
   log "dry-run command: make -C $REPO_ROOT run-all-persist DATE=$DATE_LOCAL OUT_PREFIX=sched UV=$UV"
   exit 0
@@ -117,6 +119,7 @@ if ! flock -n 9; then
   exit 0
 fi
 
+log "$LEGACY_WARNING"
 log "scheduler start app_root=$REPO_ROOT date=$DATE_LOCAL uv=$UV"
 
 attempt=0

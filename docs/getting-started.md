@@ -37,7 +37,7 @@ What that gives you:
 - `scripts/semantic_sync.py` — embed missing or changed articles
 - `scripts/semantic_project.py` — rebuild persisted projection sets
 - `scripts/build_semantic_map.py` — export offline semantic artifacts
-- `scripts/run_scheduled.sh` — scheduler wrapper used by cron
+- `scripts/run_scheduled.sh` — deprecated legacy scrape-only scheduler wrapper; prefer `scripts/run_stories_refresh.sh` for recurring full-pipeline runs
 
 ### Frontend and docs
 
