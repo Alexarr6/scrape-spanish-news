@@ -102,3 +102,36 @@ def test_score_pair_penalizes_followup_story():
 
     assert "followup_penalty" in reason.penalties
     assert reason.score < 0.68
+
+
+def test_build_clusters_rolls_back_failed_rebuild() -> None:
+    class RecordingSession:
+        def __init__(self) -> None:
+            self.commit_calls = 0
+            self.rollback_calls = 0
+
+        def commit(self) -> None:
+            self.commit_calls += 1
+
+        def rollback(self) -> None:
+            self.rollback_calls += 1
+
+    session = RecordingSession()
+    pipeline = ClusterPipeline(session=session)  # type: ignore[arg-type]
+    pipeline._load_enriched_articles = lambda **_: []  # type: ignore[method-assign]
+    pipeline._connected_components = lambda article_ids, accepted_edges: [[]]  # type: ignore[method-assign]
+
+    def _boom(*args, **kwargs):
+        raise RuntimeError("boom")
+
+    pipeline._persist_clusters = _boom  # type: ignore[method-assign]
+
+    try:
+        pipeline.build_clusters()
+    except RuntimeError as exc:
+        assert str(exc) == "boom"
+    else:
+        raise AssertionError("expected rebuild failure to be re-raised")
+
+    assert session.rollback_calls == 1
+    assert session.commit_calls == 0

@@ -354,10 +354,14 @@ class ClusterPipeline:
         components = self._connected_components(
             [article.article.id for article in articles], accepted_edges
         )
-        self._persist_clusters(articles, components, accepted_edges)
+        try:
+            self._persist_clusters(articles, components, accepted_edges)
+            self.session.commit()
+        except Exception:
+            self.session.rollback()
+            raise
         metrics.cluster_count = len(components)
         metrics.finished_at = datetime.now(UTC)
-        self.session.commit()
         return metrics, artifacts
 
     def _load_enriched_articles(self, *, days_back: int, limit: int) -> list[EnrichedArticle]:
