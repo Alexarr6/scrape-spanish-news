@@ -15,22 +15,29 @@ from src.analysis.canonicalization import EntityCanonicalizer
 from src.analysis.contracts import (
     ArticleAnalysisExtractedEntity,
     ArticleAnalysisRead,
+    ArticleEditorialAnalysisPayload,
     ArticleEnrichmentPayload,
     ClusterRebuildMetrics,
+    EditorialAnalysisRunMetrics,
     EnrichmentRunMetrics,
     PairScoreArtifact,
     StoryClusterMemberReason,
 )
 from src.analysis.heuristics import heuristic_enrichment, title_similarity
 from src.analysis.llm_client import (
+    EDITORIAL_ANALYSIS_SCHEMA_VERSION,
+    EDITORIAL_ANALYSIS_SOURCE_TEXT_VERSION,
     OpenRouterClient,
     OpenRouterSettings,
+    build_editorial_analysis_prompt,
     build_prompt,
+    editorial_analysis_json_schema,
     enrichment_json_schema,
 )
 from src.analysis.normalization import jaccard_similarity, normalize_lookup, slugify
 from src.analysis.orm_models import (
     ArticleAnalysisORM,
+    ArticleEditorialAnalysisORM,
     ArticleEnrichmentRunORM,
     ArticleTagORM,
     ClusterEntityORM,
@@ -210,9 +217,7 @@ class AnalysisPipeline:
         self.session.execute(
             delete(EntityMentionORM).where(EntityMentionORM.article_id == article.id)
         )
-        merged_mentions: dict[
-            tuple[int, int, str], dict[str, int | float | str | None]
-        ] = {}
+        merged_mentions: dict[tuple[int, int, str], dict[str, int | float | str | None]] = {}
         for entity_payload in payload.entities[:12]:
             canonical = self.canonicalizer.canonicalize(entity_payload)
             entity_row = self.session.execute(
@@ -308,6 +313,130 @@ class AnalysisPipeline:
             [article.title, article.summary, article.article_text, article.section, article.tags]
         )
         return hashlib.sha256(raw.encode("utf-8")).hexdigest()
+
+
+class EditorialAnalysisPipeline:
+    """Run bounded LLM-driven editorial analysis as a separate first-pass pipeline."""
+
+    def __init__(self, session: Session, *, llm_settings: OpenRouterSettings | None = None) -> None:
+        self.session = session
+        self.llm = OpenRouterClient(llm_settings) if llm_settings else None
+
+    def analyze_articles(
+        self, *, days_back: int = 2, limit: int = 100, reprocess: bool = False
+    ) -> EditorialAnalysisRunMetrics:
+        if self.llm is None:
+            raise RuntimeError("OpenRouter settings are required for editorial analysis")
+
+        started_at = datetime.now(UTC)
+        metrics = EditorialAnalysisRunMetrics(started_at=started_at)
+        cutoff = started_at - timedelta(days=days_back)
+        rows = (
+            self.session.execute(
+                select(ArticleORM)
+                .where(ArticleORM.published_at.is_not(None), ArticleORM.published_at >= cutoff)
+                .order_by(ArticleORM.published_at.desc())
+                .limit(limit)
+            )
+            .scalars()
+            .all()
+        )
+        metrics.article_count = len(rows)
+        for row in rows:
+            article = ArticleRead.model_validate(row)
+            content_hash = AnalysisPipeline(self.session)._content_hash(article)
+            analysis = self.session.execute(
+                select(ArticleEditorialAnalysisORM).where(
+                    ArticleEditorialAnalysisORM.article_id == article.id
+                )
+            ).scalar_one_or_none()
+            if (
+                analysis
+                and not reprocess
+                and analysis.content_hash == content_hash
+                and analysis.analysis_status == "completed"
+            ):
+                metrics.skipped_count += 1
+                continue
+            analysis = analysis or ArticleEditorialAnalysisORM(article_id=article.id)
+            if analysis.id is None:
+                self.session.add(analysis)
+            analysis.analysis_status = "pending"
+            analysis.failure_reason = ""
+            analysis.content_hash = content_hash
+            analysis.model_provider = "openrouter"
+            analysis.model_name = self.llm.settings.model
+            analysis.model_version = self.llm.settings.model
+            analysis.prompt_version = self.llm.settings.prompt_version
+            analysis.schema_version = EDITORIAL_ANALYSIS_SCHEMA_VERSION
+            analysis.source_text_version = EDITORIAL_ANALYSIS_SOURCE_TEXT_VERSION
+            published_at = article.published_at.isoformat() if article.published_at else ""
+            prompt = build_editorial_analysis_prompt(
+                source=article.source,
+                section=article.section,
+                published_at=published_at,
+                url=str(article.url),
+                title=article.title,
+                summary=article.summary,
+                body=article.article_text,
+            )
+            try:
+                payload, _usage = self.llm.analyze_editorial(
+                    article_prompt=prompt,
+                    schema=editorial_analysis_json_schema(),
+                )
+                metrics.request_count += 1
+                self._persist_editorial_analysis(
+                    analysis=analysis,
+                    payload=payload,
+                    content_hash=content_hash,
+                )
+                metrics.analyzed_count += 1
+                self.session.commit()
+            except Exception as exc:
+                analysis.article_type = analysis.article_type or "unclear"
+                analysis.bias_label = analysis.bias_label or "unclear"
+                analysis.tone_emotional = analysis.tone_emotional or "unclear"
+                analysis.tone_target = analysis.tone_target or "unclear"
+                analysis.opinionatedness = analysis.opinionatedness or "unclear"
+                analysis.sensationalism = analysis.sensationalism or "unclear"
+                analysis.rhetorical_certainty = analysis.rhetorical_certainty or "unclear"
+                analysis.analysis_status = "failed"
+                analysis.failure_reason = str(exc)[:255]
+                analysis.updated_at = datetime.now(UTC)
+                self.session.commit()
+                metrics.failed_count += 1
+        metrics.finished_at = datetime.now(UTC)
+        return metrics
+
+    def _persist_editorial_analysis(
+        self,
+        *,
+        analysis: ArticleEditorialAnalysisORM,
+        payload: ArticleEditorialAnalysisPayload,
+        content_hash: str,
+    ) -> None:
+        analysis.article_type = payload.article_type
+        analysis.article_type_confidence = payload.article_type_confidence
+        analysis.bias_label = payload.bias_label
+        analysis.bias_score = payload.bias_score
+        analysis.bias_confidence = payload.bias_confidence
+        analysis.tone_emotional = payload.tone_emotional
+        analysis.tone_target = payload.tone_target
+        analysis.opinionatedness = payload.opinionatedness
+        analysis.sensationalism = payload.sensationalism
+        analysis.rhetorical_certainty = payload.rhetorical_certainty
+        analysis.framing_devices_json = json.dumps(payload.framing_devices, ensure_ascii=False)
+        analysis.evidence_spans_json = json.dumps(
+            [item.model_dump(mode="json") for item in payload.evidence_spans],
+            ensure_ascii=False,
+        )
+        analysis.rationale = payload.rationale
+        analysis.analysis_status = "completed"
+        analysis.failure_reason = ""
+        analysis.content_hash = content_hash
+        analysis.analyzed_at = datetime.now(UTC)
+        analysis.updated_at = datetime.now(UTC)
 
 
 class ClusterPipeline:
