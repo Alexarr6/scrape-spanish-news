@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass
 from datetime import date, datetime
 
@@ -9,6 +10,7 @@ from sqlalchemy import Select, func, or_, select
 from sqlalchemy.orm import Session
 
 from src.analysis.orm_models import (
+    ArticleEditorialAnalysisORM,
     ArticleTagORM,
     ClusterEntityORM,
     ClusterMemberORM,
@@ -32,21 +34,62 @@ class ClusterListFilters:
     search: str | None = None
 
 
+def load_article_editorial_analysis(session: Session, article_id: int) -> dict | None:
+    row = session.execute(
+        select(ArticleEditorialAnalysisORM).where(
+            ArticleEditorialAnalysisORM.article_id == article_id
+        )
+    ).scalar_one_or_none()
+    if row is None:
+        return None
+    return {
+        "article_id": row.article_id,
+        "article_type": row.article_type,
+        "article_type_confidence": float(row.article_type_confidence),
+        "bias_label": row.bias_label,
+        "bias_score": float(row.bias_score),
+        "bias_confidence": float(row.bias_confidence),
+        "tone_emotional": row.tone_emotional,
+        "tone_target": row.tone_target,
+        "opinionatedness": row.opinionatedness,
+        "sensationalism": row.sensationalism,
+        "rhetorical_certainty": row.rhetorical_certainty,
+        "framing_devices": json.loads(row.framing_devices_json or "[]"),
+        "evidence_spans": json.loads(row.evidence_spans_json or "[]"),
+        "rationale": row.rationale,
+        "analysis_status": row.analysis_status,
+        "failure_reason": row.failure_reason,
+        "model_provider": row.model_provider,
+        "model_name": row.model_name,
+        "model_version": row.model_version,
+        "prompt_version": row.prompt_version,
+        "schema_version": row.schema_version,
+        "content_hash": row.content_hash,
+        "source_text_version": row.source_text_version,
+        "analyzed_at": _iso(row.analyzed_at),
+        "updated_at": _iso(row.updated_at),
+    }
+
+
 def load_story_clusters(session: Session, filters: ClusterListFilters) -> tuple[list[dict], int]:
     """Load one page of cluster cards plus the total count for the active filter set."""
 
     cluster_ids = _matching_cluster_ids_stmt(filters)
     total = session.execute(select(func.count()).select_from(cluster_ids.subquery())).scalar_one()
-    ids = session.execute(
-        cluster_ids.order_by(
-            StoryClusterORM.article_count.desc(),
-            StoryClusterORM.source_count.desc(),
-            StoryClusterORM.last_article_published_at.desc().nullslast(),
-            StoryClusterORM.id.desc(),
+    ids = (
+        session.execute(
+            cluster_ids.order_by(
+                StoryClusterORM.article_count.desc(),
+                StoryClusterORM.source_count.desc(),
+                StoryClusterORM.last_article_published_at.desc().nullslast(),
+                StoryClusterORM.id.desc(),
+            )
+            .offset(filters.offset)
+            .limit(filters.limit)
         )
-        .offset(filters.offset)
-        .limit(filters.limit)
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
     if not ids:
         return [], total
     payload, _ = load_story_clusters_for_ids(session, ids)
@@ -56,7 +99,9 @@ def load_story_clusters(session: Session, filters: ClusterListFilters) -> tuple[
 def load_story_cluster_detail(session: Session, cluster_id: int) -> dict | None:
     """Load one cluster card plus its ordered member article payloads."""
 
-    cluster = session.execute(select(StoryClusterORM).where(StoryClusterORM.id == cluster_id)).scalar_one_or_none()
+    cluster = session.execute(
+        select(StoryClusterORM).where(StoryClusterORM.id == cluster_id)
+    ).scalar_one_or_none()
     if cluster is None:
         return None
     cluster_payload, _ = load_story_clusters_for_ids(session, [cluster_id])
@@ -73,7 +118,9 @@ def load_story_cluster_detail(session: Session, cluster_id: int) -> dict | None:
         )
         .join(ArticleORM, ArticleORM.id == ClusterMemberORM.article_id)
         .where(ClusterMemberORM.cluster_id == cluster_id)
-        .order_by(ArticleORM.published_at.desc().nullslast(), ClusterMemberORM.membership_score.desc())
+        .order_by(
+            ArticleORM.published_at.desc().nullslast(), ClusterMemberORM.membership_score.desc()
+        )
     ).all()
     article_ids = [row.article_id for row in members]
     tags_by_article = _load_article_tags(session, article_ids)
@@ -103,7 +150,9 @@ def load_story_clusters_for_ids(session: Session, ids: list[int]) -> tuple[list[
         return [], 0
     clusters = {
         row.id: row
-        for row in session.execute(select(StoryClusterORM).where(StoryClusterORM.id.in_(ids))).scalars()
+        for row in session.execute(
+            select(StoryClusterORM).where(StoryClusterORM.id.in_(ids))
+        ).scalars()
     }
     primary_tags = {row.id: row for row in session.execute(select(TagORM)).scalars()}
     source_rows = session.execute(
@@ -197,7 +246,11 @@ def load_story_cluster_filters(session: Session, filters: ClusterListFilters) ->
         .order_by(func.count(func.distinct(ClusterMemberORM.cluster_id)).desc(), ArticleORM.source)
     ).all()
     tags = session.execute(
-        select(TagORM.tag_code, TagORM.display_name, func.count(func.distinct(ClusterMemberORM.cluster_id)))
+        select(
+            TagORM.tag_code,
+            TagORM.display_name,
+            func.count(func.distinct(ClusterMemberORM.cluster_id)),
+        )
         .join(ArticleTagORM, ArticleTagORM.tag_id == TagORM.id)
         .join(ClusterMemberORM, ClusterMemberORM.article_id == ArticleTagORM.article_id)
         .where(ClusterMemberORM.cluster_id.in_(cluster_ids))
@@ -214,11 +267,15 @@ def load_story_cluster_filters(session: Session, filters: ClusterListFilters) ->
         .join(ClusterEntityORM, ClusterEntityORM.entity_id == EntityORM.id)
         .where(ClusterEntityORM.cluster_id.in_(cluster_ids))
         .group_by(EntityORM.slug, EntityORM.canonical_name, EntityORM.entity_type)
-        .order_by(func.count(func.distinct(ClusterEntityORM.cluster_id)).desc(), EntityORM.canonical_name)
+        .order_by(
+            func.count(func.distinct(ClusterEntityORM.cluster_id)).desc(), EntityORM.canonical_name
+        )
         .limit(50)
     ).all()
     return {
-        "sources": [{"value": source, "label": source, "count": count} for source, count in sources],
+        "sources": [
+            {"value": source, "label": source, "count": count} for source, count in sources
+        ],
         "tags": [
             {"value": tag_code, "label": display_name, "count": count}
             for tag_code, display_name, count in tags
@@ -262,7 +319,10 @@ def _matching_cluster_ids_stmt(filters: ClusterListFilters) -> Select:
     if filters.date_from:
         stmt = stmt.where(StoryClusterORM.last_article_published_at >= filters.date_from)
     if filters.date_to:
-        stmt = stmt.where(StoryClusterORM.first_article_published_at < datetime.combine(filters.date_to, datetime.max.time()))
+        stmt = stmt.where(
+            StoryClusterORM.first_article_published_at
+            < datetime.combine(filters.date_to, datetime.max.time())
+        )
     if filters.search:
         term = f"%{filters.search.strip().lower()}%"
         stmt = stmt.where(
