@@ -1,73 +1,96 @@
-- State: CLEANUP_IMPLEMENTATION_COMPLETE
-- Current phase: cleanup implementation completed for scoped audit items in `spain-news-bias-scraper`
+- State: EDITORIAL_PHASE1_IMPLEMENTED
+- Current phase: article-level editorial analysis phase 1 implemented for `spain-news-bias-scraper`
 - Last update: 2026-03-21 UTC
 
-## What completed in this implementation pass
+## Editorial analysis phase 1 implementation
 
-- Completed the scoped cleanup items from `ARCH_AUDIT.md` that were explicitly requested in this pass.
-- Landed three atomic commits:
-  1. `refactor(db): deduplicate schema sql constants`
-  2. `fix(clustering): make cluster rebuild transactional`
-  3. `chore(ops): deprecate legacy scheduled wrapper`
-- Ran narrow validation after each change.
+### What landed
+- New dedicated ORM table/model: `article_editorial_analysis`
+- New strict editorial Pydantic contracts with semantic validation guards
+- New dedicated editorial prompt builder + strict JSON schema generator
+- New dedicated OpenRouter client method: `analyze_editorial(...)`
+- New separate editorial pipeline/job: `EditorialAnalysisPipeline`
+- New CLI entrypoint: `scripts/analyze_editorial.py`
+- New Make target: `make analyze-editorial DATABASE_URL=...`
+- New minimal read API: `GET /api/v1/editorial-analysis/{article_id}`
+- Focused tests for contracts, persistence/pipeline behavior, and API read path
 
-## Key findings summary
+### Hard constraints respected
+- Editorial analysis was **not** folded into the existing enrichment flow
+- Existing `article_analysis.article_type` usage was left in place for clustering
+- No cluster/story ideological aggregation was added
+- No unrelated cleanup/refactor was bundled into this slice
 
-### P0 (dangerous, fix immediately)
-- `INIT_SQL_TEMPLATE` and `ADDITIVE_SCHEMA_SQL` in `dbstore.py` are byte-for-byte identical. Dead duplication.
+### Validation run
+- `ruff check` on touched editorial files: passed
+- `pytest -q tests/test_editorial_analysis_contracts.py tests/test_editorial_analysis_pipeline.py tests/test_api_editorial.py tests/test_api_articles.py tests/test_openrouter_extraction_contract.py`: passed (`13 passed`)
 
-### P1 (important structural debt)
-- `run_scheduled.sh` is a legacy scrape-only scheduler that coexists with newer full-pipeline wrappers. Operator confusion risk; can run silently without analysis/clustering.
-- Cluster rebuild is a full DELETE with no atomic transaction or rollback — API returns empty cluster state on failed rebuild.
-- `article_enrichment_runs` table is written on every enrichment but never read by API, frontend, or any operational surface. Dead write work.
-- SQLite dialect branch (`_session_dialect_name`, `_explorer_published_at_sql`) lives in production `dbstore.py` to serve test infrastructure. Should be in test layer.
+### Deferred by design
+- Cluster/story ideological rollups
+- Media-level comparison endpoints
+- Unifying editorial `article_type` with current `article_analysis.article_type`
+- Frontend/editorial UI polish
+- Broader migration framework changes
 
-### P2 (cleanup/clarity debt)
-- `entity_aliases` write path runs per enrichment but no API/read-side path consumes alias data.
-- `ExplorerArticleDetail.semantic_summary` duplicates `point.analysis` in the API response.
-- `cluster_key` is not a stable identifier — regenerated on each full rebuild, exposed in API/frontend.
-- Enrichment score threshold defaults differ between Makefile (0.68) and `run_stories_refresh.sh` (0.45).
-- `generate_comparison_summary.py` is an orphan script with no Makefile target and a hardcoded date.
-- Frontend types are manually mirrored from Python contracts (acceptable now, needs tooling before growing).
+## Scope completed in this planning pass
 
-## Tables classified
+Prepared an implementation-ready plan for adding **article-level editorial analysis** using OpenRouter, based on:
+- `docs/contracts/editorial-analysis-v1.md`
+- `docs/contracts/editorial-analysis-prompt-v1.md`
+- existing analysis / ORM / OpenRouter / API stack
 
-- Source-of-truth: `articles` only
-- Semi-durable (expensive to rebuild): `article_embeddings`
-- Reference/seed: `tags`
-- Rebuild artifacts: everything else (story_clusters, cluster_members, cluster_entities, article_analysis, article_tags, entity_mentions, entities, article_projections, semantic_point_analysis, semantic_clusters)
-- No read path: `article_enrichment_runs`, `entity_aliases`
+## Planner recommendations
 
-## Story clustering vs semantic clustering
+### Recommended persistence shape
+- Add a new dedicated ORM table: `article_editorial_analysis`
+- Keep **one row per article** in v1
+- Do **not** overload existing `article_analysis`
+- Keep `framing_devices` and `evidence_spans` as bounded JSON fields in v1
 
-Confirmed: these are clearly different products. No schema overlap or conceptual confusion.
+### Recommended OpenRouter integration
+- Add a separate editorial payload contract and JSON schema
+- Add a dedicated prompt builder and client method
+- Use strict OpenRouter `json_schema` response mode plus Pydantic validation
+- Treat the prompt/template as versioned infrastructure, not inline glue text
 
-## Validation run in this implementation pass
+### Recommended pipeline shape
+- Add a **new dedicated editorial-analysis job/pipeline**
+- Do not fold it directly into current topical enrichment flow in v1
+- Use content-hash skip logic and explicit status/failure handling
+- Do not invent a heuristic fallback for bias/tone classification
 
-- `~/.local/bin/uv run --project . python - <<'PY' ...` to verify both semantic schema renderers still emit identical SQL after deduplication.
-- `~/.local/bin/uv run --project . pytest -q tests/test_story_clustering.py`
-- `DATABASE_URL='postgresql+psycopg://user:pass@host:5432/dbname' make scheduler-dry-run`
-- `make help | grep -n "LEGACY" | head`
+### Recommended API shape
+- Start with article-level read access:
+  - `GET /api/v1/articles/{article_id}/editorial-analysis`
+- Add optional list/filter endpoints later if needed
+- Defer cluster-level ideological aggregation; it is underspecified and easy to get wrong
 
-## Scope completed
+## Migration / schema call
 
-### P0 — deduplicate SQL constants in `dbstore.py`
-- Done.
-- Replaced duplicate `INIT_SQL_TEMPLATE` / `ADDITIVE_SCHEMA_SQL` bodies with one canonical `SCHEMA_SQL_TEMPLATE`.
-- Kept both render helpers for behavior compatibility.
+- The repo currently uses ORM registration + `Base.metadata.create_all()` via init scripts, not Alembic
+- Plan assumes additive schema evolution in that style
+- No full historical backfill should happen by default on first implementation
 
-### P1 — make cluster rebuild safer
-- Done.
-- `ClusterPipeline.build_clusters()` now explicitly rolls back on any failure during the destructive rebuild/persist phase before re-raising.
-- Added a focused regression test that asserts rollback happens and commit does not happen on rebuild failure.
+## Key open design calls resolved by planner
 
-### P1 — reduce operator trap around old scheduler wrapper
-- Done, without breaking legacy invocation.
-- `scripts/run_scheduled.sh` now logs a loud deprecation warning stating that it is scrape-only and does not run enrichment/clustering.
-- Makefile help text and operator docs now mark the wrapper as deprecated legacy behavior and point operators at `run_stories_refresh.sh`.
+1. **Naming**: recommend `article_editorial_analysis` over alternatives because `article_analysis` already means enrichment/taxonomy work in this repo
+2. **Pipeline placement**: recommend a separate job, not silent expansion of existing enrichment payload
+3. **Evidence modeling**: keep as JSON in v1, normalize later only if there is a proven read/write need
+4. **Prompt handling**: prompt/template must be explicit, versioned, and test-covered
+5. **Cluster rollups**: defer; article-level output is the real v1 contract
 
-## Remaining architect backlog not tackled in this pass
+## Atomic implementation slices proposed
 
-- `article_enrichment_runs` still has no read path.
-- SQLite compatibility branch in `src/semantic/dbstore.py` still exists.
-- Other P2 cleanup items from the audit remain deferred.
+1. editorial contract models + validators
+2. prompt/template infrastructure
+3. dedicated OpenRouter client method
+4. ORM model + schema init coverage
+5. editorial pipeline/CLI target
+6. article-level read API
+7. optional cluster detail integration
+8. later operator/backfill controls
+
+## Files updated in this pass
+- `PLAN.md`
+- `STATUS.md`
+- `RESULTS.md`

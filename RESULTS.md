@@ -1,6 +1,187 @@
 # RESULTS.md
 
-## 2026-03-21 — cleanup implementation for `spain-news-bias-scraper`
+## 2026-03-21 — editorial analysis phase 1 implementation for `spain-news-bias-scraper`
+
+**Role:** implementer  
+**Outcome:** ✅ Complete for scoped phase 1  
+**Scope:** dedicated article-level editorial analysis only
+
+---
+
+## What was added
+
+### Persistence / ORM
+- Added new dedicated ORM model and table: `article_editorial_analysis`
+- Kept this additive and separate from existing `article_analysis`
+- Stored bounded JSON payloads in:
+  - `framing_devices_json`
+  - `evidence_spans_json`
+- Included operational/versioning fields for status, model, prompt/schema version, content hash, and timestamps
+
+### Contracts / validation
+- Added strict editorial contracts in `src/analysis/contracts.py`
+- Added dedicated evidence span model
+- Added semantic guards beyond raw JSON parsing, including:
+  - score/confidence bounds
+  - no duplicate framing devices
+  - at least one evidence span
+  - `unclear` bias requiring near-neutral/low-confidence outputs
+  - pragmatic consistency checks for tone/opinionatedness/certainty
+
+### Prompt / schema / OpenRouter client
+- Added dedicated prompt builder: `build_editorial_analysis_prompt(...)`
+- Added dedicated strict JSON schema builder: `editorial_analysis_json_schema()`
+- Added dedicated OpenRouter client method: `analyze_editorial(...)`
+- Kept this path separate from the existing enrichment prompt/schema/client flow
+
+### Pipeline / job
+- Added dedicated `EditorialAnalysisPipeline`
+- Added `scripts/analyze_editorial.py`
+- Added Make target: `make analyze-editorial DATABASE_URL=...`
+- Implemented:
+  - recent article loading
+  - content-hash skip behavior
+  - OpenRouter call
+  - strict payload validation
+  - persistence into the new table
+  - simple failed/completed status handling
+
+### Read surface
+- Added minimal article-level read endpoint:
+  - `GET /api/v1/editorial-analysis/{article_id}`
+- Did **not** add cluster-level ideological summaries
+
+---
+
+## Validation run
+
+Ran focused checks only:
+- `ruff check src/analysis/contracts.py src/analysis/llm_client.py src/analysis/orm_models.py src/analysis/pipeline.py src/analysis/readside.py src/api/app.py src/api/contracts/editorial.py src/api/v1/editorial.py scripts/analyze_editorial.py tests/test_editorial_analysis_contracts.py tests/test_editorial_analysis_pipeline.py tests/test_api_editorial.py`
+- `pytest -q tests/test_editorial_analysis_contracts.py tests/test_editorial_analysis_pipeline.py tests/test_api_editorial.py tests/test_api_articles.py tests/test_openrouter_extraction_contract.py`
+
+Result:
+- `13 passed`
+- lint passed on touched files
+
+---
+
+## Caveats / deferred items
+
+Still intentionally out of scope:
+- cluster/story ideological rollups
+- media-level comparison endpoints
+- replacing or refactoring current `article_analysis.article_type`
+- frontend polish for this feature
+- migration framework overhaul
+
+One practical caveat:
+- failed editorial rows are persisted with `analysis_status="failed"` plus `failure_reason`, using placeholder `unclear` values for required classification columns so the row stays storable without inventing fake successful analysis
+
+---
+
+## Previous result entries
+
+### 2026-03-21 — planner handoff for editorial analysis feature
+
+**Role:** planner  
+**Outcome:** ✅ Complete  
+**Scope:** planning only, no implementation
+
+---
+
+## What was accomplished
+
+Created a concrete implementation plan for adding **LLM-driven article editorial analysis** to `spain-news-bias-scraper`.
+
+The plan was grounded in:
+- `docs/contracts/editorial-analysis-v1.md`
+- `docs/contracts/editorial-analysis-prompt-v1.md`
+- the current OpenRouter client path in `src/analysis/llm_client.py`
+- the current analysis ORM/contracts/pipeline stack
+- current FastAPI read-side structure and CRUD style
+
+Updated:
+- `PLAN.md`
+- `STATUS.md`
+- `RESULTS.md`
+
+No implementation work was performed.
+
+---
+
+## Planner recommendations in one shot
+
+### 1) Persistence / naming
+- Add a new dedicated table and ORM model: **`article_editorial_analysis`**
+- Keep **one row per article** in v1
+- Do **not** stuff editorial bias/tone fields into the existing `article_analysis` table
+- Keep `framing_devices` and `evidence_spans` as bounded JSON fields in v1
+
+### 2) OpenRouter integration
+- Add a separate editorial payload contract and schema instead of extending `ArticleEnrichmentPayload`
+- Add a dedicated prompt builder + client method for editorial analysis
+- Reuse OpenRouter `response_format={type: json_schema}` style, then validate with Pydantic and extra semantic guards
+- Treat the prompt/template as **versioned core infrastructure**
+
+### 3) Pipeline design
+- Build a **new dedicated editorial-analysis pipeline/job**
+- Do not fold it into the current enrichment job in v1
+- Use content-hash skip logic and explicit status/failure fields
+- Do **not** add a heuristic fallback for ideology/tone classification
+
+### 4) Schema evolution
+- The repo currently relies on ORM registration + `Base.metadata.create_all()` via init scripts
+- Plan assumes additive schema evolution in that existing style
+- No default full-corpus backfill on first release; start with bounded recent windows
+
+### 5) API surface
+- Start with article-level read access:
+  - `GET /api/v1/articles/{article_id}/editorial-analysis`
+- Optionally add list/filter reads later
+- Defer cluster-level ideological rollups; they need explicit aggregation rules and are easy to bullshit
+
+### 6) Testing / validation
+- Add contract tests, JSON schema tests, prompt/version tests, client parsing tests, DB persistence tests, and API route tests
+- Add manual review fixtures for ambiguous vs obvious cases before any broader backfill
+
+---
+
+## Recommended atomic implementation order
+
+1. editorial Pydantic models + validators
+2. prompt/template runtime infrastructure
+3. dedicated OpenRouter client method
+4. ORM model + schema init support
+5. dedicated editorial pipeline/CLI target
+6. article-level read API
+7. optional cluster detail integration
+8. later operator/backfill controls
+
+---
+
+## Important decisions locked by this planner pass
+
+- **Best table name:** `article_editorial_analysis`
+- **Best v1 architecture:** dedicated pipeline, not enrichment-job overloading
+- **Best evidence modeling:** JSON in v1, not child-table normalization yet
+- **Best prompt handling:** explicit versioned asset/module, not ad hoc inline strings
+- **Best read-side scope:** article-level first, cluster aggregation later if ever justified
+
+---
+
+## Relevant repo details for implementer
+
+- Existing OpenRouter integration already uses strict JSON schema mode in `src/analysis/llm_client.py`
+- Existing topical enrichment uses `ArticleEnrichmentPayload` and writes to `article_analysis`
+- Existing schema init is driven by `Base.metadata.create_all()` via `scripts/init_analysis_schema.py`
+- Existing CRUD style is explicit, lightweight, and a good fit for article-level editorial reads
+- Current clustering depends on existing `article_analysis.article_type`, so any unification of article-type sources should be treated as a later deliberate follow-up, not part of the first feature slice
+
+---
+
+## Previous result entries
+
+### 2026-03-21 — cleanup implementation for `spain-news-bias-scraper`
 
 **Role:** implementer
 **Outcome:** ✅ Complete for scoped items
