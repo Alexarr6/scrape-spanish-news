@@ -25,6 +25,25 @@ Implemented the approved robustness pass for the editorial-analysis pipeline:
 - `docs/operator-guide/editorial-analysis-manual-test.md`
 - `STATUS.md`
 
+### 2026-03-22 — post-pass hotfix for OpenRouter/OpenAI SDK usage objects
+
+**Outcome:** ✅ Complete  
+**Scope:** minimal regression fix after the editorial robustness pass
+
+What changed:
+- normalized `response.usage` handling in `src/analysis/llm_client.py`
+- editorial/enrichment usage parsing now accepts:
+  - plain dicts
+  - pydantic-like objects exposing `model_dump()`
+  - SDK-style objects with `prompt_tokens` / `completion_tokens` / `total_tokens` attributes
+  - missing / `None`
+- added focused regression coverage in `tests/test_llm_client_usage.py`
+- updated `STATUS.md` for the hotfix slice
+
+Verification:
+- `~/.local/bin/uv run --project . pytest -q tests/test_llm_client_usage.py tests/test_editorial_analysis_pipeline.py` → passed (`6 passed`)
+- `~/.local/bin/uv run --project . ruff check src/analysis/llm_client.py tests/test_llm_client_usage.py` → passed
+
 ### Verification run
 Commands run:
 - `PYTHONPATH=.venv/lib/python3.11/site-packages .venv/bin/ruff check src/analysis/llm_client.py src/analysis/pipeline.py tests/test_editorial_analysis_pipeline.py`

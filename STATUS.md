@@ -1,5 +1,5 @@
 - State: DONE
-- Current phase: editorial-analysis reliability remediation implemented on `iter/004`
+- Current phase: editorial-analysis reliability remediation implemented on `iter/004`, plus post-pass usage normalization hotfix
 - Last update: 2026-03-22 UTC
 
 ## Why this new planning pass exists
@@ -56,8 +56,7 @@ Completed in code:
 - focused regression coverage for parse failure, schema rejection fallback, validation failure, and unchanged-row skipping
 
 Pending before closure:
-- final docs/results sync
-- commit(s)
+- none for this hotfix slice once focused test passes and atomic commit lands
 
 ## Notes on previous Phase 2 status
 

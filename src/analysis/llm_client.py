@@ -142,7 +142,7 @@ class OpenRouterClient:
         )
         content = response.choices[0].message.content or "{}"
         payload = ArticleEnrichmentPayload.model_validate(json.loads(content))
-        usage = OpenRouterUsage.model_validate(getattr(response, "usage", {}) or {})
+        usage = self._normalize_usage(getattr(response, "usage", None))
         return payload, usage
 
     def analyze_editorial(
@@ -212,7 +212,7 @@ class OpenRouterClient:
                 failure_message=str(exc),
             )
 
-        usage = OpenRouterUsage.model_validate(getattr(response, "usage", {}) or {})
+        usage = self._normalize_usage(getattr(response, "usage", None))
         raw_response = self._safe_dump_model(response)
         choice = response.choices[0] if getattr(response, "choices", None) else None
         message = getattr(choice, "message", None)
@@ -369,6 +369,21 @@ class OpenRouterClient:
                 if candidate:
                     return candidate
         return None
+
+    def _normalize_usage(self, usage: Any) -> OpenRouterUsage:
+        if usage is None:
+            return OpenRouterUsage()
+        if isinstance(usage, dict):
+            return OpenRouterUsage.model_validate(usage)
+        if hasattr(usage, "model_dump"):
+            return OpenRouterUsage.model_validate(usage.model_dump())
+        return OpenRouterUsage.model_validate(
+            {
+                "prompt_tokens": getattr(usage, "prompt_tokens", 0),
+                "completion_tokens": getattr(usage, "completion_tokens", 0),
+                "total_tokens": getattr(usage, "total_tokens", 0),
+            }
+        )
 
     def _safe_dump_model(self, value: Any) -> Any:
         if value is None:
