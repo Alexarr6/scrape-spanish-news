@@ -1,659 +1,374 @@
-# COMPONENT_MAP.md — iter/004 Component Architecture
+# COMPONENT_MAP.md — iter/006 Component Architecture
 
-**Role:** Frontend Architect (iter/004)
+**Role:** Frontend Architect (iter/006)
 **Date:** 2026-03-20
 
 ---
 
-## Overview
+## Scope of this revision
 
-This map defines the full component inventory for the rebuilt frontend. It covers:
-- what each component does and owns
-- what props it receives
-- which state it manages (if any)
-- which existing component it replaces
-- which other components it composes
+This is an **incremental revision** of iter/004 COMPONENT_MAP.md.
 
-Read alongside `UI_SPEC.md` (layout and screen specs) and `DESIGN_TOKENS.md` (visual system).
+**What changed:** Section 5 (Explorer route components) has been fully rewritten with:
+- Precise render reliability fix targets in MapPanel
+- Updated MapPanel prop contract
+- New `ExplorerContextRail` details (seeded chip, onboarding guide, source swatches)
+- New `explorerColors.ts` utility file
+- Updated `ExplorerPage` composition reflecting the diagnosis
+
+**What is unchanged from iter/004:** Sections 1–4 (App entry, Layout, Stories route, Stories page) and Sections 6–10 (shared utilities, preserved components, deletions, build notes).
 
 ---
 
 ## 1. App entry and routing
 
-### `App.tsx` (refactor)
-
-**Role:** Root component. Renders shell + routes based on `isSemanticExplorerMode()`.
-
-**Changes from current:**
-- No longer passes `shell={AppShell}` as a prop to routes
-- Simpler: `<Shell navItems={...}><ClusterBrowserPage /></Shell>` or `<Shell navItems={...}><ExplorerPage /></Shell>`
-- `navItems` remains computed here from navigation lib
-
-```tsx
-// New shape
-export default function App() {
-  const navItems = buildNavItems()
-  return (
-    <Shell navItems={navItems}>
-      {isSemanticExplorerMode() ? <ExplorerPage /> : <ClusterBrowserPage />}
-    </Shell>
-  )
-}
-```
+*(unchanged from iter/004)*
 
 ---
 
-## 2. Layout components (`components/layout/`)
+## 2. Layout components
 
-### `Shell.tsx` ← replaces `AppShell.tsx`
-
-**Role:** Renders the global app frame. Top bar + main content area only. No route logic.
-
-**Props:**
-```tsx
-type ShellProps = {
-  navItems: NavItem[]
-  children: ReactNode
-}
-```
-
-**Internal structure:**
-```tsx
-<div className="app-shell">
-  <TopBar navItems={navItems} />
-  <main className="app-main">{children}</main>
-</div>
-```
-
-**CSS:**
-```css
-.app-shell {
-  display: flex;
-  flex-direction: column;
-  min-height: 100vh;
-}
-.app-main {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-}
-```
-
-**Eliminates:** `app-sidebar`, `brand-block`, `sidebar-note`, `page-header`, `workspace-grid`, `workspace-panel` responsibility from shell.
+*(unchanged from iter/004)*
 
 ---
 
-### `TopBar.tsx` ← new
+## 3. Stories route components
 
-**Role:** Sticky global top bar with wordmark, nav, and optional dataset scope chip.
-
-**Props:**
-```tsx
-type TopBarProps = {
-  navItems: NavItem[]
-  scopeLabel?: string  // optional — "15–20 Mar · 8 sources"
-}
-```
-
-**Internal structure:**
-```tsx
-<header className="topbar">
-  <span className="topbar-wordmark">Signal</span>
-  <nav className="topbar-nav">
-    {navItems.map(item => (
-      <a key={item.key} href={item.href} className={item.active ? 'topbar-nav-item active' : 'topbar-nav-item'}>
-        {item.label}
-      </a>
-    ))}
-  </nav>
-  {scopeLabel && <span className="badge muted topbar-scope">{scopeLabel}</span>}
-</header>
-```
-
-**Behavior:**
-- Sticky top, z-index above panels
-- `scopeLabel` prop: pass if API returns scope info (optional for initial build; can be `undefined`)
-- Active state: bottom border on active nav item, no background treatment
+*(unchanged from iter/004)*
 
 ---
 
-### `FilterDrawer.tsx` ← new (replaces `ClusterFilterPanel` + `FilterBar`)
+## 4. Stories route page
 
-**Role:** Slide-over filter panel shared by both routes. Content slots controlled by parent.
-
-**Props:**
-```tsx
-type FilterDrawerProps = {
-  open: boolean
-  onClose: () => void
-  title: string           // "Refine Stories" or "Refine Explorer"
-  children: ReactNode     // filter fields from parent
-  activeCount?: number    // badge on trigger button (managed by parent)
-  onReset?: () => void
-}
-```
-
-**Behavior:**
-- Slides in from left (overlay) on `open=true`
-- Backdrop click closes
-- Escape key closes
-- `onReset` shown as "Clear all" if provided
-- Does NOT manage filter state — only renders provided children
-- Mobile: full width overlay
-
-**CSS:**
-```css
-.filter-drawer {
-  position: fixed;
-  inset: 0 auto 0 0;
-  width: var(--filter-drawer-width, 340px);
-  z-index: 100;
-  background: var(--color-surface);
-  box-shadow: var(--shadow-overlay);
-  border-right: 1px solid var(--color-border-strong);
-  display: flex;
-  flex-direction: column;
-  transform: translateX(-100%);
-  transition: transform 220ms ease-out;
-}
-.filter-drawer.open {
-  transform: translateX(0);
-}
-.filter-drawer-backdrop {
-  position: fixed;
-  inset: 0;
-  z-index: 99;
-  background: rgba(14, 23, 36, 0.25);
-}
-```
-
----
-
-### `SectionDivider.tsx` ← new
-
-**Role:** Thin semantic divider between named sections in a panel.
-
-**Props:**
-```tsx
-type SectionDividerProps = {
-  label?: string   // optional section label above the divider
-}
-```
-
-Rendered as `<hr className="section-divider" />` with optional label above.
-
----
-
-## 3. Stories route components (`components/stories/`)
-
-### `StoryStream.tsx` ← heavily refactors `ClusterListPanel.tsx`
-
-**Role:** Main column of Stories route. Renders story cards, pagination.
-
-**Props:**
-```tsx
-type StoryStreamProps = {
-  data: StoryClusterListResponse | null
-  loading: boolean
-  error: string | null
-  selectedClusterId: number | null
-  onSelectCluster: (clusterId: number) => void
-  onNextPage: () => void
-  onPreviousPage: () => void
-}
-```
-
-**Internal structure:**
-```tsx
-<div className="story-stream">
-  {/* Loading state */}
-  {loading && !data && <StoryStreamSkeleton />}
-
-  {/* Error state */}
-  {error && <ErrorState message={error} hint="Try widening the date range or clearing filters." />}
-
-  {/* Empty state */}
-  {!loading && !error && data?.items.length === 0 && (
-    <EmptyState
-      title="No stories match the current filters"
-      hint="Clear a filter or widen the date window."
-    />
-  )}
-
-  {/* Story cards */}
-  {(data?.items ?? []).map(cluster => (
-    <StoryCard
-      key={cluster.id}
-      cluster={cluster}
-      selected={selectedClusterId === cluster.id}
-      onClick={() => onSelectCluster(cluster.id)}
-    />
-  ))}
-
-  {/* Pagination */}
-  {data && <StoryPagination data={data} onPrevious={onPreviousPage} onNext={onNextPage} />}
-</div>
-```
-
-**Removes from current:**
-- `story-hero` card with marketing copy inside the panel
-- Nested `cluster-results-header` with its own header
-- Replaces the panel-in-panel-in-panel nesting
-
----
-
-### `StoryCard.tsx` ← new (was inline in ClusterListPanel)
-
-**Role:** Individual story cluster card in the stream.
-
-**Props:**
-```tsx
-type StoryCardProps = {
-  cluster: StoryClusterListItem
-  selected: boolean
-  onClick: () => void
-}
-```
-
-**Internal structure:**
-```tsx
-<button className={`story-card ${selected ? 'selected' : ''}`} onClick={onClick}>
-  <div className="story-card-meta">
-    <span className="text-eyebrow">{cluster.cluster_type.replace(/_/g, ' ')}</span>
-    <span className="story-card-counts">
-      {cluster.article_count} articles · {cluster.source_count} sources
-    </span>
-  </div>
-  <h2 className="story-card-headline">{cluster.summary_headline}</h2>
-  <p className="story-card-summary">{cluster.summary_text}</p>
-  <div className="story-card-footer">
-    <div className="story-card-sources">
-      {cluster.sources.slice(0, 3).map(source => (
-        <span key={source} className="badge">{source}</span>
-      ))}
-      {cluster.sources.length > 3 && (
-        <span className="badge muted">+{cluster.sources.length - 3}</span>
-      )}
-    </div>
-    <span className="story-card-date">{formatClusterWindow(cluster)}</span>
-  </div>
-</button>
-```
-
-**CSS rules:**
-```css
-.story-card {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-3);
-  padding: var(--space-5);
-  background: var(--color-surface);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-md);
-  border-left: 3px solid transparent;
-  text-align: left;
-  cursor: pointer;
-  transition: border-color 120ms ease, background 120ms ease;
-}
-.story-card:hover {
-  border-color: var(--color-border-strong);
-  background: var(--color-hover-bg);
-}
-.story-card.selected {
-  border-left-color: var(--color-accent);
-  background: var(--color-selected-bg);
-}
-.story-card-headline {
-  font-size: var(--text-md);
-  font-weight: 700;
-  line-height: var(--leading-snug);
-  color: var(--color-text);
-}
-.story-card-summary {
-  font-size: var(--text-sm);
-  color: var(--color-text-secondary);
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
-}
-.story-card-footer {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: var(--space-3);
-}
-.story-card-sources {
-  display: flex;
-  gap: var(--space-2);
-  flex-wrap: wrap;
-}
-.story-card-date {
-  font-size: var(--text-xs);
-  color: var(--color-text-muted);
-  white-space: nowrap;
-}
-```
-
----
-
-### `StoryFocusPanel.tsx` ← replaces `ClusterInspectorPanel.tsx`
-
-**Role:** Story focus panel. Shows story brief, coverage bar, articles by source, and selected article detail.
-
-**Props:**
-```tsx
-type StoryFocusPanelProps = {
-  detail: StoryClusterDetail | null
-  article: ExplorerArticleDetail | null
-  loading: boolean
-  articleLoading: boolean
-  error: string | null
-  articleError: string | null
-  selectedArticleId: number | null
-  onSelectArticle: (articleId: number | null) => void  // null = back/clear
-}
-```
-
-**Internal states rendered:**
-
-1. `loading && !detail` → `<LoadingState label="Loading story…" />`
-2. `error` → `<ErrorState message={error} />`
-3. `!detail` → Empty state (editorial prompt + Explorer CTA)
-4. `detail` → Full focus panel
-
-**Full focus panel structure:**
-```tsx
-<div className="story-focus-panel">
-  {/* Section 1: Story brief */}
-  <section className="focus-brief">
-    <span className="text-eyebrow">{cluster_type} · {status}</span>
-    <h2>{summary_headline}</h2>
-    <p>{summary_text}</p>
-    <div className="focus-brief-meta">
-      {article_count} articles · {source_count} sources · {date window}
-    </div>
-    <a href={explorerHref} className="btn-ghost focus-explorer-link">
-      Open in Explorer →
-    </a>
-  </section>
-
-  <SectionDivider label="Coverage" />
-
-  {/* Section 2: Coverage bar */}
-  <CoverageBar members={detail.members} />
-
-  <SectionDivider label="Articles by source" />
-
-  {/* Section 3: Articles by source */}
-  {selectedArticleId ? (
-    /* Section 4: Article detail */
-    <ArticleDetailSection
-      article={article}
-      loading={articleLoading}
-      error={articleError}
-      onBack={() => onSelectArticle(null)}
-    />
-  ) : (
-    <SourceGroupList
-      members={detail.members}
-      selectedArticleId={selectedArticleId}
-      onSelectArticle={onSelectArticle}
-    />
-  )}
-</div>
-```
-
-**Sub-components (can be in same file or split):**
-
-**`CoverageBar`** — see below.
-
-**`SourceGroupList`:** renders members grouped by source. Uses `groupMembersBySource()` util from existing code. Each source section is a plain `<section>` with source name as header (not a card with border+shadow).
-
-**`ArticleDetailSection`:** renders the selected article evidence. Has Back button, article body, semantic metrics, neighbors.
-
----
-
-### `CoverageBar.tsx` ← new
-
-**Role:** Visual representation of source share within a story's member articles.
-
-**Props:**
-```tsx
-type CoverageBarProps = {
-  members: StoryClusterMemberItem[]
-}
-```
-
-**Internal logic:**
-```ts
-// Derived purely from members — no new backend needed
-function computeCoverage(members: StoryClusterMemberItem[]) {
-  const groups = new Map<string, number>()
-  for (const m of members) {
-    groups.set(m.source, (groups.get(m.source) ?? 0) + 1)
-  }
-  const total = members.length
-  return Array.from(groups.entries())
-    .sort((a, b) => b[1] - a[1])
-    .map(([source, count]) => ({ source, count, pct: Math.round((count / total) * 100) }))
-}
-```
-
-**Rendered output:**
-```tsx
-<div className="coverage-bar">
-  {coverage.map(({ source, count, pct }) => (
-    <div key={source} className="coverage-bar-row">
-      <span className="coverage-bar-label">{source}</span>
-      <div className="coverage-bar-track">
-        <div className="coverage-bar-fill" style={{ width: `${pct}%` }} />
-      </div>
-      <span className="coverage-bar-count">{count} · {pct}%</span>
-    </div>
-  ))}
-</div>
-```
-
-**CSS:**
-```css
-.coverage-bar { display: flex; flex-direction: column; gap: var(--space-2); }
-.coverage-bar-row { display: flex; align-items: center; gap: var(--space-3); }
-.coverage-bar-label { font-size: var(--text-xs); width: 5rem; color: var(--color-text-secondary); }
-.coverage-bar-track { flex: 1; height: 6px; background: var(--color-bg-subtle); border-radius: var(--radius-full); overflow: hidden; }
-.coverage-bar-fill { height: 100%; background: var(--color-accent); border-radius: var(--radius-full); }
-.coverage-bar-count { font-size: var(--text-xs); color: var(--color-text-muted); width: 4rem; text-align: right; }
-```
-
----
-
-## 4. Stories route page (`routes/ClusterBrowserPage.tsx`)
-
-**Role:** Composes Stories layout. No longer receives `shell` prop.
-
-**Internal layout:**
-```tsx
-<div className="stories-layout">
-  <StoriesHeader
-    total={listState.data?.meta.total ?? 0}
-    sourceCount={?}            // optional — from filter data if available
-    activeFilterCount={activeFilterCount}
-    onOpenFilters={() => setFiltersOpen(true)}
-  />
-
-  <div className="stories-workspace">
-    <StoryStream
-      data={listState.data}
-      loading={listState.loading}
-      error={listState.error}
-      selectedClusterId={selectedClusterId}
-      onSelectCluster={setSelectedClusterId}
-      onNextPage={...}
-      onPreviousPage={...}
-    />
-    <StoryFocusPanel
-      detail={detailState.data}
-      article={articleState.data}
-      loading={detailState.loading}
-      articleLoading={articleState.loading}
-      error={detailState.error}
-      articleError={articleState.error}
-      selectedArticleId={selectedArticleId}
-      onSelectArticle={setSelectedArticleId}
-    />
-  </div>
-
-  <FilterDrawer
-    open={filtersOpen}
-    onClose={() => setFiltersOpen(false)}
-    title="Refine Stories"
-    activeCount={activeFilterCount}
-    onReset={resetQuery}
-  >
-    <StoriesFilterFields
-      filters={filtersState.data}
-      query={query}
-      onQueryChange={updateQuery}
-      disabled={listState.loading && !listState.data}
-    />
-  </FilterDrawer>
-</div>
-```
-
-**Local state added:**
-- `const [filtersOpen, setFiltersOpen] = useState(false)` — filter drawer toggle
-
-**CSS layout:**
-```css
-.stories-layout {
-  display: flex;
-  flex-direction: column;
-  flex: 1;
-  max-width: var(--content-max);
-  margin: 0 auto;
-  width: 100%;
-  padding: var(--space-6);
-  gap: var(--space-5);
-}
-.stories-workspace {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) min(480px, 37vw);
-  gap: var(--space-5);
-  align-items: start;
-}
-```
-
-**`StoriesHeader`** (inline or separate file):
-```tsx
-<header className="stories-header">
-  <div>
-    <h1 className="stories-title">Stories</h1>
-    <p className="stories-scope">
-      {total} stories in scope
-      {sourceCount ? ` · ${sourceCount} sources` : ''}
-    </p>
-  </div>
-  <div className="stories-header-actions">
-    {activeFilterCount > 0 && (
-      <span className="badge accent">{activeFilterCount} filters</span>
-    )}
-    <button className="btn-ghost" onClick={onOpenFilters}>Refine ↓</button>
-  </div>
-</header>
-```
-
-**`StoriesFilterFields`** (inline or separate file):
-Direct port of `ClusterFilterPanel` fields without the panel wrapper. Fields render inside `FilterDrawer.children`.
+*(unchanged from iter/004)*
 
 ---
 
 ## 5. Explorer route components (`components/explorer/`)
 
-### `ExplorerControlBar.tsx` ← new
+### New utility file: `lib/explorerColors.ts`
 
-**Role:** Compact horizontal control bar above the Explorer canvas.
+**Role:** Single source of truth for all Explorer point encoding constants. Removes inline magic constants from `MapPanel.tsx`.
 
-**Props:**
-```tsx
-type ExplorerControlBarProps = {
-  viewMode: ExplorerViewMode
-  colorMode: ExplorerColorMode
-  pointCount: number
-  activeFilterCount: number
-  loading: boolean
-  onViewModeChange: (mode: ExplorerViewMode) => void
-  onColorModeChange: (mode: ExplorerColorMode) => void
-  onFitAll: () => void
-  onFocusSelected: () => void
-  onOpenFilters: () => void
-  hasSelection: boolean
-}
+**Content:**
+```ts
+// All point color/radius/alpha constants for the Explorer canvas
+// These replace all inline color arrays in MapPanel.tsx
+// See DESIGN_TOKENS.md Section 12.2 for the complete listing
+
+export const POINT_SELECTED_FILL: [number, number, number, number]
+export const POINT_SELECTED_STROKE: [number, number, number, number]
+export const POINT_SELECTED_STROKE_WIDTH: number
+export const POINT_SELECTED_RADIUS_2D: number
+export const POINT_SELECTED_RADIUS_3D: number
+
+export const POINT_NEIGHBOR_FILL: [number, number, number, number]
+export const POINT_NEIGHBOR_STROKE: [number, number, number, number]
+export const POINT_NEIGHBOR_STROKE_WIDTH: number
+export const POINT_NEIGHBOR_RADIUS_2D: number
+export const POINT_NEIGHBOR_RADIUS_3D: number
+
+export const POINT_HOVERED_FILL: [number, number, number, number]
+export const POINT_HOVERED_STROKE: [number, number, number, number]
+export const POINT_HOVERED_STROKE_WIDTH: number
+export const POINT_HOVERED_RADIUS_2D: number
+export const POINT_HOVERED_RADIUS_3D: number
+
+export const POINT_REGULAR_ALPHA_NO_SELECTION: number
+export const POINT_REGULAR_ALPHA_UNDER_SELECTION: number
+export const POINT_OUTLIER_ALPHA_NO_SELECTION: number
+export const POINT_OUTLIER_ALPHA_UNDER_SELECTION: number
+export const POINT_REGULAR_RADIUS_2D: number
+export const POINT_REGULAR_RADIUS_3D: number
+export const POINT_OUTLIER_RADIUS_2D: number
+export const POINT_OUTLIER_RADIUS_3D: number
+
+export const POINT_RECEDING_STROKE: [number, number, number, number]
+export const POINT_RECEDING_STROKE_WIDTH: number
+export const POINT_DEFAULT_STROKE: [number, number, number, number]
+export const POINT_DEFAULT_STROKE_WIDTH: number
+
+export const SOURCE_COLORS: Record<string, [number, number, number]>
+export const SOURCE_COLORS_HEX: Record<string, string>
+export const SOURCE_FALLBACK_COLOR: [number, number, number]
+
+export const CLUSTER_PALETTE: Array<[number, number, number]>
+export const CLUSTER_OUTLIER_COLOR: [number, number, number]
+export const CLUSTER_NULL_COLOR: [number, number, number]
 ```
 
-**Internal structure:**
-```tsx
-<div className="explorer-control-bar">
-  <div className="explorer-controls-left">
-    <SegmentedControl
-      options={[{ value: '2d', label: '2D' }, { value: '3d', label: '3D' }]}
-      value={viewMode}
-      onChange={onViewModeChange}
-    />
-    <SegmentedControl
-      options={[
-        { value: 'neutral', label: 'Neutral' },
-        { value: 'source', label: 'Source' },
-        { value: 'cluster', label: 'Cluster' },
-      ]}
-      value={colorMode}
-      onChange={onColorModeChange}
-    />
-    <button className="btn-ghost" onClick={onFitAll}>Fit all</button>
-    {hasSelection && (
-      <button className="btn-ghost" onClick={onFocusSelected}>Focus selected</button>
-    )}
-  </div>
-  <div className="explorer-controls-right">
-    <span className="explorer-point-count">{pointCount} points</span>
-    {activeFilterCount > 0 && (
-      <span className="badge accent">{activeFilterCount} filters</span>
-    )}
-    <button className="btn-ghost" onClick={onOpenFilters}>Refine ↓</button>
-  </div>
-</div>
-```
-
-**CSS:**
-```css
-.explorer-control-bar {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: var(--space-4);
-  padding: var(--space-3) var(--space-6);
-  background: var(--color-surface);
-  border-bottom: 1px solid var(--color-border);
-}
-.explorer-controls-left, .explorer-controls-right {
-  display: flex;
-  align-items: center;
-  gap: var(--space-3);
-}
-.explorer-point-count {
-  font-size: var(--text-sm);
-  color: var(--color-text-muted);
-}
-```
-
-**Note on camera controls:** `onFitAll` and `onFocusSelected` must call into `MapPanel` via a ref (same as today's MapPanel internal pattern). Maintain that ref-based imperative interface.
+**Location:** `frontend/src/lib/explorerColors.ts`
 
 ---
 
-### `ExplorerContextRail.tsx` ← replaces `InspectorPanel.tsx`
+### `MapPanel.tsx` (precision refactor)
 
-**Role:** Right context rail for Explorer. No selection tabs — sections with dividers.
+**Role:** DeckGL canvas only. No controls. Exposes imperative camera handle.
 
-**Props:**
+**Props (unchanged contract from iter/004):**
+```tsx
+type Props = {
+  points: ExplorerPointsResponse | null
+  loading: boolean
+  error: string | null
+  selectedArticleId: number | null
+  hoveredArticleId: number | null
+  neighborIds: Set<number>
+  viewMode: ExplorerViewMode
+  colorMode: ExplorerColorMode
+  onHoverArticle: (articleId: number | null) => void
+  onSelectArticle: (articleId: number | null) => void
+}
+
+export type MapPanelHandle = {
+  fitAll: () => void
+  focusSelected: () => void
+}
+```
+
+**Implementation changes — render reliability fixes:**
+
+**Fix BUG-1 (Container height):**
+- `MapPanel` itself does not set its own height — it renders `<div className="map-frame">` → `<div className="map-canvas">` → `<DeckGL ...>`
+- The fix is in CSS: add `min-height: 0` to `.explorer-workspace`, confirm the flex chain has no interruption
+- Add a `useEffect` dev-diagnostic to confirm canvas `clientHeight > 0`
+
+**Fix BUG-4 (Named view + viewState mismatch):**
+```tsx
+// BEFORE (broken):
+views={[new OrthographicView({ id: 'semantic-2d' })]}
+viewState={activeViewState as never}  // not keyed to 'semantic-2d'
+
+// AFTER (fixed — Option A: remove ids from views):
+views={[viewMode === '3d' ? new OrbitView() : new OrthographicView()]}
+viewState={activeViewState}
+
+// OR Option B: key the viewState (keep named views):
+views={[viewMode === '3d'
+  ? new OrbitView({ id: 'semantic-3d' })
+  : new OrthographicView({ id: 'semantic-2d' })
+]}
+viewState={viewMode === '3d'
+  ? { 'semantic-3d': viewState['semantic-3d'] }
+  : { 'semantic-2d': viewState['semantic-2d'] }
+}
+```
+
+**Recommendation:** Use Option A (remove view IDs) — simpler, less surface area for bugs. `onViewStateChange` handler must be updated to use the string key from `viewId` if ids are kept; with unnamed views it just returns the state directly.
+
+```tsx
+// With unnamed views:
+onViewStateChange={({ viewState: nextViewState }) => {
+  setViewState((current) => ({
+    ...current,
+    [viewMode === '3d' ? 'semantic-3d' : 'semantic-2d']: nextViewState,
+  }))
+}}
+```
+
+**Fix BUG-5 (Stable layer ID):**
+```tsx
+// BEFORE:
+id: `semantic-points-${viewMode}-${colorMode}`  // changes on every mode toggle
+
+// AFTER:
+id: 'semantic-points'  // stable — let updateTriggers handle all changes
+```
+
+**Fix BUG-2 (StrictMode isolation):**
+```tsx
+// Wrap DeckGL in a stable key — prevents identity loss on StrictMode double-mount
+<DeckGL
+  key="explorer-deck"  // ADD THIS
+  views={...}
+  ...
+/>
+```
+
+**Fix BUG-6 (Remove CSS !important overrides):**
+- Remove from `styles.css`: `.map-canvas > div, .map-canvas canvas { width: 100% !important; height: 100% !important; }`
+- DeckGL should control its own canvas size; parent flex layout should give it the dimensions
+
+**Updated ScatterplotLayer encoding:**
+
+Import from `explorerColors.ts` instead of inline constants.
+
+```tsx
+import {
+  POINT_SELECTED_FILL, POINT_SELECTED_STROKE, POINT_SELECTED_STROKE_WIDTH,
+  POINT_SELECTED_RADIUS_2D, POINT_SELECTED_RADIUS_3D,
+  POINT_NEIGHBOR_FILL, POINT_NEIGHBOR_STROKE, POINT_NEIGHBOR_STROKE_WIDTH,
+  POINT_NEIGHBOR_RADIUS_2D, POINT_NEIGHBOR_RADIUS_3D,
+  POINT_HOVERED_FILL, POINT_HOVERED_STROKE, POINT_HOVERED_STROKE_WIDTH,
+  POINT_HOVERED_RADIUS_2D, POINT_HOVERED_RADIUS_3D,
+  POINT_REGULAR_ALPHA_NO_SELECTION, POINT_REGULAR_ALPHA_UNDER_SELECTION,
+  POINT_OUTLIER_ALPHA_NO_SELECTION, POINT_OUTLIER_ALPHA_UNDER_SELECTION,
+  POINT_REGULAR_RADIUS_2D, POINT_REGULAR_RADIUS_3D,
+  POINT_OUTLIER_RADIUS_2D, POINT_OUTLIER_RADIUS_3D,
+  POINT_RECEDING_STROKE, POINT_RECEDING_STROKE_WIDTH,
+  POINT_DEFAULT_STROKE, POINT_DEFAULT_STROKE_WIDTH,
+} from '../../lib/explorerColors'
+```
+
+**Updated getRadius:**
+```tsx
+getRadius: (point) => {
+  const is3d = viewMode === '3d'
+  if (point.article_id === selectedArticleId)
+    return is3d ? POINT_SELECTED_RADIUS_3D : POINT_SELECTED_RADIUS_2D
+  if (neighborIds.has(point.article_id))
+    return is3d ? POINT_NEIGHBOR_RADIUS_3D : POINT_NEIGHBOR_RADIUS_2D
+  if (point.article_id === hoveredArticleId)
+    return is3d ? POINT_HOVERED_RADIUS_3D : POINT_HOVERED_RADIUS_2D
+  if (point.analysis.is_outlier)
+    return is3d ? POINT_OUTLIER_RADIUS_3D : POINT_OUTLIER_RADIUS_2D
+  return is3d ? POINT_REGULAR_RADIUS_3D : POINT_REGULAR_RADIUS_2D
+}
+```
+
+**Updated getFillColor:**
+```tsx
+getFillColor: (point) => {
+  if (point.article_id === selectedArticleId) return POINT_SELECTED_FILL
+  if (neighborIds.has(point.article_id)) return POINT_NEIGHBOR_FILL
+  if (point.article_id === hoveredArticleId) return POINT_HOVERED_FILL
+  const base = colorForPoint(point, colorMode)
+  const alpha = hasSelection
+    ? (point.analysis.is_outlier
+        ? POINT_OUTLIER_ALPHA_UNDER_SELECTION
+        : POINT_REGULAR_ALPHA_UNDER_SELECTION)
+    : (point.analysis.is_outlier
+        ? POINT_OUTLIER_ALPHA_NO_SELECTION
+        : POINT_REGULAR_ALPHA_NO_SELECTION)
+  return [...base, alpha] as [number, number, number, number]
+}
+```
+
+**Updated getLineColor:**
+```tsx
+getLineColor: (point) => {
+  if (point.article_id === selectedArticleId) return POINT_SELECTED_STROKE
+  if (neighborIds.has(point.article_id)) return POINT_NEIGHBOR_STROKE
+  if (point.article_id === hoveredArticleId) return POINT_HOVERED_STROKE
+  if (hasSelection) return POINT_RECEDING_STROKE
+  return POINT_DEFAULT_STROKE
+}
+```
+
+**Updated getLineWidth:**
+```tsx
+getLineWidth: (point) => {
+  if (point.article_id === selectedArticleId) return POINT_SELECTED_STROKE_WIDTH
+  if (neighborIds.has(point.article_id)) return POINT_NEIGHBOR_STROKE_WIDTH
+  if (point.article_id === hoveredArticleId) return POINT_HOVERED_STROKE_WIDTH
+  if (hasSelection) return POINT_RECEDING_STROKE_WIDTH
+  return POINT_DEFAULT_STROKE_WIDTH
+}
+```
+
+**Updated tooltip (add cluster + outlier info):**
+```tsx
+function Tooltip({ tooltip }: { tooltip: NonNullable<TooltipState> }) {
+  const point = tooltip.point
+  return (
+    <div className="tooltip-card" style={{ left: tooltip.x + 14, top: tooltip.y + 14 }}>
+      <div className="tooltip-eyebrow">
+        {point.source}
+        {point.section ? ` · ${point.section}` : ''}
+        {point.analysis.is_outlier && (
+          <span className="tooltip-outlier-badge">Outlier</span>
+        )}
+      </div>
+      <strong>{point.title}</strong>
+      <div className="tooltip-meta">{formatDate(point.published_at)}</div>
+      <div className="tooltip-meta">
+        {point.analysis.cluster_id != null
+          ? `Cluster ${point.analysis.cluster_id}`
+          : 'No cluster'}
+      </div>
+      {point.summary_snippet && <p>{point.summary_snippet}</p>}
+    </div>
+  )
+}
+```
+
+**Dev diagnostic hook (add to MapPanel, dev only):**
+```tsx
+useEffect(() => {
+  if (!import.meta.env.DEV) return
+  const el = document.querySelector('.map-canvas') as HTMLElement | null
+  console.debug(
+    '[MapPanel] mount diagnostic:',
+    '\n  canvas clientHeight:', el?.clientHeight ?? 'NOT FOUND',
+    '\n  canvas clientWidth:', el?.clientWidth ?? 'NOT FOUND',
+    '\n  points count:', points?.items.length ?? 0,
+    '\n  viewState:', activeViewState,
+    '\n  bounds:', points?.meta.bounds,
+  )
+}, [])  // run only on mount
+```
+
+**Camera behavior:**
+- `fitAll()`: recompute from `points?.meta.bounds` — same as current
+- `focusSelected()`: same logic as current, preserve 3D angles
+- Add: do not call `fitAll` or `focusSelected` inside the `useEffect` that fires on bounds change — that auto-reset is a UX anti-pattern. The `useEffect` that calls `buildInitialViewState` on bounds change should ONLY fire on the first time data loads (when previous bounds were null), not on every filter refinement.
+
+**Camera view-state fix — suppress eager resets:**
+```tsx
+// BEFORE: fires on every bounds change, resetting user camera
+useEffect(() => {
+  setViewState((current) => buildInitialViewState(points, current))
+}, [bounds?.min_x, bounds?.max_x, /* ... */ points?.items.length])
+
+// AFTER: only reset if the data went from null → populated (i.e., first load or full reset)
+const [dataLoaded, setDataLoaded] = useState(false)
+useEffect(() => {
+  if (!points?.items.length) {
+    setDataLoaded(false)
+    return
+  }
+  if (!dataLoaded) {
+    // First load or after a reset — fit all
+    setViewState((current) => buildInitialViewState(points, current))
+    setDataLoaded(true)
+  }
+  // Subsequent filter changes: do NOT reset camera
+}, [points?.items.length, points?.meta.projection_set])
+```
+
+This preserves camera position when the user refines filters. Only explicit "Fit all" or a complete data reset reframes the view.
+
+---
+
+### `ExplorerControlBar.tsx` (minor update)
+
+**Role:** Compact horizontal control bar — same as iter/004.
+
+**Changes in this pass:**
+1. Color mode labels: `'By source'` instead of `'source'`, `'By cluster'` instead of `'cluster'`
+2. Add `title` attribute to 2D/3D buttons:
+   ```tsx
+   <button ... title="2D: flat layout for broad comparison">2D</button>
+   <button ... title="3D: depth view for cluster overlap inspection">3D</button>
+   ```
+3. Loading indicator in point count:
+   ```tsx
+   <span className="explorer-point-count">
+     {loading
+       ? (pointCount === 0 ? 'Loading…' : `${pointCount} points (updating)`)
+       : `${pointCount} points`}
+   </span>
+   ```
+
+**Props:** unchanged from iter/004.
+
+---
+
+### `ExplorerContextRail.tsx` (updated)
+
+**Role:** Right context rail for Explorer. Sections with dividers. No tabs.
+
+**Props (unchanged from iter/004):**
 ```tsx
 type ExplorerContextRailProps = {
   selectedPoint: ExplorerPoint | null
@@ -668,267 +383,696 @@ type ExplorerContextRailProps = {
 }
 ```
 
-**No-selection state:**
+**New prop to add:**
+```tsx
+type ExplorerContextRailProps = {
+  // ... existing ...
+  seedContext: { type: 'cluster'; clusterId: number } | { type: 'search'; query: string } | null
+  onClearSeed: () => void
+}
+```
+
+`seedContext` is derived in `ExplorerPage` from `query`:
+```tsx
+const seedContext = useMemo(() => {
+  if (query.clusterId) return { type: 'cluster' as const, clusterId: Number(query.clusterId) }
+  if (query.search.trim()) return { type: 'search' as const, query: query.search.trim() }
+  return null
+}, [query.clusterId, query.search])
+```
+
+`onClearSeed` calls `resetQuery()` from `useExplorerUrlState`.
+
+**No-selection state (updated):**
 ```tsx
 <div className="context-rail">
-  <div className="context-rail-guide">
-    <p className="context-guide-text">Click any point to inspect an article and its semantic neighborhood.</p>
+  {/* Seeded context chip — only when filter active from Stories */}
+  {seedContext && (
+    <div className="context-seed-chip">
+      <span className="context-seed-chip-label">
+        {seedContext.type === 'cluster'
+          ? `📍 Cluster ${seedContext.clusterId}`
+          : `🔍 "${seedContext.query}"`}
+      </span>
+      <button className="context-seed-chip-clear" onClick={onClearSeed}>
+        Clear ×
+      </button>
+    </div>
+  )}
+
+  {/* Guide text */}
+  <p className="context-guide-text">
+    Click any point to inspect an article and its semantic neighborhood.
+  </p>
+
+  {/* How to read this space — onboarding */}
+  <div className="context-guide-explainer">
+    <p className="context-guide-explainer-text">
+      Proximity = semantic similarity. Clusters group articles the model found coherent.
+      Outliers (red) sit outside all clusters.
+    </p>
   </div>
+
   <SectionDivider label="Legend" />
   <ColorLegend colorMode={colorMode} clusterSummaries={clusterSummaries} />
+
   <SectionDivider label="Dataset" />
-  <DatasetSummary clusterSummaries={clusterSummaries} />
+  <DatasetSummary clusterSummaries={clusterSummaries} viewMode={viewMode} />
 </div>
 ```
 
-**Selection state:**
+**Updated `ColorLegend` component:**
 ```tsx
-<div className="context-rail">
-  <div className="context-rail-header">
-    <button className="btn-text" onClick={onClearSelection}>← Clear</button>
-  </div>
+function ColorLegend({
+  colorMode,
+  clusterSummaries,
+}: {
+  colorMode: ExplorerColorMode
+  clusterSummaries: ExplorerClusterSummary[]
+}) {
+  return (
+    <ul className="legend-list">
+      <li className="legend-item">
+        <span className="legend-dot" style={{ background: '#0ea5e9' }} />
+        <span>Selected article</span>
+      </li>
+      <li className="legend-item">
+        <span className="legend-dot" style={{ background: '#22c55e' }} />
+        <span>Semantic neighbors</span>
+      </li>
+      <li className="legend-item">
+        <span className="legend-dot" style={{ background: '#dc2626' }} />
+        <span>Outliers</span>
+      </li>
 
-  {/* Article section */}
-  <div className="context-article">
-    <span className="text-eyebrow">{detail.article.source} · {detail.article.section}</span>
-    <h3 className="context-article-title">{detail.article.title}</h3>
-    <p className="context-article-date">{formatDate(detail.article.published_at)}</p>
-    <p className="context-article-summary">{clampText(detail.article.summary, detail.article.article_text_excerpt)}</p>
-    <div className="context-article-actions">
-      <a href={detail.article.url} target="_blank" rel="noreferrer" className="btn-ghost">Open article ↗</a>
-      {storiesHref && <a href={storiesHref} className="btn-ghost">Open in Stories →</a>}
-    </div>
-  </div>
+      {/* Mode-specific legend entries */}
+      {colorMode === 'neutral' && (
+        <li className="legend-item">
+          <span className="legend-dot" style={{ background: '#4338ca' }} />
+          <span>Articles (neutral field)</span>
+        </li>
+      )}
 
-  <SectionDivider label="Cluster context" />
+      {colorMode === 'source' && (
+        <>
+          <li className="legend-item legend-item-header">Color by source</li>
+          {Object.entries(SOURCE_COLORS_HEX).map(([source, color]) => (
+            <li key={source} className="legend-item legend-item-indent">
+              <span className="legend-dot" style={{ background: color }} />
+              <span>{source}</span>
+            </li>
+          ))}
+        </>
+      )}
 
-  <ClusterContextSection summary={selectedCluster} />
-
-  <SectionDivider label="Semantic neighborhood" />
-
-  <NeighborhoodSection
-    neighbors={detail.neighbors}
-    onSelectArticle={onSelectArticle}
-  />
-</div>
-```
-
-**"Open in Stories" link construction:**
-```ts
-// In ExplorerContextRail or navigation.ts
-function buildStoriesHref(point: ExplorerPoint | null): string | null {
-  if (!point?.analysis.cluster_id) return null
-  // Assumes ClusterBrowserPage can accept ?clusterId= in URL state
-  return buildClusterBrowserHref({ clusterId: point.analysis.cluster_id })
+      {colorMode === 'cluster' && (
+        <>
+          <li className="legend-item legend-item-header">Color by cluster</li>
+          {clusterSummaries.slice(0, 6).map((cluster, idx) => {
+            const [r, g, b] = CLUSTER_PALETTE[idx % CLUSTER_PALETTE.length]
+            return (
+              <li key={cluster.cluster_id} className="legend-item legend-item-indent">
+                <span className="legend-dot" style={{ background: `rgb(${r},${g},${b})` }} />
+                <span>Cluster {cluster.cluster_id} · {cluster.size}</span>
+              </li>
+            )
+          })}
+        </>
+      )}
+    </ul>
+  )
 }
 ```
 
-**Note:** Requires `buildClusterBrowserHref` in `navigation.ts` to support `clusterId` param. Verify `useClusterUrlState` reads it on mount and sets `selectedClusterId`.
+**Selection state (unchanged from iter/004 core, minor additions):**
+- Add outlier badge next to article eyebrow if `selectedPoint.analysis.is_outlier`
+- Show article source at top of cluster context: "Cluster N · N articles" + top sources as badges
 
----
-
-### `MapPanel.tsx` (refactor, keep file)
-
-**Role:** DeckGL canvas. Controls moved out.
-
-**Props change:**
-- Remove `onViewModeChange` and `onColorModeChange` — those are now in `ExplorerControlBar`
-- Remove `viewMode` and `colorMode` if MapPanel receives them purely for controls; keep if needed for rendering
-- Add imperative ref handle for `fitAll` and `focusSelected`:
-
+**"Open in Stories" link:**
 ```tsx
-// Expose imperative handle
-export type MapPanelHandle = {
-  fitAll: () => void
-  focusSelected: () => void
-}
-
-const MapPanel = forwardRef<MapPanelHandle, MapPanelProps>((props, ref) => {
-  useImperativeHandle(ref, () => ({
-    fitAll: () => { /* existing fit logic */ },
-    focusSelected: () => { /* existing focus logic */ },
-  }))
-  // ...
-})
+// In ExplorerContextRail — remains from iter/004
+// Only shown if cluster_id is non-null
+const storiesHref = buildStoriesHref(detail?.semantic_summary.cluster_id ?? selectedPoint?.analysis.cluster_id ?? null)
 ```
 
-This allows `ExplorerPage` to pass the ref to `MapPanel` and call camera actions from `ExplorerControlBar` without prop drilling camera callbacks through the control bar.
+**Additional CSS additions for rail:**
+```css
+.context-guide-explainer {
+  margin-top: var(--space-2);
+  padding: var(--space-3);
+  background: var(--color-surface-muted);
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--color-border);
+}
 
-**Canvas cleanliness:**
-- Remove `.map-toolbar` overlay from inside the canvas
-- Remove the guide text overlay from inside the canvas
-- Keep: hover tooltip, empty state overlay (when no points), loading overlay
+.context-guide-explainer-text {
+  font-size: var(--text-xs);
+  color: var(--color-text-secondary);
+  line-height: var(--leading-relaxed);
+}
+
+.legend-item-header {
+  font-size: var(--text-xs);
+  font-weight: 600;
+  color: var(--color-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  margin-top: var(--space-2);
+  list-style: none;
+}
+
+.legend-item-indent {
+  padding-left: var(--space-3);
+}
+```
 
 ---
 
-## 6. Explorer route page (`routes/ExplorerPage.tsx`)
+### `ExplorerPage.tsx` (updated)
 
-**Role:** Composes Explorer layout. No longer receives `shell` prop.
+**Changes from iter/004:**
+1. Derive `seedContext` from `query`
+2. Pass `seedContext` and `onClearSeed` to `ExplorerContextRail`
+3. Pass `hasSelection={selectedArticleId !== null}` to `ExplorerControlBar` (already done)
 
-**Internal layout:**
 ```tsx
-<div className="explorer-layout">
-  <ExplorerControlBar
-    viewMode={viewMode}
-    colorMode={colorMode}
-    pointCount={pointsState.data?.meta.returned ?? 0}
-    activeFilterCount={activeFilterCount}
-    loading={pointsState.loading}
-    onViewModeChange={setViewMode}
-    onColorModeChange={setColorMode}
-    onFitAll={() => mapRef.current?.fitAll()}
-    onFocusSelected={() => mapRef.current?.focusSelected()}
-    onOpenFilters={() => setFiltersOpen(true)}
-    hasSelection={selectedArticleId !== null}
-  />
+export function ExplorerPage() {
+  const [viewMode, setViewMode] = useState<ExplorerViewMode>('2d')  // 2D default
+  const [colorMode, setColorMode] = useState<ExplorerColorMode>('neutral')
+  const [filtersOpen, setFiltersOpen] = useState(false)
+  const mapRef = useRef<MapPanelHandle>(null)
 
-  <div className="explorer-workspace">
-    <div className="explorer-canvas-area">
-      <MapPanel
-        ref={mapRef}
-        points={pointsState.data}
-        loading={pointsState.loading}
-        error={pointsState.error}
-        selectedArticleId={selectedArticleId}
-        hoveredArticleId={hoveredArticleId}
-        neighborIds={neighborIds}
+  const {
+    query,
+    selectedArticleId,
+    activeFilterCount,
+    updateQuery,
+    resetQuery,
+    setSelectedArticleId,
+  } = useExplorerUrlState()
+
+  const {
+    pointsState,
+    filtersState,
+    detailState,
+    selectedPoint,
+    hoveredArticleId,
+    neighborIds,
+    clearSelectedArticle,
+    setHoveredArticleId,
+  } = useExplorerData(query, selectedArticleId, setSelectedArticleId)
+
+  // Seeded context: visible chip when Explorer was opened from Stories with a filter
+  const seedContext = useMemo(() => {
+    if (query.clusterId) return { type: 'cluster' as const, clusterId: Number(query.clusterId) }
+    if (query.search.trim()) return { type: 'search' as const, query: query.search.trim() }
+    return null
+  }, [query.clusterId, query.search])
+
+  return (
+    <div className="explorer-layout">
+      <ExplorerControlBar
         viewMode={viewMode}
         colorMode={colorMode}
-        onHoverArticle={setHoveredArticleId}
-        onSelectArticle={setSelectedArticleId}
+        pointCount={pointsState.data?.meta.returned ?? 0}
+        activeFilterCount={activeFilterCount}
+        loading={pointsState.loading}
+        hasSelection={selectedArticleId !== null}
+        onViewModeChange={setViewMode}
+        onColorModeChange={setColorMode}
+        onFitAll={() => mapRef.current?.fitAll()}
+        onFocusSelected={() => mapRef.current?.focusSelected()}
+        onOpenFilters={() => setFiltersOpen(true)}
       />
+
+      <div className="explorer-workspace">
+        <div className="explorer-canvas-area">
+          <MapPanel
+            ref={mapRef}
+            points={pointsState.data}
+            loading={pointsState.loading}
+            error={pointsState.error}
+            selectedArticleId={selectedArticleId}
+            hoveredArticleId={hoveredArticleId}
+            neighborIds={neighborIds}
+            viewMode={viewMode}
+            colorMode={colorMode}
+            onHoverArticle={setHoveredArticleId}
+            onSelectArticle={setSelectedArticleId}
+          />
+        </div>
+
+        <ExplorerContextRail
+          selectedPoint={selectedPoint}
+          detail={detailState.data}
+          loading={detailState.loading}
+          error={detailState.error}
+          clusterSummaries={
+            pointsState.data?.meta.cluster_summaries ??
+            filtersState.data?.cluster_summaries ??
+            []
+          }
+          viewMode={viewMode}
+          colorMode={colorMode}
+          onClearSelection={clearSelectedArticle}
+          onSelectArticle={setSelectedArticleId}
+          seedContext={seedContext}
+          onClearSeed={resetQuery}
+        />
+      </div>
+
+      <FilterDrawer
+        open={filtersOpen}
+        onClose={() => setFiltersOpen(false)}
+        title="Refine Explorer"
+        activeCount={activeFilterCount}
+        onReset={resetQuery}
+      >
+        <ExplorerFilterFields
+          filters={filtersState.data}
+          query={query}
+          onQueryChange={updateQuery}
+          disabled={pointsState.loading && !pointsState.data}
+        />
+      </FilterDrawer>
     </div>
-
-    <ExplorerContextRail
-      selectedPoint={selectedPoint}
-      detail={detailState.data}
-      loading={detailState.loading}
-      error={detailState.error}
-      clusterSummaries={pointsState.data?.meta.cluster_summaries ?? filtersState.data?.cluster_summaries ?? []}
-      viewMode={viewMode}
-      colorMode={colorMode}
-      onClearSelection={clearSelectedArticle}
-      onSelectArticle={setSelectedArticleId}
-    />
-  </div>
-
-  <FilterDrawer
-    open={filtersOpen}
-    onClose={() => setFiltersOpen(false)}
-    title="Refine Explorer"
-    activeCount={activeFilterCount}
-    onReset={resetQuery}
-  >
-    <ExplorerFilterFields
-      filters={filtersState.data}
-      query={query}
-      onQueryChange={updateQuery}
-      disabled={pointsState.loading && !pointsState.data}
-    />
-  </FilterDrawer>
-</div>
+  )
+}
 ```
 
-**Local state added:**
-- `const [filtersOpen, setFiltersOpen] = useState(false)` — filter drawer toggle
-- `const mapRef = useRef<MapPanelHandle>(null)` — imperative camera control
+---
 
-**CSS layout:**
+## 5.A iter/006 — MapPanel changes for framing, axes, and 3D points
+
+All changes are in `frontend/src/components/explorer/MapPanel.tsx` and `frontend/src/lib/explorerColors.ts`.
+No other files change in this pass.
+
+---
+
+### 5.A.1 Zoom formula — replace `build2dViewState` and `build3dViewState`
+
+**Signature change:** both functions now take `canvasPx: number` as a second parameter.
+
+```ts
+// PADDING_FACTOR: percentage of canvas the data span should occupy (inverted)
+// 1.25 means the span occupies 100/1.25 = 80% of the canvas (10% margin each side)
+const PADDING_2D = 1.25
+const PADDING_3D = 1.4   // slightly more padding in 3D for depth comfort
+
+function build2dViewState(bounds: PointBounds | null, canvasPx: number): ViewState2D {
+  if (!bounds) return { target: [0, 0, 0], zoom: 8.5 }  // sensible default for [-1,1]
+  const spanX = bounds.maxX - bounds.minX
+  const spanY = bounds.maxY - bounds.minY
+  const dominantSpan = Math.max(spanX, spanY)
+  const paddedSpan = Math.max(dominantSpan * PADDING_2D, 0.01)  // guard against 0
+  const zoom = Math.max(1.0, Math.min(14.0, Math.log2(canvasPx / paddedSpan)))
+  return {
+    target: [(bounds.minX + bounds.maxX) / 2, (bounds.minY + bounds.maxY) / 2, 0],
+    zoom,
+  }
+}
+
+function build3dViewState(bounds: PointBounds | null, canvasPx: number, current?: ViewState3D): ViewState3D {
+  if (!bounds) return {
+    target: [0, 0, 0],
+    zoom: 8.5,
+    rotationOrbit: current?.rotationOrbit ?? DEFAULT_3D_ORBIT,
+    rotationX: current?.rotationX ?? DEFAULT_3D_TILT,
+  }
+  const spanX = bounds.maxX - bounds.minX
+  const spanY = bounds.maxY - bounds.minY
+  const spanZ = bounds.maxZ - bounds.minZ
+  const dominantSpan = Math.max(spanX, spanY, spanZ)
+  const paddedSpan = Math.max(dominantSpan * PADDING_3D, 0.01)
+  const zoom = Math.max(1.0, Math.min(14.0, Math.log2(canvasPx / paddedSpan)))
+  return {
+    target: [
+      (bounds.minX + bounds.maxX) / 2,
+      (bounds.minY + bounds.maxY) / 2,
+      (bounds.minZ + bounds.maxZ) / 2,
+    ],
+    zoom,
+    rotationOrbit: current?.rotationOrbit ?? DEFAULT_3D_ORBIT,
+    rotationX: current?.rotationX ?? DEFAULT_3D_TILT,
+  }
+}
+```
+
+**Reading `canvasPx` at call-site:**
+```ts
+// Helper — call wherever build2d/3dViewState is invoked
+function getCanvasPx(canvasRef: React.RefObject<HTMLDivElement>): number {
+  const el = canvasRef.current
+  if (!el) return 900  // safe fallback
+  return Math.min(el.clientWidth, el.clientHeight)
+}
+```
+
+Update `buildInitialViewState`, `fitAll()`, and `focusSelected()` to pass `getCanvasPx(canvasRef)`.
+The initial `useState` call happens before the ref is populated, so the fallback `900` will apply there —
+that's acceptable; the `useEffect` on first data load will re-fit with real dimensions.
+
+---
+
+### 5.A.2 Axis layer builder — add `buildAxisLayers` to MapPanel
+
+Add the following function inside `MapPanel.tsx` (not exported, module-level):
+
+```ts
+import { LineLayer } from '@deck.gl/layers'
+import {
+  AXIS_COLOR_2D,
+  AXIS_X_COLOR_3D, AXIS_Y_COLOR_3D, AXIS_Z_COLOR_3D, AXIS_GRID_COLOR_3D,
+} from '../../lib/explorerColors'
+
+function buildAxisLayers(viewMode: ExplorerViewMode, bounds: PointBounds | null) {
+  const extent = bounds
+    ? Math.max(1.5, Math.max(
+        Math.abs(bounds.minX), Math.abs(bounds.maxX),
+        Math.abs(bounds.minY), Math.abs(bounds.maxY),
+      ) * 1.1)
+    : 1.5
+
+  if (viewMode === '2d') {
+    return [
+      new LineLayer({
+        id: 'axis-2d',
+        data: [
+          { from: [-extent, 0, 0], to: [extent, 0, 0] },
+          { from: [0, -extent, 0], to: [0, extent, 0] },
+        ] as { from: [number,number,number]; to: [number,number,number] }[],
+        getSourcePosition: (d) => d.from,
+        getTargetPosition: (d) => d.to,
+        getColor: AXIS_COLOR_2D,
+        getWidth: 1.0,
+        widthUnits: 'pixels',
+        pickable: false,
+      }),
+    ]
+  }
+
+  // 3D axes + XY grid
+  const gridExtent = Math.ceil(extent)
+  const gridLines: { from: [number,number,number]; to: [number,number,number]; color: [number,number,number,number] }[] = []
+  for (let i = -gridExtent; i <= gridExtent; i++) {
+    gridLines.push(
+      { from: [-extent, i, 0], to: [extent, i, 0], color: AXIS_GRID_COLOR_3D },
+      { from: [i, -extent, 0], to: [i, extent, 0], color: AXIS_GRID_COLOR_3D },
+    )
+  }
+
+  return [
+    new LineLayer({
+      id: 'axis-grid-3d',
+      data: gridLines,
+      getSourcePosition: (d) => d.from,
+      getTargetPosition: (d) => d.to,
+      getColor: (d) => d.color,
+      getWidth: 0.8,
+      widthUnits: 'pixels',
+      pickable: false,
+    }),
+    new LineLayer({
+      id: 'axis-3d',
+      data: [
+        { from: [-extent, 0, 0], to: [extent, 0, 0], color: AXIS_X_COLOR_3D },
+        { from: [0, -extent, 0], to: [0, extent, 0], color: AXIS_Y_COLOR_3D },
+        { from: [0, 0, -extent], to: [0, 0, extent], color: AXIS_Z_COLOR_3D },
+      ] as { from: [number,number,number]; to: [number,number,number]; color: [number,number,number,number] }[],
+      getSourcePosition: (d) => d.from,
+      getTargetPosition: (d) => d.to,
+      getColor: (d) => d.color,
+      getWidth: 1.5,
+      widthUnits: 'pixels',
+      pickable: false,
+    }),
+  ]
+}
+```
+
+**Wire up in the `layers` useMemo:**
+```ts
+const bounds = normalizeBounds(points?.meta.bounds ?? null)  // derive this in the memo too
+
+const layers = useMemo(() => {
+  const items = points?.items ?? []
+  const bounds = normalizeBounds(points?.meta.bounds ?? null)
+  const axisLayers = buildAxisLayers(viewMode, bounds)
+
+  if (viewMode === '3d') {
+    // ... PointCloudLayer tiers (see 5.A.3) ...
+    return [...axisLayers, ...pcLayers]
+  }
+
+  // 2D: existing ScatterplotLayer
+  return [
+    ...axisLayers,
+    new ScatterplotLayer<ExplorerPoint>({ /* unchanged */ }),
+  ]
+}, [/* same deps + viewMode in axis trigger */])
+```
+
+**updateTriggers for axis layers:** not needed — axis layers have no dynamic data. They re-create naturally on `viewMode` change because `buildAxisLayers` is called in the same `useMemo`.
+
+---
+
+### 5.A.3 3D PointCloudLayer tiers — replace OrbitView ScatterplotLayer
+
+**Import:**
+```ts
+import { PointCloudLayer } from '@deck.gl/layers'
+import {
+  PC_SIZE_REGULAR, PC_SIZE_OUTLIER, PC_SIZE_NEIGHBOR, PC_SIZE_HOVERED, PC_SIZE_SELECTED,
+} from '../../lib/explorerColors'
+```
+
+**Inside the `layers` useMemo, 3D branch:**
+
+```ts
+if (viewMode === '3d') {
+  const isHighlighted = (p: ExplorerPoint) =>
+    p.article_id === selectedArticleId ||
+    neighborIds.has(p.article_id) ||
+    p.article_id === hoveredArticleId
+
+  const getPC3dColor = (p: ExplorerPoint): [number,number,number,number] => {
+    if (p.article_id === selectedArticleId) return POINT_SELECTED_FILL
+    if (neighborIds.has(p.article_id)) return POINT_NEIGHBOR_FILL
+    if (p.article_id === hoveredArticleId) return POINT_HOVERED_FILL
+    const [r, g, b] = colorForPoint(p, colorMode)
+    const alpha = hasSelection
+      ? (p.analysis.is_outlier ? POINT_OUTLIER_ALPHA_UNDER_SELECTION : POINT_REGULAR_ALPHA_UNDER_SELECTION)
+      : (p.analysis.is_outlier ? POINT_OUTLIER_ALPHA_NO_SELECTION : POINT_REGULAR_ALPHA_NO_SELECTION)
+    return [r, g, b, alpha]
+  }
+
+  const colorTrigger = [colorMode, selectedArticleId, hoveredArticleId, neighborKey, hasSelection]
+
+  const pcLayer = (id: string, data: ExplorerPoint[], size: number) =>
+    new PointCloudLayer<ExplorerPoint>({
+      id,
+      data,
+      pickable: true,
+      sizeUnits: 'pixels',
+      pointSize: size,
+      getPosition: (p) => [p.x, p.y, p.z],
+      getColor: getPC3dColor,
+      getNormal: [0, 0, 1],
+      material: false,
+      onHover: (info: PickingInfoLike) => {
+        const point = info.object
+        onHoverArticle(point?.article_id ?? null)
+        if (point && info.x != null && info.y != null) {
+          setTooltip({ x: info.x, y: info.y, point })
+        } else {
+          setTooltip(null)
+        }
+      },
+      onClick: (info: PickingInfoLike) => onSelectArticle(info.object?.article_id ?? null),
+      updateTriggers: {
+        getColor: colorTrigger,
+      },
+    })
+
+  const regular  = items.filter(p => !isHighlighted(p) && !p.analysis.is_outlier)
+  const outlier  = items.filter(p => !isHighlighted(p) && p.analysis.is_outlier)
+  const neighbor = items.filter(p => neighborIds.has(p.article_id))
+  const hovered  = hoveredArticleId != null ? items.filter(p => p.article_id === hoveredArticleId) : []
+  const selected = selectedArticleId != null ? items.filter(p => p.article_id === selectedArticleId) : []
+
+  const pcLayers = [
+    pcLayer('pc-regular',  regular,  PC_SIZE_REGULAR),
+    pcLayer('pc-outlier',  outlier,  PC_SIZE_OUTLIER),
+    pcLayer('pc-neighbor', neighbor, PC_SIZE_NEIGHBOR),
+    pcLayer('pc-hovered',  hovered,  PC_SIZE_HOVERED),
+    pcLayer('pc-selected', selected, PC_SIZE_SELECTED),
+  ]
+
+  return [...axisLayers, ...pcLayers]
+}
+```
+
+**Picking note:** Each `PointCloudLayer` tier has `pickable: true` with the same `onHover`/`onClick` handlers. This is correct — DeckGL picks from the topmost rendered layer at the cursor position, so the selected/neighbor tiers correctly win picking over regular tiers.
+
+**No tooltip changes needed** — `setTooltip` / `Tooltip` component is unchanged.
+
+---
+
+### 5.A.4 `explorerColors.ts` additions
+
+Append to the bottom of `frontend/src/lib/explorerColors.ts`:
+
+```ts
+// ─── Axis and grid colors (iter/006) ────────────────────────────────────────
+export const AXIS_COLOR_2D: [number, number, number, number] = [148, 163, 184, 90]
+export const AXIS_X_COLOR_3D: [number, number, number, number] = [220, 38, 38, 115]
+export const AXIS_Y_COLOR_3D: [number, number, number, number] = [34, 197, 94, 115]
+export const AXIS_Z_COLOR_3D: [number, number, number, number] = [59, 130, 246, 115]
+export const AXIS_GRID_COLOR_3D: [number, number, number, number] = [148, 163, 184, 30]
+
+// ─── PointCloudLayer sizes (iter/006) — 3D mode only ────────────────────────
+export const PC_SIZE_REGULAR  = 8
+export const PC_SIZE_OUTLIER  = 10
+export const PC_SIZE_NEIGHBOR = 14
+export const PC_SIZE_HOVERED  = 12
+export const PC_SIZE_SELECTED = 18
+```
+
+---
+
+### 5.A.5 Files changed in iter/006
+
+| File | Change |
+|---|---|
+| `frontend/src/lib/explorerColors.ts` | Append axis + PC size constants |
+| `frontend/src/components/explorer/MapPanel.tsx` | New zoom formula, `buildAxisLayers`, 3D `PointCloudLayer` tiers |
+| `UI_SPEC.md` | Section 4.A added (this pass spec) |
+| `DESIGN_TOKENS.md` | Section 13 added (axis colors, PC sizes) |
+| `COMPONENT_MAP.md` | Section 5.A added (this section) |
+| `STATUS.md` | Updated |
+| `RESULTS.md` | Updated |
+
+No other files change.
+
+---
+
+## 6. Shared utility components
+
+*(unchanged from iter/004)*
+
+---
+
+## 7. Preserved components
+
+*(unchanged from iter/004)*
+
+**Additional verification for this pass:**
+
+`useExplorerData.ts` — The `useEffect` that watches `[query, selectedArticleId]` and calls `setSelectedArticleId(null)` when the selected article is not in the new result set may cause a brief flash. Consider:
+- Debouncing the query change by 200ms before firing the API call
+- Or: only clear selectedArticleId after the API response arrives, not during loading
+
+This is a minor UX issue, not a render bug. Address in a cleanup commit after the render is confirmed working.
+
+---
+
+## 8. Components to delete
+
+*(unchanged from iter/004)*
+
+---
+
+## 9. CSS changes summary for this pass
+
+**File: `frontend/src/styles.css` — Explorer section**
+
+Changes needed:
+
 ```css
-.explorer-layout {
-  display: flex;
-  flex-direction: column;
-  flex: 1;
-}
+/* ADD: min-height: 0 to workspace grid to fix flex height chain (BUG-1) */
 .explorer-workspace {
+  min-height: 0;   /* ADD */
+  /* rest unchanged */
+}
+
+/* ADD: explicit height to app-main to support flex chain */
+.app-main {
+  min-height: 0;   /* ADD */
+}
+
+/* REMOVE: !important override that conflicts with DeckGL canvas sizing (BUG-6) */
+/* DELETE these lines: */
+/* .map-canvas > div, */
+/* .map-canvas canvas { */
+/*   width: 100% !important; */
+/*   height: 100% !important; */
+/* } */
+
+/* ADD: explicit height on map-canvas */
+.map-canvas {
   flex: 1;
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) var(--explorer-context-width, 320px);
-  align-items: stretch;
-}
-.explorer-canvas-area {
   position: relative;
-  display: flex;
-  flex-direction: column;
   min-height: 0;
+  height: 100%;   /* ADD: explicit height for DeckGL reference */
+}
+
+/* ADD: loading-update dimming class */
+.map-canvas.loading-update {
+  opacity: 0.6;
+  transition: opacity 180ms ease;
+}
+
+/* ADD: tooltip eyebrow and outlier badge */
+.tooltip-eyebrow {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--text-xs);
+  color: rgba(255, 255, 255, 0.65);
+}
+
+.tooltip-outlier-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 1px 5px;
+  background: rgba(220, 38, 38, 0.25);
+  border-radius: var(--radius-sm);
+  font-size: 10px;
+  font-weight: 600;
+  color: #fca5a5;
+}
+
+/* ADD: seed chip styles */
+.context-seed-chip {
+  /* see DESIGN_TOKENS.md Section 12.3 */
+}
+
+/* ADD: guide explainer styles */
+.context-guide-explainer {
+  /* see DESIGN_TOKENS.md Section 12.3 */
+}
+
+/* ADD: legend header/indent styles */
+.legend-item-header { /* ... */ }
+.legend-item-indent { /* ... */ }
+
+/* ADD: dev diagnostic overlay */
+.map-debug-overlay {
+  /* see DESIGN_TOKENS.md Section 12.5 */
 }
 ```
 
 ---
 
-## 7. Shared utility components (`components/system/`)
+## 10. Build-level notes
 
-### `LoadingState.tsx`
+*(unchanged from iter/004, plus)*
 
-```tsx
-type Props = { label?: string; hint?: string }
-// Renders: label + optional hint, minimal styling
-```
-
-### `ErrorState.tsx`
-
-```tsx
-type Props = { message: string; hint?: string; onRetry?: () => void }
-// Renders: error message + hint + optional retry button
-```
-
-### `EmptyState.tsx`
-
-```tsx
-type Props = { title: string; hint?: string; action?: ReactNode }
-// Renders: title + hint + optional action (button or link)
-```
-
-These consolidate the current mix of `.loading-card`, `.empty-state-card`, `.state-card error-state` patterns into consistent components.
+- After fixing BUGs 1 and 4, verify the canvas renders points in a fresh browser profile (to avoid cached state)
+- Run `cd frontend && npm run build` and `npm run preview` to test against a real API after each major fix
+- Do NOT run `npm run dev` with StrictMode as the only test environment for DeckGL — preview mode is more representative
+- The dev diagnostic log (`console.debug`) must be gated on `import.meta.env.DEV` and must not appear in production builds
 
 ---
 
-## 8. Preserved components
-
-These files survive with minimal or no changes.
-
-| File | Status |
-|---|---|
-| `hooks/useClusterBrowserData.ts` | Keep |
-| `hooks/useClusterUrlState.ts` | Keep (verify clusterId param support) |
-| `hooks/useClusterFilters.ts` | Keep |
-| `hooks/useExplorerData.ts` | Keep |
-| `hooks/useExplorerUrlState.ts` | Keep |
-| `hooks/useExplorerFilters.ts` | Keep |
-| `hooks/useExplorerBootstrap.ts` | Keep |
-| `lib/api.ts` | Keep (no new endpoints needed) |
-| `lib/types.ts` | Keep (no new types needed for initial pass) |
-| `lib/format.ts` | Keep |
-| `lib/query.ts` | Keep |
-| `lib/navigation.ts` | Minor: add clusterId param to `buildClusterBrowserHref` |
-
----
-
-## 9. Components to delete
-
-These are removed. The builder should delete the files and remove any imports.
-
-| File | Replaced by |
-|---|---|
-| `components/AppShell.tsx` | `layout/Shell.tsx` + `layout/TopBar.tsx` |
-| `components/ClusterStatusBar.tsx` | Inline in `StoriesHeader` (inside ClusterBrowserPage) |
-| `components/StatusBar.tsx` | `ExplorerControlBar.tsx` |
-| `components/ClusterFilterPanel.tsx` | `StoriesFilterFields` (inline) + `FilterDrawer.tsx` |
-| `components/FilterBar.tsx` | `ExplorerFilterFields` (inline) + `FilterDrawer.tsx` |
-| `components/ClusterListPanel.tsx` | `StoryStream.tsx` + `StoryCard.tsx` |
-| `components/ClusterInspectorPanel.tsx` | `StoryFocusPanel.tsx` |
-| `components/InspectorPanel.tsx` | `ExplorerContextRail.tsx` |
-
----
-
-## 10. Build-level notes for builder
-
-- `npm run build` should pass cleanly throughout. Do not let TypeScript errors accumulate.
-- If `MapPanel` is refactored to use `forwardRef`, remember to update the import in `ExplorerPage`.
-- `FilterDrawer` uses `position: fixed` — ensure it does not conflict with DeckGL's canvas `z-index`.
-- The `isSemanticExplorerMode()` routing logic in `App.tsx` is fine for now. Do not introduce a full router.
-- Do not add new npm packages unless strictly necessary. The current deps are sufficient.
-
----
-
-*Component map complete. See UI_SPEC.md for layout specs and DESIGN_TOKENS.md for visual system.*
+*Component map complete. See UI_SPEC.md for layout and interaction specs. See DESIGN_TOKENS.md for visual system.*

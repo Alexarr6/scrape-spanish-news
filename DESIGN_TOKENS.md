@@ -1,474 +1,302 @@
-# DESIGN_TOKENS.md — iter/004 Visual System
+# DESIGN_TOKENS.md — iter/006 Visual System
 
-**Role:** Frontend Architect (iter/004)
+**Role:** Frontend Architect (iter/006)
 **Date:** 2026-03-20
 
 ---
 
-## 1. Design principles
+## Scope of this revision
 
-1. **Typography over ornament.** Use text hierarchy, not decorative borders.
-2. **Surface hierarchy, not variety.** Fewer surface levels, more distinction between them.
-3. **Quiet where it doesn't earn its noise.** Chips, pills, and badges only where they carry meaning.
-4. **Dense where it helps.** Information density is a feature, not a problem.
-5. **Light and editorial.** Not white-glove SaaS, not dark hacker terminal.
+Sections 1–9 from iter/004 are **unchanged and remain valid**.
+
+This revision adds **Section 12: Explorer-specific visual additions** covering:
+- Explorer canvas background and depth cue tokens
+- Point encoding state palette (consolidates MapPanel inline constants)
+- Seeded context chip visual treatment
 
 ---
 
-## 2. Color palette
+## 1–11: Base visual system
 
-### 2.1 Base palette (CSS custom properties)
+*(All content from iter/004 DESIGN_TOKENS.md remains unchanged)*
+
+See iter/004 for:
+- Design principles (Section 1)
+- Color palette (Section 2)
+- Typography (Section 3)
+- Spacing scale (Section 4)
+- Border and radius (Section 5)
+- Elevation / shadow (Section 6)
+- Surface hierarchy rules (Section 7)
+- Interactive states (Section 8)
+- Component visual rules (Section 9)
+- Layout-level tokens (Section 10)
+- CSS architecture notes (Section 11)
+
+---
+
+## 12. Explorer-specific visual additions
+
+These tokens augment the base system for the Explorer canvas and its point encoding. They belong in the Explorer-specific CSS section or in a future `explorer.css` split.
+
+---
+
+### 12.1 Explorer canvas background
 
 ```css
-:root {
-  /* Background layers */
-  --color-bg:           #f4f6f9;   /* page background */
-  --color-bg-subtle:    #edf0f5;   /* subtle inset areas */
-  --color-surface:      #ffffff;   /* primary surface (panels, cards) */
-  --color-surface-muted:#f8fafc;   /* muted surface (nested sections) */
+/* Explorer canvas area */
+.explorer-canvas-area {
+  background: var(--color-bg);     /* same as page — no special canvas color */
+}
 
-  /* Border */
-  --color-border:       #dde3ec;   /* default border */
-  --color-border-strong:#b8c5d6;   /* emphasis border */
+/* No grid overlay, no axes in this iteration */
+/* The semantic projection does not have a meaningful coordinate origin to label */
+```
 
-  /* Text */
-  --color-text:         #0e1724;   /* primary text — slightly warmer than #0f172a */
-  --color-text-secondary:#4a5568; /* secondary / descriptive text */
-  --color-text-muted:   #718096;   /* metadata, labels, captions */
-  --color-text-disabled: #a0aec0;  /* disabled controls */
+The canvas background should match the page background. Do not use a dark canvas background in light mode — it creates a jarring visual mode switch. If a dark canvas treatment is desired later, it should be a separate dark-canvas design token, not a CSS hack.
 
-  /* Accent — restrained indigo/slate */
-  --color-accent:        #4338ca;  /* primary accent (links, active states) */
-  --color-accent-light:  #eef2ff;  /* accent background tint */
-  --color-accent-border: rgba(67, 56, 202, 0.22); /* accent-colored border */
+---
 
-  /* Semantic */
-  --color-success:       #047857;
-  --color-warning:       #92400e;
-  --color-danger:        #991b1b;
-  --color-danger-bg:     #fff5f5;
+### 12.2 Explorer point encoding palette (authoritative source)
 
-  /* Interactive states */
-  --color-hover-bg:      rgba(14, 23, 36, 0.04);
-  --color-selected-bg:   #f0f3ff;
-  --color-selected-border: rgba(67, 56, 202, 0.3);
-  --color-focus-ring:    rgba(67, 56, 202, 0.35);
+These values **replace** the inline constants in `MapPanel.tsx`. The builder should define them as named constants in a dedicated `explorerColors.ts` file and import from there.
+
+**Selection states:**
+
+```ts
+// frontend/src/lib/explorerColors.ts
+
+export const POINT_SELECTED_FILL: [number, number, number, number] = [14, 165, 233, 255]   // sky-500 full
+export const POINT_SELECTED_STROKE: [number, number, number, number] = [255, 255, 255, 255]  // white
+export const POINT_SELECTED_STROKE_WIDTH = 2.8
+export const POINT_SELECTED_RADIUS_2D = 9
+export const POINT_SELECTED_RADIUS_3D = 10
+
+export const POINT_NEIGHBOR_FILL: [number, number, number, number] = [34, 197, 94, 235]    // green-500
+export const POINT_NEIGHBOR_STROKE: [number, number, number, number] = [220, 252, 231, 240] // green-100
+export const POINT_NEIGHBOR_STROKE_WIDTH = 1.5
+export const POINT_NEIGHBOR_RADIUS_2D = 7
+export const POINT_NEIGHBOR_RADIUS_3D = 7.5
+
+export const POINT_HOVERED_FILL: [number, number, number, number] = [125, 211, 252, 235]   // sky-300
+export const POINT_HOVERED_STROKE: [number, number, number, number] = [224, 242, 254, 235] // sky-100
+export const POINT_HOVERED_STROKE_WIDTH = 0.8
+export const POINT_HOVERED_RADIUS_2D = 6
+export const POINT_HOVERED_RADIUS_3D = 6.5
+
+// Regular and outlier points — base alpha
+export const POINT_REGULAR_ALPHA_NO_SELECTION = 210
+export const POINT_REGULAR_ALPHA_UNDER_SELECTION = 65
+export const POINT_OUTLIER_ALPHA_NO_SELECTION = 230
+export const POINT_OUTLIER_ALPHA_UNDER_SELECTION = 100
+
+export const POINT_REGULAR_RADIUS_2D = 4
+export const POINT_REGULAR_RADIUS_3D = 4.5
+export const POINT_OUTLIER_RADIUS_2D = 5.5
+export const POINT_OUTLIER_RADIUS_3D = 6
+
+// Stroke for receding points — effectively invisible
+export const POINT_RECEDING_STROKE: [number, number, number, number] = [226, 232, 240, 0]  // transparent
+export const POINT_RECEDING_STROKE_WIDTH = 0
+
+// Stroke for visible regular points (no selection)
+export const POINT_DEFAULT_STROKE: [number, number, number, number] = [248, 250, 252, 190] // slate-50 semi
+export const POINT_DEFAULT_STROKE_WIDTH = 0.6
+```
+
+**Source color palette:**
+
+```ts
+export const SOURCE_COLORS: Record<string, [number, number, number]> = {
+  elpais:       [59, 130, 246],    // blue-500
+  elmundo:      [16, 185, 129],    // emerald-500
+  abc:          [249, 115, 22],    // orange-500
+  eldiario:     [168, 85, 247],    // purple-500
+  lavanguardia: [236, 72, 153],    // pink-500
+  '20minutos':  [251, 191, 36],    // amber-400
+}
+export const SOURCE_FALLBACK_COLOR: [number, number, number] = [100, 116, 139]  // slate-500
+
+// Source colors for CSS swatches in the legend (hex)
+export const SOURCE_COLORS_HEX: Record<string, string> = {
+  elpais:       '#3b82f6',
+  elmundo:      '#10b981',
+  abc:          '#f97316',
+  eldiario:     '#a855f7',
+  lavanguardia: '#ec4899',
+  '20minutos':  '#fbbf24',
 }
 ```
 
-### 2.2 Map / chart categorical palette
+**Cluster color palette:**
 
-Used in Explorer color-by-source / color-by-cluster modes.
-Chosen for: distinguishable at small point sizes, accessible contrast, editorial (not rainbow).
-
-```js
-// In MapPanel, keep existing color assignment logic but use these base hues
-const CATEGORICAL_PALETTE = [
-  '#4338ca',  // indigo
-  '#0369a1',  // sky blue
-  '#047857',  // emerald
-  '#b45309',  // amber
-  '#9d174d',  // rose
-  '#6d28d9',  // violet
-  '#0e7490',  // cyan
-  '#15803d',  // green
-  '#c2410c',  // orange
-  '#475569',  // slate (for "other")
+```ts
+export const CLUSTER_PALETTE: Array<[number, number, number]> = [
+  [67, 56, 202],     // indigo-700
+  [3, 105, 161],     // sky-700
+  [4, 120, 87],      // emerald-700
+  [180, 83, 9],      // amber-700
+  [157, 23, 77],     // rose-800
+  [109, 40, 217],    // violet-700
 ]
+
+export const CLUSTER_OUTLIER_COLOR: [number, number, number] = [220, 38, 38]  // red-600
+export const CLUSTER_NULL_COLOR: [number, number, number] = [148, 163, 184]   // slate-400
 ```
-
-Outlier color: `#ef4444` (red) — retained from iter/003, it works.
-
-### 2.3 Color use rules
-
-- **Never** use accent color purely decoratively
-- **Do not** use green/red to mean good/bad for editorial content (outlet bias is not a quality signal)
-- Source color assignment should be consistent within a session (derived from source name hash)
-- Cluster color assignment: consistent cluster_id → palette index mapping
 
 ---
 
-## 3. Typography
+### 12.3 Seeded context chip visual treatment
 
-### 3.1 Font stack
-
-```css
-:root {
-  font-family: 'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif;
-}
-```
-
-Keep Inter. It is correct for this product. No changes.
-
-### 3.2 Text scale
+A chip shown at the top of the context rail (no-selection state) when the Explorer was opened with pre-applied filters from Stories.
 
 ```css
-:root {
-  /* Body */
-  --text-xs:    0.75rem;    /* 12px — labels, captions, eyebrows */
-  --text-sm:    0.875rem;   /* 14px — secondary body, metadata */
-  --text-base:  1rem;       /* 16px — primary body */
-  --text-md:    1.0625rem;  /* 17px — article titles, card headlines */
-  --text-lg:    1.25rem;    /* 20px — section headers, panel titles */
-  --text-xl:    1.5rem;     /* 24px — route headers */
-  --text-2xl:   1.875rem;   /* 30px — product wordmark */
-
-  /* Line heights */
-  --leading-tight:  1.2;
-  --leading-snug:   1.35;
-  --leading-normal: 1.5;
-  --leading-relaxed:1.65;
-}
-```
-
-### 3.3 Font weight usage
-
-| Weight | Use |
-|---|---|
-| 400 | Body text, summaries, descriptions |
-| 500 | Labels, field names, navigation |
-| 600 | Card headlines, section names, active nav |
-| 700 | Story card headline, route title, strong emphasis |
-
-### 3.4 Eyebrow / label treatment
-
-```css
-.text-eyebrow {
-  font-size: var(--text-xs);
-  font-weight: 500;
-  letter-spacing: 0.07em;
-  text-transform: uppercase;
-  color: var(--color-text-muted);
-}
-```
-
-Use sparingly — only where a category label genuinely helps orientation.
-Do NOT use eyebrows as decorative styling above every panel.
-
----
-
-## 4. Spacing scale
-
-```css
-:root {
-  --space-1:  0.25rem;   /*  4px */
-  --space-2:  0.5rem;    /*  8px */
-  --space-3:  0.75rem;   /* 12px */
-  --space-4:  1rem;      /* 16px */
-  --space-5:  1.25rem;   /* 20px */
-  --space-6:  1.5rem;    /* 24px */
-  --space-8:  2rem;      /* 32px */
-  --space-10: 2.5rem;    /* 40px */
-  --space-12: 3rem;      /* 48px */
-}
-```
-
-### Spacing use rules
-
-- Panel inner padding: `--space-5` (20px) default, `--space-4` (16px) for compact sections
-- Gap between stream cards: `--space-3` (12px)
-- Gap between major sections: `--space-6` (24px)
-- Top bar height: `--space-12` (48px)
-
----
-
-## 5. Border and radius
-
-```css
-:root {
-  /* Radius */
-  --radius-sm:   0.375rem;  /*  6px — chips, tags, small buttons */
-  --radius-md:   0.625rem;  /* 10px — cards, panels, inputs */
-  --radius-lg:   0.875rem;  /* 14px — drawers, dialogs */
-  --radius-full: 9999px;    /* pills */
-
-  /* Border */
-  --border-width: 1px;
-}
-```
-
-### Radius use rules
-
-The current design uses `--radius-md: 1rem` and `--radius-lg: 1.25rem` everywhere — this creates a soft, rounded look that undercuts the analytical character. Reduce across the board.
-
-- Story cards: `--radius-md` (10px)
-- Filter drawer: `--radius-lg` (14px) on the panel edge
-- Inputs: `--radius-sm` (6px) — inputs should feel precise, not bubbly
-- Segmented controls: `--radius-full` only for the pill container, `--radius-sm` for buttons inside
-- Chips/tags: `--radius-sm` (not `--radius-full` — pill chips look too casual for analytical UI)
-
----
-
-## 6. Elevation / shadow
-
-```css
-:root {
-  --shadow-none: none;
-  --shadow-xs:   0 1px 3px rgba(14, 23, 36, 0.06);
-  --shadow-sm:   0 2px 8px rgba(14, 23, 36, 0.08);
-  --shadow-md:   0 4px 16px rgba(14, 23, 36, 0.10);
-  --shadow-lg:   0 8px 32px rgba(14, 23, 36, 0.14);
-  --shadow-overlay: 0 16px 48px rgba(14, 23, 36, 0.18);
-}
-```
-
-### Elevation use rules
-
-| Element | Shadow |
-|---|---|
-| Page background | none |
-| Panel / card (default) | `--shadow-xs` |
-| Hovered card | `--shadow-sm` |
-| Focus panel / context rail | `--shadow-sm` |
-| Top bar (sticky) | `--shadow-xs` on scroll |
-| Filter drawer (overlay) | `--shadow-overlay` |
-| Tooltip | `--shadow-md` with dark background |
-
-Current styles use `--shadow-sm: 0 8px 20px` on nearly everything, which makes all surfaces feel equally elevated — kills hierarchy. Scale this down.
-
----
-
-## 7. Surface hierarchy rules
-
-The current UI applies borders + background + shadow to almost every element at the same intensity. This makes everything look equally important.
-
-New rule: **only three surface levels**.
-
-| Level | Background | Border | Shadow | Use |
-|---|---|---|---|---|
-| 0 — Page | `--color-bg` | none | none | Page background |
-| 1 — Panel | `--color-surface` | `--color-border` | `--shadow-xs` | Main panels, focus panel, context rail |
-| 2 — Inset | `--color-surface-muted` | `--color-border` | none | Nested sections within Level 1 (source groups, article detail) |
-| Overlay | `--color-surface` | `--color-border-strong` | `--shadow-overlay` | Filter drawer, tooltips |
-
-Cards (story cards, article rows) are elements within Level 1 panels — they should not have their own full border+shadow stack. Use subtle border or hover state only.
-
----
-
-## 8. Interactive states
-
-```css
-/* Focus ring — keyboard navigation */
-:focus-visible {
-  outline: 2px solid var(--color-accent);
-  outline-offset: 2px;
-  border-radius: var(--radius-sm);
-}
-
-/* Selected story card */
-.story-card.selected {
-  border-left: 3px solid var(--color-accent);
-  background: var(--color-selected-bg);
-  /* No box-shadow ring */
-}
-
-/* Hovered card */
-.story-card:hover {
-  background: var(--color-hover-bg);
-  border-color: var(--color-border-strong);
-}
-
-/* Selected article row */
-.article-row.selected {
-  background: var(--color-accent-light);
-  border-left: 2px solid var(--color-accent);
-}
-
-/* Active nav item */
-.nav-item.active {
-  color: var(--color-text);
-  font-weight: 600;
-  border-bottom: 2px solid var(--color-accent);
-  /* No background, no box shadow */
-}
-```
-
-### Transition rules
-
-- Button/card hover: `120ms ease` — quick, not sluggish
-- Drawer open/close: `220ms ease-out` — smooth slide
-- Filter changes: no transition on data (let data swap immediately)
-- No bounce, spring, or elaborate animation
-
----
-
-## 9. Component visual rules
-
-### 9.1 Chips / badges
-
-Remove the two-tier chip system (`status-chip`, `summary-pill`) — they're interchangeable in the current CSS and both overused.
-
-New unified rules:
-
-```css
-/* Use for: source names, counts, quick metadata */
-.badge {
-  display: inline-flex;
+/* Seeded context chip */
+.context-seed-chip {
+  display: flex;
   align-items: center;
-  padding: 0.2rem 0.5rem;
-  font-size: var(--text-xs);
-  font-weight: 500;
-  border-radius: var(--radius-sm);
-  border: 1px solid var(--color-border);
-  background: var(--color-surface-muted);
-  color: var(--color-text-secondary);
-}
-
-/* Accent variant — current workspace or emphasis */
-.badge.accent {
+  justify-content: space-between;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
   background: var(--color-accent-light);
-  border-color: var(--color-accent-border);
-  color: var(--color-accent);
-}
-
-/* Muted variant — secondary metadata */
-.badge.muted {
-  border-color: transparent;
-  background: var(--color-bg-subtle);
-  color: var(--color-text-muted);
-}
-```
-
-Usage discipline:
-- Max 3 source chips visible on a story card
-- No entity chips on stream cards
-- Tag chips: 1 primary tag maximum on stream cards
-- Source chips: should show source name only, not count (count is in the meta row)
-
-### 9.2 Buttons
-
-```css
-/* Ghost button — primary action in context */
-.btn-ghost {
-  padding: 0.45rem 0.85rem;
-  font-size: var(--text-sm);
-  font-weight: 500;
-  border-radius: var(--radius-sm);
-  border: 1px solid var(--color-border);
-  background: var(--color-surface);
-  color: var(--color-text);
-  cursor: pointer;
-}
-
-.btn-ghost:hover {
-  border-color: var(--color-border-strong);
-  background: var(--color-hover-bg);
-}
-
-/* Accent button — for primary CTAs like "Refine", "Clear all" */
-.btn-accent {
-  padding: 0.45rem 0.85rem;
-  font-size: var(--text-sm);
-  font-weight: 600;
-  border-radius: var(--radius-sm);
   border: 1px solid var(--color-accent-border);
-  background: var(--color-accent-light);
+  border-radius: var(--radius-sm);
+  font-size: var(--text-xs);
   color: var(--color-accent);
-}
-
-/* Text link button — for back navigation, secondary actions */
-.btn-text {
-  padding: 0;
-  font-size: var(--text-sm);
   font-weight: 500;
-  border: none;
+  margin-bottom: var(--space-3);
+}
+
+.context-seed-chip-label {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.context-seed-chip-clear {
   background: none;
-  color: var(--color-accent);
-  text-decoration: underline;
-  text-underline-offset: 3px;
-}
-```
-
-### 9.3 Inputs and selects
-
-```css
-input, select {
-  height: 2.25rem;
-  padding: 0 0.75rem;
-  font-size: var(--text-sm);
-  border-radius: var(--radius-sm);    /* reduced from current 0.85rem */
-  border: 1px solid var(--color-border);
-  background: var(--color-surface);
-  color: var(--color-text);
-}
-
-input:focus, select:focus {
-  outline: 2px solid var(--color-accent);
-  outline-offset: -1px;
-  border-color: transparent;
-}
-```
-
-### 9.4 Section dividers
-
-```css
-/* SectionDivider — between named sections within a panel */
-.section-divider {
   border: none;
-  border-top: 1px solid var(--color-border);
-  margin: var(--space-5) 0;
+  color: var(--color-accent);
+  cursor: pointer;
+  font-size: var(--text-xs);
+  padding: 0;
+  opacity: 0.7;
+  transition: opacity 120ms ease;
+}
+
+.context-seed-chip-clear:hover {
+  opacity: 1;
 }
 ```
 
-Used in Story focus panel and Explorer context rail between named sections.
-Do not use between every element — only between semantically distinct sections.
+Usage: shown only when `query.clusterId !== ''` or `query.search.trim() !== ''` on mount (i.e., Explorer was launched with a pre-applied filter from Stories).
 
 ---
 
-## 10. Layout-level tokens
+### 12.4 Explorer loading state visual treatment
+
+The loading overlay during initial data fetch is distinct from the loading state during filter changes.
+
+**Initial load:**
+```css
+.map-loading-overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(244, 246, 249, 0.72);
+  z-index: 10;
+  backdrop-filter: blur(1px);  /* optional — subtle */
+}
+```
+
+**Filter change (refetch with existing data):**
+Do not show the full overlay. Instead, dim the canvas slightly via a CSS class:
+```css
+.map-canvas.loading-update {
+  opacity: 0.6;
+  transition: opacity 180ms ease;
+}
+```
+
+This preserves the map's spatial context while indicating that data is refreshing. The control bar point count shows "Loading…" during this state.
+
+---
+
+### 12.5 Dev diagnostic overlay
+
+For dev builds only. Positioned as an absolute overlay in the top-left corner of the canvas, low z-index (below tooltip).
 
 ```css
-:root {
-  /* Top bar */
-  --topbar-height: 3rem;       /* 48px */
-
-  /* Stories layout */
-  --stories-stream-width: minmax(0, 1fr);
-  --stories-focus-width:  min(480px, 37vw);
-
-  /* Explorer layout */
-  --explorer-context-width: 320px;
-
-  /* Filter drawer */
-  --filter-drawer-width: 340px;
-
-  /* Content max width (stories header, etc.) */
-  --content-max: 72rem;        /* 1152px — prevents ultra-wide stretch */
+/* Dev only — strip from production builds */
+.map-debug-overlay {
+  position: absolute;
+  top: var(--space-2);
+  left: var(--space-2);
+  z-index: 5;
+  background: rgba(0, 0, 0, 0.65);
+  color: #fff;
+  font-size: 11px;
+  font-family: monospace;
+  padding: var(--space-1) var(--space-2);
+  border-radius: var(--radius-sm);
+  pointer-events: none;
+  line-height: 1.6;
 }
 ```
 
+Content: `points: N | canvas: W×H px | zoom: Z.ZZ | bounds: [minX,maxX,minY,maxY]`
+
+Visible only when `import.meta.env.DEV === true`.
+
 ---
 
-## 11. CSS architecture notes for builder
+## 13. iter/006 additions — axis colors and PointCloud sizes
 
-### What to keep from `styles.css`
-- Color variable names (can rename to match above tokens if cleaner)
-- Map canvas and DeckGL-related styles (`.map-frame`, `.map-canvas`, `.tooltip-card`)
-- Segmented control pattern
-- `color-scheme: light` declaration
+These constants extend `explorerColors.ts`. Add them to the bottom of that file.
 
-### What to rewrite in `styles.css`
-- The giant `.brand-block, .sidebar-note, .status-strip, .workspace-panel ...` border/shadow rule (applies the same look to ~25 elements — kills hierarchy)
-- All sidebar-related styles (`.app-sidebar`, `.brand-block`, `.sidebar-note`)
-- `.workspace-grid` and `.workspace-panel` as generic three-column layout
-- All `.status-chip` and `.summary-pill` — replace with `.badge` system
-- Border radius values — reduce across the board
+### 13.1 Axis layer colors
 
-### Stylesheet structure recommendation
+```ts
+// Axis line and grid colors — used by buildAxisLayers() in MapPanel.tsx
 
-Consider splitting styles:
-```
-frontend/src/
-  styles/
-    tokens.css     ← custom properties only
-    base.css       ← reset, html/body/root
-    layout.css     ← shell, top bar, route-level layouts
-    components.css ← reusable component styles
-    stories.css    ← stories-specific styles
-    explorer.css   ← explorer-specific styles
+// 2D mode: single subtle grey for both axes
+export const AXIS_COLOR_2D: [number, number, number, number] = [148, 163, 184, 90]    // slate-400 @35%
+
+// 3D mode: RGB convention for XYZ
+export const AXIS_X_COLOR_3D: [number, number, number, number] = [220, 38, 38, 115]   // red-600 @45%
+export const AXIS_Y_COLOR_3D: [number, number, number, number] = [34, 197, 94, 115]   // green-500 @45%
+export const AXIS_Z_COLOR_3D: [number, number, number, number] = [59, 130, 246, 115]  // blue-500 @45%
+export const AXIS_GRID_COLOR_3D: [number, number, number, number] = [148, 163, 184, 30] // slate-400 @12%, very faint
 ```
 
-Or keep single `styles.css` if the builder prefers — but at minimum, the token block must come first and all component styles must reference tokens, not hardcoded values.
+**Opacity rationale:**
+- 2D axes: 35% — visible but clearly secondary to points
+- 3D axes: 45% — slightly more prominent to help depth orientation
+- 3D grid: 12% — barely there, just enough to read the XY plane
+
+---
+
+### 13.2 PointCloudLayer sizes
+
+`PointCloudLayer.pointSize` is a single per-layer value (pixel diameter), not per-point.
+Use one layer per tier, each with its own fixed `pointSize`:
+
+```ts
+// frontend/src/lib/explorerColors.ts — add these
+// PointCloudLayer point diameters (pixels) — 3D mode only
+export const PC_SIZE_REGULAR  = 8    // regular field points
+export const PC_SIZE_OUTLIER  = 10   // outlier field points
+export const PC_SIZE_NEIGHBOR = 14   // semantic neighbors (highlighted)
+export const PC_SIZE_HOVERED  = 12   // hovered (unselected) point
+export const PC_SIZE_SELECTED = 18   // selected article — always dominant
+```
+
+**Sizing rationale:**
+- These are diameters; `POINT_*_RADIUS_3D` values from Section 12.2 were radii.
+- `PC_SIZE = POINT_*_RADIUS_3D * 2` approximately, then rounded to even px.
+- `PC_SIZE_REGULAR = 8` gives a readable point that won't crowd at typical zoom.
 
 ---
 
