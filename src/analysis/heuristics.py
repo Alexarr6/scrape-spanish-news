@@ -8,7 +8,7 @@ from difflib import SequenceMatcher
 
 from src.analysis.contracts import ArticleAnalysisExtractedEntity, ArticleEnrichmentPayload
 from src.analysis.taxonomy import SOURCE_TAG_MAP
-from src.persistence.contracts import ArticleRead
+from src.persistence.core import ArticleRead
 
 ARTICLE_TYPE_HINTS = {
     "opinion": ("opinión", "opinion", "tribuna", "columna", "editorial"),

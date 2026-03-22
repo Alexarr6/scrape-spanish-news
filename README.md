@@ -17,6 +17,24 @@ This README is the operator front door. It covers the commands you actually run 
 
 The canonical workflow is `uv` from repo root.
 
+### Python environment with `uv`
+
+If you want the explicit environment flow instead of going through `make`, use:
+
+```bash
+uv sync --dev
+uv run python -m src.main --help
+uv run pytest
+```
+
+Notes:
+
+- `uv sync --dev` creates or updates the project-managed virtual environment from `pyproject.toml` and `uv.lock`
+- you do **not** need to activate `.venv` manually for normal repo work; prefer `uv run ...`
+- `make sync`, `make test`, `make lint`, and the other repo targets are thin wrappers around this `uv` workflow
+
+The shortest repo bootstrap remains:
+
 ```bash
 make sync
 make preflight

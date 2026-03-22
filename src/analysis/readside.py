@@ -19,7 +19,7 @@ from src.analysis.orm_models import (
     StoryClusterORM,
     TagORM,
 )
-from src.persistence.orm_models import ArticleORM
+from src.persistence.orm import ArticleORM
 
 
 @dataclass

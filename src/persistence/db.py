@@ -6,7 +6,7 @@ from sqlalchemy import Engine, create_engine
 from sqlalchemy.orm import Session
 
 from src.analysis import orm_models as _analysis_orm_models  # noqa: F401
-from src.persistence.orm_models import Base
+from src.persistence.orm import Base
 
 
 def resolve_db_url(cli_db_url: str | None = None) -> str:

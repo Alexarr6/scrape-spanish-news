@@ -6,8 +6,13 @@ from pydantic import ValidationError
 from src.analysis.contracts import (
     ArticleEditorialAnalysisPayload,
     ArticleEditorialAnalysisRawPayload,
+    ArticleEnrichmentPayload,
 )
-from src.analysis.llm_client import build_editorial_analysis_prompt, editorial_analysis_json_schema
+from src.analysis.llm_client import (
+    build_editorial_analysis_prompt,
+    editorial_analysis_json_schema,
+    enrichment_json_schema,
+)
 
 VALID_PAYLOAD = {
     "article_type": "analysis",
@@ -119,3 +124,24 @@ def test_editorial_prompt_and_schema_expose_raw_generation_contract() -> None:
     assert schema["properties"]["framing_devices"]["maxItems"] == 20
     assert schema["properties"]["evidence_spans"]["maxItems"] == 20
     assert "anyOf" in schema["properties"]["confidence"]
+
+
+def test_editorial_schema_is_model_driven_and_keeps_required_provider_fields() -> None:
+    schema = editorial_analysis_json_schema()
+
+    assert schema["required"] == ["article_type", "framing_devices", "evidence_spans", "rationale"]
+    assert "title" not in schema
+    assert "default" not in schema["properties"]["article_type"]
+
+
+def test_enrichment_schema_matches_canonical_pydantic_contract() -> None:
+    schema = enrichment_json_schema()
+
+    assert schema["type"] == "object"
+    assert schema["additionalProperties"] is False
+    assert (
+        schema["properties"]["entities"]["items"]["$ref"]
+        == "#/$defs/ArticleAnalysisExtractedEntity"
+    )
+    assert schema["$defs"]["ArticleAnalysisExtractedEntity"]["additionalProperties"] is False
+    assert set(schema["required"]) == set(ArticleEnrichmentPayload.model_fields)

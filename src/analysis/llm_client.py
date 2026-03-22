@@ -17,6 +17,10 @@ from src.analysis.editorial_normalization import (
     EditorialNormalizationError,
     normalize_editorial_payload,
 )
+from src.analysis.schemas import (
+    editorial_analysis_json_schema as build_editorial_analysis_json_schema,
+)
+from src.analysis.schemas import enrichment_json_schema as build_enrichment_json_schema
 
 DEFAULT_BASE_URL = "https://openrouter.ai/api/v1"
 EDITORIAL_ANALYSIS_SYSTEM_PROMPT = """You are classifying a Spanish news article.
@@ -480,168 +484,8 @@ def editorial_debug_artifact_dir() -> Path:
 
 
 def enrichment_json_schema() -> dict[str, Any]:
-    return {
-        "type": "object",
-        "additionalProperties": False,
-        "properties": {
-            "article_type": {"type": "string"},
-            "article_type_confidence": {"type": "number"},
-            "is_event_coverage": {"type": "boolean"},
-            "language": {"type": "string"},
-            "primary_tag_code": {"type": ["string", "null"]},
-            "secondary_tag_codes": {"type": "array", "items": {"type": "string"}},
-            "entities": {
-                "type": "array",
-                "items": {
-                    "type": "object",
-                    "additionalProperties": False,
-                    "properties": {
-                        "entity_type": {"type": "string"},
-                        "canonical_name": {"type": "string"},
-                        "aliases": {"type": "array", "items": {"type": "string"}},
-                        "relevance_score": {"type": "number"},
-                        "role_hint": {"type": ["string", "null"]},
-                    },
-                    "required": [
-                        "entity_type",
-                        "canonical_name",
-                        "aliases",
-                        "relevance_score",
-                        "role_hint",
-                    ],
-                },
-            },
-            "key_phrases": {"type": "array", "items": {"type": "string"}},
-            "claims": {"type": "array", "items": {"type": "string"}},
-        },
-        "required": [
-            "article_type",
-            "article_type_confidence",
-            "is_event_coverage",
-            "language",
-            "primary_tag_code",
-            "secondary_tag_codes",
-            "entities",
-            "key_phrases",
-            "claims",
-        ],
-    }
+    return build_enrichment_json_schema()
 
 
 def editorial_analysis_json_schema() -> dict[str, Any]:
-    def bounded_string(max_length: int = 1200) -> dict[str, Any]:
-        return {"type": "string", "maxLength": max_length}
-
-    return {
-        "type": "object",
-        "additionalProperties": True,
-        "properties": {
-            "article_type": bounded_string(120),
-            "article_type_confidence": {
-                "anyOf": [
-                    {"type": "number", "minimum": 0.0, "maximum": 1.0},
-                    bounded_string(40),
-                    {"type": "object", "additionalProperties": True},
-                    {"type": "null"},
-                ]
-            },
-            "bias_label": bounded_string(80),
-            "ideological_bias_framing": {
-                "anyOf": [
-                    bounded_string(240),
-                    {"type": "object", "additionalProperties": True},
-                    {"type": "null"},
-                ]
-            },
-            "bias_score": {
-                "anyOf": [{"type": "number", "minimum": -1.0, "maximum": 1.0}, bounded_string(40)]
-            },
-            "bias_confidence": {
-                "anyOf": [
-                    {"type": "number", "minimum": 0.0, "maximum": 1.0},
-                    bounded_string(40),
-                    {"type": "object", "additionalProperties": True},
-                    {"type": "null"},
-                ]
-            },
-            "confidence": {
-                "anyOf": [
-                    {"type": "number", "minimum": 0.0, "maximum": 1.0},
-                    bounded_string(40),
-                    {"type": "object", "additionalProperties": True},
-                    {"type": "null"},
-                ]
-            },
-            "tone_emotional": bounded_string(80),
-            "tone_target": bounded_string(80),
-            "opinionatedness": bounded_string(80),
-            "sensationalism": bounded_string(80),
-            "rhetorical_certainty": bounded_string(80),
-            "tone_dimensions": {
-                "type": "object",
-                "additionalProperties": True,
-                "properties": {
-                    "emotionality": bounded_string(80),
-                    "target": bounded_string(80),
-                    "polarity": bounded_string(80),
-                    "opinionatedness": bounded_string(80),
-                    "style": bounded_string(80),
-                    "sensationalism": bounded_string(80),
-                    "rhetorical_certainty": bounded_string(80),
-                    "certainty": bounded_string(80),
-                },
-            },
-            "framing_devices": {
-                "type": "array",
-                "maxItems": 20,
-                "items": {
-                    "anyOf": [
-                        {"type": "string", "maxLength": 240},
-                        {"type": "object", "additionalProperties": True},
-                    ]
-                },
-            },
-            "evidence_spans": {
-                "type": "array",
-                "maxItems": 20,
-                "items": {
-                    "anyOf": [
-                        bounded_string(400),
-                        {
-                            "type": "object",
-                            "additionalProperties": True,
-                            "properties": {
-                                "type": bounded_string(40),
-                                "location": bounded_string(40),
-                                "text": bounded_string(400),
-                                "note": bounded_string(240),
-                                "explanation": bounded_string(240),
-                            },
-                        },
-                    ]
-                },
-            },
-            "rationale": {
-                "anyOf": [
-                    bounded_string(1200),
-                    {"type": "object", "additionalProperties": True},
-                    {"type": "null"},
-                ]
-            },
-            "notes": {
-                "anyOf": [
-                    bounded_string(500),
-                    {"type": "object", "additionalProperties": True},
-                    {"type": "null"},
-                ]
-            },
-            "uncertainty_reason": {
-                "anyOf": [
-                    bounded_string(500),
-                    {"type": "object", "additionalProperties": True},
-                    {"type": "null"},
-                ]
-            },
-        },
-        "required": ["article_type", "framing_devices", "evidence_spans", "rationale"],
-    }
+    return build_editorial_analysis_json_schema()

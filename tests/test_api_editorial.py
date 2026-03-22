@@ -12,7 +12,7 @@ from sqlalchemy.pool import StaticPool
 from src.analysis.orm_models import ArticleEditorialAnalysisORM
 from src.api.v1.articles import get_session
 from src.api.v1.editorial import router
-from src.persistence.orm_models import ArticleORM, Base
+from src.persistence.orm import ArticleORM, Base
 
 
 def _build_client() -> TestClient:

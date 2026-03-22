@@ -4,7 +4,7 @@ from datetime import UTC, datetime
 
 from src.analysis.contracts import ArticleAnalysisRead
 from src.analysis.pipeline import ClusterPipeline, EnrichedArticle
-from src.persistence.contracts import ArticleRead
+from src.persistence.core import ArticleRead
 
 
 def _enriched(

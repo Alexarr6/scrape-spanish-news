@@ -58,6 +58,31 @@ class LaVanguardiaTests(unittest.TestCase):
         self.assertIn("https://www.lavanguardia.com/nacional/2026/03/13/baz.html", urls)
         self.assertNotIn("https://www.lavanguardia.com/cultura/2026/03/13/nope.html", urls)
 
+    def test_run_emits_strategy_metrics_envelope(self):
+        adapter = LaVanguardiaAdapter(http_client=_FakeHttp({}))
+
+        def _fake_discover(*, target_date, cfg):
+            adapter._strategy_metrics = [
+                {
+                    "strategy_name": "rss_discovery",
+                    "attempted": 3,
+                    "accepted": 1,
+                    "errors": 0,
+                    "stop_reason": "completed",
+                    "elapsed_ms": 0,
+                }
+            ]
+            return []
+
+        adapter.discover = _fake_discover
+        _, metrics = adapter.run("2026-03-13", RunConfig())
+        self.assertIn("strategy_metrics", metrics)
+        self.assertEqual(
+            metrics["strategy_metrics"]["schema_version"],
+            "discovery_strategy_metrics.v1",
+        )
+        self.assertIsInstance(metrics["strategy_metrics"]["strategies"], list)
+
 
 if __name__ == "__main__":
     unittest.main()

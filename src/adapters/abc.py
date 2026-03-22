@@ -1,9 +1,8 @@
 from __future__ import annotations
 
-import re
-import xml.etree.ElementTree as ET
-
+from src.adapters.layered_discovery import DiscoveryLayer, run_layered_discovery
 from src.adapters.rss_adapter import GenericRSSAdapter
+from src.adapters.url_filters import is_probable_noise_url
 from src.core.adapter import RunConfig
 from src.core.strategies.metrics import build_strategy_metrics_envelope
 
@@ -30,131 +29,31 @@ class ABCAdapter(GenericRSSAdapter):
         self._strategy_metrics: list[dict] = []
 
     def discover(self, target_date: str, cfg: RunConfig) -> list[str]:
-        urls: list[str] = []
-        seen: set[str] = set()
-        layer_metrics: list[dict] = []
-
-        # Layer 1: RSS
-        rss_attempted = 0
-        rss_accepted = 0
-        for feed in self.feeds:
-            try:
-                xml = self.http.get_text(feed)
-            except Exception:
-                continue
-            parsed = self._parse_feed(xml)
-            rss_attempted += len(parsed)
-            for item in parsed:
-                link = item.get("link", "")
-                if self._accept(link, seen):
-                    urls.append(link)
-                    rss_accepted += 1
-                if len(urls) >= cfg.max_discovery_urls:
-                    layer_metrics.append(
-                        {
-                            "strategy_name": "rss_discovery",
-                            "attempted": rss_attempted,
-                            "accepted": rss_accepted,
-                            "errors": 0,
-                            "stop_reason": "cap_candidates",
-                            "elapsed_ms": 0,
-                        }
-                    )
-                    self._strategy_metrics = layer_metrics
-                    return urls
-
-        layer_metrics.append(
-            {
-                "strategy_name": "rss_discovery",
-                "attempted": rss_attempted,
-                "accepted": rss_accepted,
-                "errors": 0,
-                "stop_reason": "completed",
-                "elapsed_ms": 0,
-            }
+        del target_date
+        urls, metrics = run_layered_discovery(
+            cfg=cfg,
+            accept=self._accept,
+            reject_noise=self._reject_noise,
+            layers=[
+                DiscoveryLayer(
+                    strategy_name="rss_discovery",
+                    load_candidates=lambda: self._discover_links_from_feeds(self.feeds),
+                ),
+                DiscoveryLayer(
+                    strategy_name="sitemap_discovery",
+                    load_candidates=lambda: self._discover_links_from_sitemaps(self.sitemaps),
+                    min_existing_candidates_to_skip=25,
+                ),
+                DiscoveryLayer(
+                    strategy_name="html_fallback_discovery",
+                    load_candidates=lambda: self._discover_links_from_html_pages(
+                        self.html_fallback_pages
+                    ),
+                    min_existing_candidates_to_skip=20,
+                ),
+            ],
         )
-
-        # Layer 2: sitemap
-        sm_attempted = 0
-        sm_accepted = 0
-        if len(urls) < 25:
-            for sm in self.sitemaps:
-                try:
-                    xml = self.http.get_text(sm)
-                except Exception:
-                    continue
-                parsed = self._parse_sitemap(xml)
-                sm_attempted += len(parsed)
-                for link in parsed:
-                    if self._accept(link, seen):
-                        urls.append(link)
-                        sm_accepted += 1
-                    if len(urls) >= cfg.max_discovery_urls:
-                        layer_metrics.append(
-                            {
-                                "strategy_name": "sitemap_discovery",
-                                "attempted": sm_attempted,
-                                "accepted": sm_accepted,
-                                "errors": 0,
-                                "stop_reason": "cap_candidates",
-                                "elapsed_ms": 0,
-                            }
-                        )
-                        self._strategy_metrics = layer_metrics
-                        return urls
-
-        layer_metrics.append(
-            {
-                "strategy_name": "sitemap_discovery",
-                "attempted": sm_attempted,
-                "accepted": sm_accepted,
-                "errors": 0,
-                "stop_reason": "completed",
-                "elapsed_ms": 0,
-            }
-        )
-
-        # Layer 3: HTML fallback
-        html_attempted = 0
-        html_accepted = 0
-        if len(urls) < 20:
-            for page in self.html_fallback_pages:
-                try:
-                    html = self.http.get_text(page)
-                except Exception:
-                    continue
-                parsed = self._extract_links(html)
-                html_attempted += len(parsed)
-                for link in parsed:
-                    if self._accept(link, seen):
-                        urls.append(link)
-                        html_accepted += 1
-                    if len(urls) >= cfg.max_discovery_urls:
-                        layer_metrics.append(
-                            {
-                                "strategy_name": "html_fallback_discovery",
-                                "attempted": html_attempted,
-                                "accepted": html_accepted,
-                                "errors": 0,
-                                "stop_reason": "cap_candidates",
-                                "elapsed_ms": 0,
-                            }
-                        )
-                        self._strategy_metrics = layer_metrics
-                        return urls
-
-        layer_metrics.append(
-            {
-                "strategy_name": "html_fallback_discovery",
-                "attempted": html_attempted,
-                "accepted": html_accepted,
-                "errors": 0,
-                "stop_reason": "completed",
-                "elapsed_ms": 0,
-            }
-        )
-
-        self._strategy_metrics = layer_metrics
+        self._strategy_metrics = metrics
         return urls
 
     def run(self, target_date: str, cfg: RunConfig):
@@ -172,17 +71,5 @@ class ABCAdapter(GenericRSSAdapter):
         seen.add(link)
         return True
 
-    def _parse_sitemap(self, xml_text: str) -> list[str]:
-        try:
-            root = ET.fromstring(xml_text)
-        except Exception:
-            return []
-        links = []
-        for loc in root.findall(".//{*}loc"):
-            if loc.text:
-                links.append(loc.text.strip())
-        return links
-
-    def _extract_links(self, html: str) -> list[str]:
-        out = re.findall(r'href=["\'](https://www\\.abc\\.es[^"\']+)["\']', html)
-        return out
+    def _reject_noise(self, link: str) -> bool:
+        return is_probable_noise_url(link)

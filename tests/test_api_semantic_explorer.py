@@ -11,7 +11,7 @@ from sqlalchemy.pool import StaticPool
 
 from src.api.v1.articles import get_session
 from src.api.v1.semantic import router
-from src.persistence.orm_models import Base
+from src.persistence.orm import Base
 
 
 DEFAULT_PROJECTION_SET = 'pca_3d_latest'

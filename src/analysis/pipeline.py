@@ -51,8 +51,8 @@ from src.analysis.orm_models import (
     TagORM,
 )
 from src.analysis.taxonomy import CANONICAL_TAGS
-from src.persistence.contracts import ArticleRead
-from src.persistence.orm_models import ArticleORM
+from src.persistence.core import ArticleRead
+from src.persistence.orm import ArticleORM
 
 
 @dataclass

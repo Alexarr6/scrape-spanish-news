@@ -1,10 +1,10 @@
 from __future__ import annotations
 
-import re
-import xml.etree.ElementTree as ET
-
+from src.adapters.layered_discovery import DiscoveryLayer, run_layered_discovery
 from src.adapters.rss_adapter import GenericRSSAdapter
+from src.adapters.url_filters import is_probable_noise_url
 from src.core.adapter import RunConfig
+from src.core.strategies.metrics import build_strategy_metrics_envelope
 
 
 class LaVanguardiaAdapter(GenericRSSAdapter):
@@ -26,50 +26,42 @@ class LaVanguardiaAdapter(GenericRSSAdapter):
         "https://www.lavanguardia.com/nacional",
     ]
 
+    def __init__(self, http_client=None):
+        super().__init__(http_client=http_client)
+        self._strategy_metrics: list[dict] = []
+
     def discover(self, target_date: str, cfg: RunConfig) -> list[str]:
-        urls: list[str] = []
-        seen: set[str] = set()
-
-        # Layer 1: RSS
-        for feed in self.feeds:
-            try:
-                xml = self.http.get_text(feed)
-            except Exception:
-                continue
-            for item in self._parse_feed(xml):
-                link = item.get("link", "")
-                if self._accept(link, seen):
-                    urls.append(link)
-                if len(urls) >= cfg.max_discovery_urls:
-                    return urls
-
-        # Layer 2: sitemap
-        if len(urls) < 25:
-            for sm in self.sitemaps:
-                try:
-                    xml = self.http.get_text(sm)
-                except Exception:
-                    continue
-                for link in self._parse_sitemap(xml):
-                    if self._accept(link, seen):
-                        urls.append(link)
-                    if len(urls) >= cfg.max_discovery_urls:
-                        return urls
-
-        # Layer 3: HTML fallback (hard-cap 5 pages)
-        if len(urls) < 20:
-            for page in self.html_fallback_pages[:5]:
-                try:
-                    html = self.http.get_text(page)
-                except Exception:
-                    continue
-                for link in self._extract_links(html):
-                    if self._accept(link, seen):
-                        urls.append(link)
-                    if len(urls) >= cfg.max_discovery_urls:
-                        return urls
-
+        del target_date
+        urls, metrics = run_layered_discovery(
+            cfg=cfg,
+            accept=self._accept,
+            reject_noise=self._reject_noise,
+            layers=[
+                DiscoveryLayer(
+                    strategy_name="rss_discovery",
+                    load_candidates=lambda: self._discover_links_from_feeds(self.feeds),
+                ),
+                DiscoveryLayer(
+                    strategy_name="sitemap_discovery",
+                    load_candidates=lambda: self._discover_links_from_sitemaps(self.sitemaps),
+                    min_existing_candidates_to_skip=25,
+                ),
+                DiscoveryLayer(
+                    strategy_name="html_fallback_discovery",
+                    load_candidates=lambda: self._discover_links_from_html_pages(
+                        self.html_fallback_pages[:5]
+                    ),
+                    min_existing_candidates_to_skip=20,
+                ),
+            ],
+        )
+        self._strategy_metrics = metrics
         return urls
+
+    def run(self, target_date: str, cfg: RunConfig):
+        articles, metrics = super().run(target_date=target_date, cfg=cfg)
+        metrics["strategy_metrics"] = build_strategy_metrics_envelope(self._strategy_metrics)
+        return articles, metrics
 
     def _accept(self, link: str, seen: set[str]) -> bool:
         if not link or link in seen:
@@ -77,7 +69,6 @@ class LaVanguardiaAdapter(GenericRSSAdapter):
         lo = link.lower()
         if "lavanguardia.com" not in lo:
             return False
-        # Initial whitelist focused on España/política/nacional.
         allowed = (
             "/politica/",
             "/nacional/",
@@ -91,16 +82,5 @@ class LaVanguardiaAdapter(GenericRSSAdapter):
         seen.add(link)
         return True
 
-    def _parse_sitemap(self, xml_text: str) -> list[str]:
-        try:
-            root = ET.fromstring(xml_text)
-        except Exception:
-            return []
-        links = []
-        for loc in root.findall(".//{*}loc"):
-            if loc.text:
-                links.append(loc.text.strip())
-        return links
-
-    def _extract_links(self, html: str) -> list[str]:
-        return re.findall(r'href=["\'](https://www\.lavanguardia\.com[^"\']+)["\']', html)
+    def _reject_noise(self, link: str) -> bool:
+        return is_probable_noise_url(link)

@@ -11,7 +11,7 @@ from sqlalchemy.pool import StaticPool
 from src.analysis.llm_client import EditorialAnalysisAttempt, EditorialAnalysisResult
 from src.analysis.orm_models import ArticleEditorialAnalysisORM
 from src.analysis.pipeline import EditorialAnalysisPipeline, EditorialSelectionFilters
-from src.persistence.orm_models import ArticleORM, Base
+from src.persistence.orm import ArticleORM, Base
 
 
 class _Settings:
