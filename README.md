@@ -116,8 +116,8 @@ make docs-build
 
 ```bash
 make smoke SOURCE=elpais
-make run-source SOURCE=elpais DATE=$(date +%F)
-make run-all DATE=$(date +%F)
+make run-source SOURCE=elpais DATE=$(TZ=UTC date +%F)
+make run-all DATE=$(TZ=UTC date +%F)
 ```
 
 Use these when you want JSON output only, with no database writes.
@@ -126,8 +126,8 @@ Use these when you want JSON output only, with no database writes.
 
 ```bash
 export DATABASE_URL='postgresql+psycopg://user:pass@host:5432/dbname'
-make run-source-persist SOURCE=elpais OUT_PREFIX=manual DATE=$(date +%F)
-make run-all-persist DATE=$(date +%F)
+make run-source-persist SOURCE=elpais OUT_PREFIX=manual DATE=$(TZ=UTC date +%F)
+make run-all-persist DATE=$(TZ=UTC date +%F)
 make verify-db
 ```
 
@@ -205,7 +205,7 @@ export DATABASE_URL='postgresql+psycopg://user:pass@host:5432/dbname'
 export OPENAI_API_KEY='sk-...'
 make stories-refresh-once
 make explorer-refresh-once
-make verify-output DATE=$(date +%F) OUT_PREFIX=sched
+make verify-output DATE=$(TZ=UTC date +%F) OUT_PREFIX=sched
 make verify-db
 ```
 
@@ -257,7 +257,7 @@ Use this if you just want to prove the repo is alive.
 
 ```bash
 export DATABASE_URL='postgresql+psycopg://user:pass@host:5432/dbname'
-make run-all-persist DATE=$(date +%F)
+make run-all-persist DATE=$(TZ=UTC date +%F)
 make verify-db
 ```
 

@@ -46,8 +46,9 @@ Useful if you only want persistent scraping and verification.
 7. `make verify-db`
 
 Defaults:
-- `LOCAL_TZ=Europe/Madrid`
+- `LOCAL_TZ=UTC`
 - `DAYS_BACK=3`
+- scrape `DATE` is computed in UTC to match `src.main --date`
 - `SCORE_THRESHOLD=0.50`
 - `OUT_PREFIX=sched`
 

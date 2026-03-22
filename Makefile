@@ -13,7 +13,7 @@ UV_RUN := $(UV) run --project $(REPO_ROOT)
 RUFF := $(UV_RUN) ruff
 PRE_COMMIT := $(UV_RUN) pre-commit
 PYTHON := $(UV_RUN) python
-LOCAL_TZ ?= Europe/Madrid
+LOCAL_TZ ?= UTC
 DATE ?= $(if $(RUN_DATE),$(RUN_DATE),$(shell TZ=$(LOCAL_TZ) date +%F))
 SOURCES ?= 20minutos abc eldiario elmundo elpais lavanguardia
 SOURCE ?=

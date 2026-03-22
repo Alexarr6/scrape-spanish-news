@@ -23,7 +23,7 @@ Use this when Postgres should become the durable source of truth.
 
 ```bash
 export DATABASE_URL='postgresql+psycopg://user:pass@host:5432/dbname'
-make run-all-persist DATE=$(date +%F)
+make run-all-persist DATE=$(TZ=UTC date +%F)
 make verify-db
 ```
 
@@ -153,6 +153,6 @@ cp .env.example .env
 make db-up
 make db-check
 export DATABASE_URL="$(make --no-print-directory db-url)"
-make run-source-persist SOURCE=elpais OUT_PREFIX=localdb DATE=$(date +%F)
+make run-source-persist SOURCE=elpais OUT_PREFIX=localdb DATE=$(TZ=UTC date +%F)
 make verify-db
 ```
