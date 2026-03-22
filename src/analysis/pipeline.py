@@ -27,6 +27,7 @@ from src.analysis.heuristics import heuristic_enrichment, title_similarity
 from src.analysis.llm_client import (
     EDITORIAL_ANALYSIS_SCHEMA_VERSION,
     EDITORIAL_ANALYSIS_SOURCE_TEXT_VERSION,
+    EditorialAnalysisResult,
     OpenRouterClient,
     OpenRouterSettings,
     build_editorial_analysis_prompt,
@@ -335,6 +336,11 @@ class EditorialAnalysisPipeline:
         self.session = session
         self.llm = OpenRouterClient(llm_settings) if llm_settings else None
 
+    def effective_status(
+        self, *, status: str, reprocess: bool, article_ids: list[int] | None
+    ) -> str:
+        return "any" if reprocess and status == "pending" and not article_ids else status
+
     def analyze_articles(
         self,
         *,
@@ -354,10 +360,15 @@ class EditorialAnalysisPipeline:
 
         started_at = datetime.now(UTC)
         metrics = EditorialAnalysisRunMetrics(started_at=started_at)
+        effective_status = self.effective_status(
+            status=status,
+            reprocess=reprocess,
+            article_ids=article_ids,
+        )
         filters = EditorialSelectionFilters(
             days_back=days_back,
             limit=limit,
-            status=status,
+            status=effective_status,
             article_ids=article_ids,
             source=source,
             published_from=published_from,
@@ -432,6 +443,28 @@ class EditorialAnalysisPipeline:
                     content_hash=content_hash,
                 )
                 metrics.analyzed_count += 1
+                if success_attempt.mode == "strict_json_schema":
+                    metrics.strict_success_count += 1
+                else:
+                    metrics.fallback_success_count += 1
+                if (
+                    success_attempt.repair_warnings
+                    or success_attempt.normalization_warnings
+                    or success_attempt.truncated_fields
+                    or success_attempt.dropped_fields
+                ):
+                    metrics.rows_with_warnings_count += 1
+                if "evidence_spans" in success_attempt.truncated_fields:
+                    metrics.rows_with_truncated_evidence_count += 1
+                if success_attempt.dropped_fields:
+                    metrics.rows_with_dropped_fields_count += 1
+                if success_attempt.payload.bias_label == "unclear":
+                    metrics.unclear_bias_count += 1
+                if (
+                    "mapping_unresolved" in success_attempt.unclear_reasons
+                    or "repair_data_loss" in success_attempt.unclear_reasons
+                ):
+                    metrics.unclear_due_to_mapping_count += 1
                 self.session.commit()
                 continue
             final_attempt = result.final_attempt
@@ -464,6 +497,34 @@ class EditorialAnalysisPipeline:
         analysis.prompt_version = self.llm.settings.prompt_version
         analysis.schema_version = EDITORIAL_ANALYSIS_SCHEMA_VERSION
         analysis.source_text_version = EDITORIAL_ANALYSIS_SOURCE_TEXT_VERSION
+
+    def selection_status_counts(
+        self,
+        *,
+        days_back: int,
+        limit: int,
+        article_ids: list[int] | None = None,
+        source: str | None = None,
+        published_from: date | None = None,
+        published_to: date | None = None,
+        batch_size: int | None = None,
+    ) -> dict[str, int]:
+        counts: dict[str, int] = {}
+        for status in ("pending", "failed", "completed", "any"):
+            rows = self._select_candidate_articles(
+                EditorialSelectionFilters(
+                    days_back=days_back,
+                    limit=limit,
+                    status=status,
+                    article_ids=article_ids,
+                    source=source,
+                    published_from=published_from,
+                    published_to=published_to,
+                    batch_size=batch_size,
+                )
+            )
+            counts[status] = len(rows[:batch_size] if batch_size else rows)
+        return counts
 
     def _select_candidate_articles(self, filters: EditorialSelectionFilters) -> list[ArticleORM]:
         stmt = select(ArticleORM).outerjoin(
@@ -580,7 +641,7 @@ class EditorialAnalysisPipeline:
         article: ArticleRead,
         analysis: ArticleEditorialAnalysisORM,
         prompt: str,
-        result,
+        result: EditorialAnalysisResult,
     ) -> str:
         artifact_dir = editorial_debug_artifact_dir()
         artifact_dir.mkdir(parents=True, exist_ok=True)
@@ -605,7 +666,13 @@ class EditorialAnalysisPipeline:
                     "raw_message": attempt.raw_message,
                     "raw_content": attempt.raw_content,
                     "parsed_json": attempt.parsed_json,
+                    "repair_warnings": list(attempt.repair_warnings),
                     "normalization_warnings": list(attempt.normalization_warnings),
+                    "dropped_fields": list(attempt.dropped_fields),
+                    "truncated_fields": list(attempt.truncated_fields),
+                    "final_unclear_reasons": list(attempt.unclear_reasons),
+                    "fallback_success": attempt.mode == "fallback_json_text"
+                    and attempt.payload is not None,
                     "raw_response": attempt.raw_response,
                 }
                 for attempt in result.attempts

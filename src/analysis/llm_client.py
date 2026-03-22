@@ -88,6 +88,10 @@ class EditorialAnalysisAttempt:
     raw_content: str | None = None
     parsed_json: dict[str, Any] | list[Any] | None = None
     normalization_warnings: tuple[str, ...] = ()
+    repair_warnings: tuple[str, ...] = ()
+    dropped_fields: tuple[str, ...] = ()
+    truncated_fields: tuple[str, ...] = ()
+    unclear_reasons: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -284,7 +288,11 @@ class OpenRouterClient:
                 raw_message=raw_message,
                 raw_content=extracted_content,
                 parsed_json=parsed_json,
-                normalization_warnings=exc.warnings,
+                normalization_warnings=exc.normalization_warnings or exc.warnings,
+                repair_warnings=exc.repair_warnings,
+                dropped_fields=exc.dropped_fields,
+                truncated_fields=exc.truncated_fields,
+                unclear_reasons=exc.unclear_reasons,
             )
 
         return EditorialAnalysisAttempt(
@@ -296,7 +304,11 @@ class OpenRouterClient:
             raw_message=raw_message,
             raw_content=extracted_content,
             parsed_json=parsed_json,
-            normalization_warnings=normalization.warnings,
+            normalization_warnings=normalization.normalization_warnings,
+            repair_warnings=normalization.repair_warnings,
+            dropped_fields=normalization.dropped_fields,
+            truncated_fields=normalization.truncated_fields,
+            unclear_reasons=normalization.unclear_reasons,
         )
 
     def _should_retry_with_fallback(self, attempt: EditorialAnalysisAttempt) -> bool:
@@ -512,12 +524,41 @@ def editorial_analysis_json_schema() -> dict[str, Any]:
         "additionalProperties": True,
         "properties": {
             "article_type": bounded_string(120),
-            "article_type_confidence": {"type": "number", "minimum": 0.0, "maximum": 1.0},
+            "article_type_confidence": {
+                "anyOf": [
+                    {"type": "number", "minimum": 0.0, "maximum": 1.0},
+                    bounded_string(40),
+                    {"type": "object", "additionalProperties": True},
+                    {"type": "null"},
+                ]
+            },
             "bias_label": bounded_string(80),
-            "ideological_bias_framing": bounded_string(80),
-            "bias_score": {"type": "number", "minimum": -1.0, "maximum": 1.0},
-            "bias_confidence": {"type": "number", "minimum": 0.0, "maximum": 1.0},
-            "confidence": {"type": "number", "minimum": 0.0, "maximum": 1.0},
+            "ideological_bias_framing": {
+                "anyOf": [
+                    bounded_string(240),
+                    {"type": "object", "additionalProperties": True},
+                    {"type": "null"},
+                ]
+            },
+            "bias_score": {
+                "anyOf": [{"type": "number", "minimum": -1.0, "maximum": 1.0}, bounded_string(40)]
+            },
+            "bias_confidence": {
+                "anyOf": [
+                    {"type": "number", "minimum": 0.0, "maximum": 1.0},
+                    bounded_string(40),
+                    {"type": "object", "additionalProperties": True},
+                    {"type": "null"},
+                ]
+            },
+            "confidence": {
+                "anyOf": [
+                    {"type": "number", "minimum": 0.0, "maximum": 1.0},
+                    bounded_string(40),
+                    {"type": "object", "additionalProperties": True},
+                    {"type": "null"},
+                ]
+            },
             "tone_emotional": bounded_string(80),
             "tone_target": bounded_string(80),
             "opinionatedness": bounded_string(80),
@@ -525,7 +566,7 @@ def editorial_analysis_json_schema() -> dict[str, Any]:
             "rhetorical_certainty": bounded_string(80),
             "tone_dimensions": {
                 "type": "object",
-                "additionalProperties": {"type": ["string", "number", "boolean", "null"]},
+                "additionalProperties": True,
                 "properties": {
                     "emotionality": bounded_string(80),
                     "target": bounded_string(80),
@@ -539,12 +580,17 @@ def editorial_analysis_json_schema() -> dict[str, Any]:
             },
             "framing_devices": {
                 "type": "array",
-                "maxItems": 8,
-                "items": {"type": "string", "maxLength": 120},
+                "maxItems": 20,
+                "items": {
+                    "anyOf": [
+                        {"type": "string", "maxLength": 240},
+                        {"type": "object", "additionalProperties": True},
+                    ]
+                },
             },
             "evidence_spans": {
                 "type": "array",
-                "maxItems": 6,
+                "maxItems": 20,
                 "items": {
                     "anyOf": [
                         bounded_string(400),
@@ -562,9 +608,27 @@ def editorial_analysis_json_schema() -> dict[str, Any]:
                     ]
                 },
             },
-            "rationale": bounded_string(1200),
-            "notes": bounded_string(500),
-            "uncertainty_reason": bounded_string(500),
+            "rationale": {
+                "anyOf": [
+                    bounded_string(1200),
+                    {"type": "object", "additionalProperties": True},
+                    {"type": "null"},
+                ]
+            },
+            "notes": {
+                "anyOf": [
+                    bounded_string(500),
+                    {"type": "object", "additionalProperties": True},
+                    {"type": "null"},
+                ]
+            },
+            "uncertainty_reason": {
+                "anyOf": [
+                    bounded_string(500),
+                    {"type": "object", "additionalProperties": True},
+                    {"type": "null"},
+                ]
+            },
         },
         "required": ["article_type", "framing_devices", "evidence_spans", "rationale"],
     }

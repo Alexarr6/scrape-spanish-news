@@ -66,25 +66,34 @@ def test_editorial_payload_rejects_unclear_label_with_confident_extreme_score() 
         ArticleEditorialAnalysisPayload.model_validate(payload)
 
 
-def test_raw_editorial_payload_accepts_bias_and_rationale_object_shapes() -> None:
+def test_raw_editorial_payload_accepts_permissive_shape_variation() -> None:
     payload = ArticleEditorialAnalysisRawPayload.model_validate(
         {
             "article_type": "noticia_accidente",
+            "article_type_confidence": {"label": "moderate"},
             "ideological_bias_framing": {
                 "bias_type": "sin_sesgo_claro",
                 "direction": "unclear",
-                "confidence": 0.7,
+                "confidence": "low",
                 "justification": "No hay encuadre ideológico claro.",
             },
+            "confidence": "moderate",
+            "framing_devices": [{"device": "public_safety"}] * 10,
+            "evidence_spans": [{"span": f"Texto {idx}", "type": "hechos"} for idx in range(9)],
             "rationale": {
                 "summary": "Texto factual sin encuadre ideológico claro ni carga valorativa.",
                 "confidence": 0.62,
+            },
+            "tone_dimensions": {
+                "emotional_valence": {"valence": "neutral", "confidence": 0.44},
             },
         }
     )
 
     assert isinstance(payload.ideological_bias_framing, dict)
     assert payload.ideological_bias_framing["bias_type"] == "sin_sesgo_claro"
+    assert payload.confidence == "moderate"
+    assert len(payload.evidence_spans) == 9
     assert isinstance(payload.rationale, dict)
     assert payload.rationale["summary"].startswith("Texto factual")
 
@@ -107,5 +116,6 @@ def test_editorial_prompt_and_schema_expose_raw_generation_contract() -> None:
     assert schema["additionalProperties"] is True
     assert "ideological_bias_framing" in schema["properties"]
     assert "tone_dimensions" in schema["properties"]
-    assert schema["properties"]["framing_devices"]["maxItems"] == 8
-    assert schema["properties"]["evidence_spans"]["maxItems"] == 6
+    assert schema["properties"]["framing_devices"]["maxItems"] == 20
+    assert schema["properties"]["evidence_spans"]["maxItems"] == 20
+    assert "anyOf" in schema["properties"]["confidence"]

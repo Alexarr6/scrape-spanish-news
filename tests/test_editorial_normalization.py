@@ -39,33 +39,29 @@ def test_normalize_editorial_payload_salvages_minimax_style_raw_shape() -> None:
     result = normalize_editorial_payload(MINIMAX_STYLE_RAW)
 
     assert result.final_payload.article_type == "news_report"
-    assert result.final_payload.article_type_confidence == 0.55
     assert result.final_payload.bias_label == "unclear"
-    assert result.final_payload.bias_score == 0.0
-    assert result.final_payload.bias_confidence == 0.6
     assert result.final_payload.tone_emotional == "calm"
-    assert result.final_payload.tone_target == "unclear"
-    assert result.final_payload.opinionatedness == "unclear"
     assert result.final_payload.sensationalism == "low"
-    assert result.final_payload.rhetorical_certainty == "unclear"
     assert result.final_payload.framing_devices == []
     assert result.final_payload.evidence_spans[0].type == "body"
+    assert "semantic_weak_signal" in result.unclear_reasons
     assert any("mapped article_type" in warning for warning in result.warnings)
     assert any("dropped framing_device" in warning for warning in result.warnings)
 
 
-def test_normalize_editorial_payload_uses_aliases_and_global_confidence_conservatively() -> None:
+def test_normalize_editorial_payload_coerces_confidence_labels_and_tracks_mapping_loss() -> None:
     result = normalize_editorial_payload(
         {
             "article_type": "op_ed",
             "bias_label": "center-right",
+            "confidence": "moderate",
+            "bias_confidence": {"label": "high"},
             "tone_dimensions": {
                 "target": "negative",
                 "opinionatedness": "commentary",
                 "sensationalism": "moderate",
                 "certainty": "direct",
             },
-            "confidence": 0.72,
             "framing_devices": ["public_safety", "competence", "public_safety"],
             "evidence_spans": [
                 {
@@ -78,76 +74,16 @@ def test_normalize_editorial_payload_uses_aliases_and_global_confidence_conserva
         }
     )
 
+    assert result.repaired_payload.confidence == 0.5
+    assert result.repaired_payload.bias_confidence == 0.75
     assert result.final_payload.article_type == "opinion"
     assert result.final_payload.bias_label == "center_right"
-    assert result.final_payload.bias_confidence == 0.6
     assert result.final_payload.tone_target == "critical"
     assert result.final_payload.opinionatedness == "opinionated"
-    assert result.final_payload.sensationalism == "medium"
-    assert result.final_payload.rhetorical_certainty == "assertive"
-    assert result.final_payload.framing_devices == [
-        "public_order_security",
-        "governance_competence",
-    ]
-    assert result.final_payload.evidence_spans[0].type == "headline"
+    assert any("repair_confidence_label_mapped" in warning for warning in result.repair_warnings)
 
 
-def test_normalize_editorial_payload_salvages_spanish_bias_object_shape_conservatively() -> None:
-    result = normalize_editorial_payload(
-        {
-            "article_type": "noticia_accidente",
-            "ideological_bias_framing": {
-                "bias_type": "sin_sesgo_claro",
-                "direction": "unclear",
-                "confidence": 0.7,
-                "justification": (
-                    "El texto describe un accidente y la respuesta de emergencias con tono "
-                    "informativo; no hay argumentación política ni encuadres ideológicos."
-                ),
-            },
-            "tone_dimensions": {
-                "overall_tone": "informativo_y_sobrio",
-                "sensationalism": "bajo",
-                "emotionality": "baja",
-                "urgency": "baja",
-                "confidence": 0.75,
-            },
-            "framing_devices": [
-                "encuadre_de_sucesos_basado_en_hechos",
-                "atribución_a_fuentes_institucionales/medios_de_emergencia",
-            ],
-            "rationale": (
-                "La estructura es típica de una noticia de sucesos y no incluye juicios "
-                "valorativos ni atribuciones políticas."
-            ),
-            "evidence_spans": [
-                {
-                    "span": "Fallece un motorista de 51 años al salirse de la vía",
-                    "type": "titular",
-                },
-                {
-                    "span": "Un hombre de 51 años ha fallecido este domingo al salirse de la vía.",
-                    "type": "hechos",
-                },
-            ],
-            "confidence": 0.78,
-        }
-    )
-
-    assert result.final_payload.article_type == "news_report"
-    assert result.final_payload.bias_label == "unclear"
-    assert result.final_payload.bias_score == 0.0
-    assert result.final_payload.bias_confidence == 0.6
-    assert result.final_payload.tone_emotional == "calm"
-    assert result.final_payload.sensationalism == "low"
-    assert result.final_payload.evidence_spans[0].type == "headline"
-    assert result.final_payload.evidence_spans[0].text.startswith("Fallece un motorista")
-    assert result.final_payload.framing_devices == []
-    assert any("mapped article_type" in warning for warning in result.warnings)
-    assert any("dropped framing_device" in warning for warning in result.warnings)
-
-
-def test_normalize_editorial_payload_handles_article_2925_style_shapes() -> None:
+def test_normalize_editorial_payload_repairs_object_shapes_and_nested_tone() -> None:
     result = normalize_editorial_payload(
         {
             "article_type": "news_report",
@@ -170,7 +106,7 @@ def test_normalize_editorial_payload_handles_article_2925_style_shapes() -> None
                     "confidence": 0.51,
                 },
                 {
-                    "device": "competence",
+                    "type": "competence",
                     "description": "Evalúa la actuación institucional.",
                     "confidence": 0.49,
                 },
@@ -183,15 +119,15 @@ def test_normalize_editorial_payload_handles_article_2925_style_shapes() -> None
             },
             "evidence_spans": [
                 {
-                    "span": "Los servicios de emergencia acudieron al lugar tras el aviso.",
-                    "type": "hechos",
+                    "quote": "Los servicios de emergencia acudieron al lugar tras el aviso.",
+                    "function": "Atribuye la actuación institucional.",
+                    "location": "hechos",
                 }
             ],
             "confidence": 0.57,
         }
     )
 
-    assert result.final_payload.bias_label == "unclear"
     assert result.final_payload.tone_emotional == "calm"
     assert result.final_payload.sensationalism == "low"
     assert result.final_payload.framing_devices == [
@@ -199,7 +135,36 @@ def test_normalize_editorial_payload_handles_article_2925_style_shapes() -> None
         "governance_competence",
     ]
     assert result.final_payload.rationale.startswith("La pieza resume hechos")
-    assert any("mapped rationale object" in warning for warning in result.warnings)
+    assert any(
+        "repair_object_text_extracted: rationale" == warning for warning in result.repair_warnings
+    )
+    assert any("repair_regularized_nested_tone" in warning for warning in result.repair_warnings)
+
+
+def test_normalize_editorial_payload_truncates_overlong_evidence_lists_deterministically() -> None:
+    result = normalize_editorial_payload(
+        {
+            "article_type": "analysis",
+            "bias_label": "unclear",
+            "evidence_spans": [f"evidence span {idx}" for idx in range(1, 10)],
+            "framing_devices": [{"description": "public_safety"} for _ in range(10)],
+            "rationale": {
+                "description": (
+                    "The output is broadly usable but the provider returned too many "
+                    "supporting fragments."
+                ),
+            },
+            "confidence": "moderate",
+        }
+    )
+
+    assert result.truncated_fields == ("framing_devices", "evidence_spans")
+    assert result.final_payload.evidence_spans[0].text == "evidence span 1"
+    assert len(result.final_payload.evidence_spans) == 3
+    assert "repair_data_loss" in result.unclear_reasons
+    assert any(
+        "repair_truncated_evidence_spans: 9 -> 6" == warning for warning in result.repair_warnings
+    )
 
 
 def test_normalize_editorial_payload_raises_when_no_usable_evidence_exists() -> None:

@@ -139,23 +139,23 @@ class ArticleEditorialAnalysisRawPayload(BaseModel):
     model_config = ConfigDict(extra="allow")
 
     article_type: str | None = None
-    article_type_confidence: float | None = Field(default=None, ge=0.0, le=1.0)
+    article_type_confidence: float | str | dict[str, Any] | None = None
     bias_label: str | None = None
     ideological_bias_framing: str | dict[str, Any] | None = None
-    bias_score: float | None = None
-    bias_confidence: float | None = Field(default=None, ge=0.0, le=1.0)
-    confidence: float | None = Field(default=None, ge=0.0, le=1.0)
+    bias_score: float | str | None = None
+    bias_confidence: float | str | dict[str, Any] | None = None
+    confidence: float | str | dict[str, Any] | None = None
     tone_emotional: str | None = None
     tone_target: str | None = None
     opinionatedness: str | None = None
     sensationalism: str | None = None
     rhetorical_certainty: str | None = None
     tone_dimensions: dict[str, Any] | None = None
-    framing_devices: list[Any] = Field(default_factory=list, max_length=8)
-    evidence_spans: list[Any] = Field(default_factory=list, max_length=6)
+    framing_devices: list[Any] = Field(default_factory=list, max_length=20)
+    evidence_spans: list[Any] = Field(default_factory=list, max_length=20)
     rationale: str | dict[str, Any] | None = Field(default=None)
-    notes: str | None = Field(default=None, max_length=500)
-    uncertainty_reason: str | None = Field(default=None, max_length=500)
+    notes: str | dict[str, Any] | None = Field(default=None)
+    uncertainty_reason: str | dict[str, Any] | None = Field(default=None)
 
 
 class ArticleEditorialAnalysisPayload(BaseModel):
@@ -439,6 +439,13 @@ class EditorialAnalysisRunMetrics(BaseModel):
     provider_rejected_count: int = 0
     parse_failed_count: int = 0
     validation_failed_count: int = 0
+    strict_success_count: int = 0
+    fallback_success_count: int = 0
+    rows_with_warnings_count: int = 0
+    rows_with_truncated_evidence_count: int = 0
+    rows_with_dropped_fields_count: int = 0
+    unclear_bias_count: int = 0
+    unclear_due_to_mapping_count: int = 0
     started_at: datetime | None = None
     finished_at: datetime | None = None
 

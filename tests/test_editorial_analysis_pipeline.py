@@ -67,6 +67,11 @@ def _attempt(
     failure_message="",
     raw_content=None,
     parsed_json=None,
+    normalization_warnings=(),
+    repair_warnings=(),
+    dropped_fields=(),
+    truncated_fields=(),
+    unclear_reasons=(),
 ):
     from src.analysis.contracts import ArticleEditorialAnalysisPayload, OpenRouterUsage
 
@@ -82,6 +87,11 @@ def _attempt(
         raw_message={"content": raw_content},
         raw_content=raw_content,
         parsed_json=parsed_json,
+        normalization_warnings=tuple(normalization_warnings),
+        repair_warnings=tuple(repair_warnings),
+        dropped_fields=tuple(dropped_fields),
+        truncated_fields=tuple(truncated_fields),
+        unclear_reasons=tuple(unclear_reasons),
         raw_response={"id": "resp_test"},
     )
 
@@ -131,6 +141,7 @@ def test_editorial_pipeline_persists_completed_analysis_and_skips_unchanged() ->
     assert stored.bias_label == "center"
     assert stored.model_name == "openrouter/test-model"
     assert "institutional_stability" in stored.framing_devices_json
+    assert metrics.strict_success_count == 1
 
     again = pipeline.analyze_articles(days_back=10, limit=10, status="any")
     assert again.skipped_count == 1
@@ -176,6 +187,8 @@ def test_editorial_pipeline_counts_request_and_writes_artifact_on_parse_failure(
     artifact_payload = json.loads(artifacts[0].read_text(encoding="utf-8"))
     assert artifact_payload["article_id"] == article.id
     assert artifact_payload["attempts"][0]["failure_class"] == "json_parse_failed"
+    assert artifact_payload["attempts"][0]["repair_warnings"] == []
+    assert artifact_payload["attempts"][0]["final_unclear_reasons"] == []
 
 
 def test_editorial_pipeline_retries_schema_rejection_with_fallback_success() -> None:
@@ -196,6 +209,12 @@ def test_editorial_pipeline_retries_schema_rejection_with_fallback_success() -> 
                     mode="fallback_json_text",
                     payload=VALID_PAYLOAD,
                     raw_content=json.dumps(VALID_PAYLOAD),
+                    repair_warnings=(
+                        "repair_confidence_label_mapped: confidence='moderate' -> 0.5",
+                    ),
+                    normalization_warnings=("mapped bias_label='neutral' -> 'unclear'",),
+                    truncated_fields=("evidence_spans",),
+                    unclear_reasons=("repair_data_loss", "mapping_unresolved"),
                 ),
             )
         )
@@ -207,6 +226,10 @@ def test_editorial_pipeline_retries_schema_rejection_with_fallback_success() -> 
     assert metrics.request_count == 1
     assert metrics.provider_rejected_count == 1
     assert metrics.analyzed_count == 1
+    assert metrics.fallback_success_count == 1
+    assert metrics.rows_with_warnings_count == 1
+    assert metrics.rows_with_truncated_evidence_count == 1
+    assert metrics.unclear_due_to_mapping_count == 1
     assert stored.analysis_status == "completed"
     assert stored.failure_reason == ""
 
@@ -342,6 +365,8 @@ def test_editorial_pipeline_supports_pending_failed_targeting_and_dry_run() -> N
 
     assert [row.id for row in pending_rows] == [fresh.id]
     assert [row.id for row in failed_rows] == [failed_article.id]
+    assert pipeline.effective_status(status="pending", reprocess=True, article_ids=None) == "any"
+    assert pipeline.selection_status_counts(days_back=10, limit=10)["completed"] == 1
 
     dry_run = pipeline.analyze_articles(
         days_back=10,
