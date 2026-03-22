@@ -1,5 +1,5 @@
 - State: DONE
-- Current phase: editorial-analysis raw-schema normalization layer implemented on `iter/004`, preserving strict final persistence validation while salvaging portable provider output
+- Current phase: minimal editorial raw-shape hotfix on `iter/004` for article-2925-style fallback payloads, preserving strict final persistence validation
 - Last update: 2026-03-22 UTC
 
 ## Implementer completion — raw/model-facing editorial payload + deterministic normalization landed

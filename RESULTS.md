@@ -1,5 +1,48 @@
 # RESULTS.md
 
+## 2026-03-22 — minimal raw-payload hotfix for article-2925-style editorial fallback payloads
+
+**Role:** implementer  
+**Outcome:** ✅ Complete  
+**Scope:** accept and conservatively normalize the newly observed fallback raw shape without redesigning the pipeline
+
+### What I accomplished
+Implemented a minimal hotfix for the observed raw payload validation failure in the editorial normalization flow:
+- widened the raw contract so `rationale` can arrive as either a string or an object
+- normalized object-form `rationale` conservatively using summary/description-style text fields
+- taught the normalizer to extract bias labels from object-form `ideological_bias_framing` payloads that use keys like `bias`
+- taught the normalizer to accept object-form `framing_devices` entries and map their `device`/`description` content conservatively into the existing framing taxonomy
+- added narrow support for the exact nested tone variants observed (`emotional_valence.valence`, `sensationalism.level`, `alarmism.level`)
+- added focused regression coverage for an article-2925-style payload shape
+- updated status notes without changing the broader architecture
+
+### Files changed
+- `src/analysis/contracts.py`
+- `src/analysis/editorial_normalization.py`
+- `tests/test_editorial_analysis_contracts.py`
+- `tests/test_editorial_normalization.py`
+- `STATUS.md`
+- `RESULTS.md`
+
+### Verification
+Commands run:
+- `~/.local/bin/uv run --project . ruff check src/analysis/contracts.py src/analysis/editorial_normalization.py tests/test_editorial_analysis_contracts.py tests/test_editorial_normalization.py`
+- `~/.local/bin/uv run --project . pytest -q tests/test_editorial_analysis_contracts.py tests/test_editorial_normalization.py`
+
+Results:
+- `ruff check`: passed
+- `pytest`: `12 passed`
+
+### Remaining risks / follow-ups
+- this is intentionally narrow and only covers the exact newly observed shapes, not arbitrary nested provider ontologies
+- rationale object extraction is conservative and text-first; if providers start returning more exotic structured rationales, more aliases may be needed later
+- framing-device object handling prefers `device` and then `description`; unmapped variants still drop safely rather than guessing
+
+### Git / rollback
+- Branch: `iter/004`
+- Commit(s): pending final atomic commit
+- Rollback hint after commit: `git log --oneline -n 5`
+
 ## 2026-03-22 — raw editorial payload normalization implementation for `spain-news-bias-scraper`
 
 **Role:** implementer  

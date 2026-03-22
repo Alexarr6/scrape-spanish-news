@@ -153,7 +153,7 @@ class ArticleEditorialAnalysisRawPayload(BaseModel):
     tone_dimensions: dict[str, Any] | None = None
     framing_devices: list[Any] = Field(default_factory=list, max_length=8)
     evidence_spans: list[Any] = Field(default_factory=list, max_length=6)
-    rationale: str | None = Field(default=None, max_length=1200)
+    rationale: str | dict[str, Any] | None = Field(default=None)
     notes: str | None = Field(default=None, max_length=500)
     uncertainty_reason: str | None = Field(default=None, max_length=500)
 

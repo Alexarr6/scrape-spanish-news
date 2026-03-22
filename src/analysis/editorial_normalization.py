@@ -194,7 +194,7 @@ def normalize_editorial_payload(raw_payload: dict[str, Any]) -> EditorialNormali
         max_from_global=0.55,
     )
 
-    raw_bias_label = raw.bias_label or raw.ideological_bias_framing
+    raw_bias_label = raw.bias_label or _extract_bias_label(raw.ideological_bias_framing)
     bias_label = _normalize_choice(
         raw_bias_label,
         allowed=set(BIAS_LABELS),
@@ -214,7 +214,10 @@ def normalize_editorial_payload(raw_payload: dict[str, Any]) -> EditorialNormali
 
     tone_dimensions = raw.tone_dimensions or {}
     tone_emotional = _normalize_choice(
-        raw.tone_emotional or tone_dimensions.get("emotionality"),
+        raw.tone_emotional
+        or _extract_nested_choice(tone_dimensions, "emotionality")
+        or _extract_nested_choice(tone_dimensions, "emotional_valence")
+        or tone_dimensions.get("overall_tone"),
         allowed=set(TONE_EMOTIONAL_VALUES),
         aliases=TONE_EMOTIONAL_ALIASES,
         default="unclear",
@@ -243,7 +246,9 @@ def normalize_editorial_payload(raw_payload: dict[str, Any]) -> EditorialNormali
         label="opinionatedness",
     )
     sensationalism = _normalize_choice(
-        raw.sensationalism or tone_dimensions.get("sensationalism"),
+        raw.sensationalism
+        or _extract_nested_choice(tone_dimensions, "sensationalism")
+        or _extract_nested_choice(tone_dimensions, "alarmism"),
         allowed=set(SENSATIONALISM_VALUES),
         aliases=SENSATIONALISM_ALIASES,
         default="unclear",
@@ -305,12 +310,32 @@ def _extract_bias_label(value: Any) -> Any:
         return value
     if not isinstance(value, dict):
         return None
-    direction = value.get("direction")
-    if isinstance(direction, str) and direction.strip() and direction.strip().lower() != "unclear":
-        return direction
-    bias_type = value.get("bias_type")
-    if isinstance(bias_type, str) and bias_type.strip():
-        return bias_type
+    for key in ("direction", "bias", "bias_type"):
+        candidate = value.get(key)
+        if isinstance(candidate, str) and candidate.strip():
+            return candidate
+    return None
+
+
+def _extract_nested_choice(container: dict[str, Any], key: str) -> Any:
+    value = container.get(key)
+    if isinstance(value, str):
+        return value
+    if isinstance(value, dict):
+        for nested_key in ("value", "valence", "level", "label", "description"):
+            candidate = value.get(nested_key)
+            if isinstance(candidate, str) and candidate.strip():
+                return candidate
+    return None
+
+
+def _extract_text_from_object(value: dict[str, Any], *, keys: tuple[str, ...]) -> str | None:
+    for key in keys:
+        candidate = value.get(key)
+        if isinstance(candidate, str):
+            cleaned = candidate.strip()
+            if len(cleaned) >= 12:
+                return cleaned
     return None
 
 
@@ -371,9 +396,16 @@ def _normalize_framing_devices(raw_values: list[Any], warnings: list[str]) -> li
     normalized: list[str] = []
     seen: set[str] = set()
     for item in raw_values[:8]:
-        if not isinstance(item, str) or not item.strip():
+        raw_value: str | None = None
+        if isinstance(item, str) and item.strip():
+            raw_value = item
+        elif isinstance(item, dict):
+            candidate = item.get("device") or item.get("description")
+            if isinstance(candidate, str) and candidate.strip():
+                raw_value = candidate
+        if raw_value is None:
             continue
-        raw = item.strip().lower().replace(" ", "_")
+        raw = raw_value.strip().lower().replace(" ", "_")
         mapped = FRAMING_DEVICE_ALIASES.get(raw, raw)
         if mapped not in FRAMING_DEVICE_VALUES:
             warnings.append(f"dropped framing_device={item!r}")
@@ -439,6 +471,14 @@ def _normalize_rationale(raw: ArticleEditorialAnalysisRawPayload, warnings: list
             cleaned = candidate.strip()
             if len(cleaned) >= 12:
                 return cleaned[:1200]
+        elif isinstance(candidate, dict):
+            extracted = _extract_text_from_object(
+                candidate,
+                keys=("summary", "description", "rationale", "justification", "framing_summary"),
+            )
+            if extracted is not None:
+                warnings.append("mapped rationale object to summary text")
+                return extracted[:1200]
     warnings.append("rationale missing or too short; using conservative fallback rationale")
     return (
         "Normalized conservatively from raw model output because the original "

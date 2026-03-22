@@ -66,7 +66,7 @@ def test_editorial_payload_rejects_unclear_label_with_confident_extreme_score() 
         ArticleEditorialAnalysisPayload.model_validate(payload)
 
 
-def test_raw_editorial_payload_accepts_bias_object_shape() -> None:
+def test_raw_editorial_payload_accepts_bias_and_rationale_object_shapes() -> None:
     payload = ArticleEditorialAnalysisRawPayload.model_validate(
         {
             "article_type": "noticia_accidente",
@@ -76,11 +76,17 @@ def test_raw_editorial_payload_accepts_bias_object_shape() -> None:
                 "confidence": 0.7,
                 "justification": "No hay encuadre ideológico claro.",
             },
+            "rationale": {
+                "summary": "Texto factual sin encuadre ideológico claro ni carga valorativa.",
+                "confidence": 0.62,
+            },
         }
     )
 
     assert isinstance(payload.ideological_bias_framing, dict)
     assert payload.ideological_bias_framing["bias_type"] == "sin_sesgo_claro"
+    assert isinstance(payload.rationale, dict)
+    assert payload.rationale["summary"].startswith("Texto factual")
 
 
 def test_editorial_prompt_and_schema_expose_raw_generation_contract() -> None:

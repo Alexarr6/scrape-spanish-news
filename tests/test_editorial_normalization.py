@@ -147,6 +147,61 @@ def test_normalize_editorial_payload_salvages_spanish_bias_object_shape_conserva
     assert any("dropped framing_device" in warning for warning in result.warnings)
 
 
+def test_normalize_editorial_payload_handles_article_2925_style_shapes() -> None:
+    result = normalize_editorial_payload(
+        {
+            "article_type": "news_report",
+            "ideological_bias_framing": {
+                "bias": "unclear",
+                "confidence": 0.58,
+                "framing_summary": (
+                    "No hay encuadre ideológico claro; predomina una descripción factual."
+                ),
+            },
+            "tone_dimensions": {
+                "emotional_valence": {"valence": "neutral", "confidence": 0.44},
+                "sensationalism": {"level": "low", "confidence": 0.31},
+                "alarmism": {"level": "low", "confidence": 0.29},
+            },
+            "framing_devices": [
+                {
+                    "device": "public_safety",
+                    "description": "Destaca la respuesta de emergencias y seguridad pública.",
+                    "confidence": 0.51,
+                },
+                {
+                    "device": "competence",
+                    "description": "Evalúa la actuación institucional.",
+                    "confidence": 0.49,
+                },
+            ],
+            "rationale": {
+                "summary": (
+                    "La pieza resume hechos y atribuye información a fuentes institucionales."
+                ),
+                "confidence": 0.57,
+            },
+            "evidence_spans": [
+                {
+                    "span": "Los servicios de emergencia acudieron al lugar tras el aviso.",
+                    "type": "hechos",
+                }
+            ],
+            "confidence": 0.57,
+        }
+    )
+
+    assert result.final_payload.bias_label == "unclear"
+    assert result.final_payload.tone_emotional == "calm"
+    assert result.final_payload.sensationalism == "low"
+    assert result.final_payload.framing_devices == [
+        "public_order_security",
+        "governance_competence",
+    ]
+    assert result.final_payload.rationale.startswith("La pieza resume hechos")
+    assert any("mapped rationale object" in warning for warning in result.warnings)
+
+
 def test_normalize_editorial_payload_raises_when_no_usable_evidence_exists() -> None:
     with pytest.raises(EditorialNormalizationError, match="no usable evidence_spans"):
         normalize_editorial_payload(
