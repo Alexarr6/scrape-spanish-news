@@ -25,6 +25,7 @@ Implemented the architect-approved contract split for editorial analysis:
 - kept the conservative stance: ambiguous mappings degrade to `unclear` or safe defaults rather than fake certainty
 - preserved debug visibility by recording normalization warnings in failure artifacts
 - added regression coverage for representative raw payload shapes, including the captured minimax-style artifact form
+- hotfixed the remaining article `2924` failure by accepting object-form `ideological_bias_framing` at the raw layer and normalizing the observed Spanish response shape (`noticia_accidente`, `bajo`/`baja`, `span`, `titular`/`hechos`) conservatively into the strict final payload
 
 ### Files changed
 - `src/analysis/contracts.py`

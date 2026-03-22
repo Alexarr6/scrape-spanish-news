@@ -141,7 +141,7 @@ class ArticleEditorialAnalysisRawPayload(BaseModel):
     article_type: str | None = None
     article_type_confidence: float | None = Field(default=None, ge=0.0, le=1.0)
     bias_label: str | None = None
-    ideological_bias_framing: str | None = None
+    ideological_bias_framing: str | dict[str, Any] | None = None
     bias_score: float | None = None
     bias_confidence: float | None = Field(default=None, ge=0.0, le=1.0)
     confidence: float | None = Field(default=None, ge=0.0, le=1.0)

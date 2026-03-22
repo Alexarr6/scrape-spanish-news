@@ -12,6 +12,7 @@ Completed in code:
 - preserved strict persistence semantics by writing only normalized final payloads
 - preserved/improved debug visibility by attaching normalization warnings to failure artifacts
 - added focused regression tests, including the captured minimax-style payload shape
+- hotfixed the remaining raw validation failure for article `2924` by accepting object-form `ideological_bias_framing` and normalizing the observed Spanish raw shape conservatively
 - manually verified normalization against `.artifacts/editorial-analysis/20260322T164233Z-article-2800.json`
 
 Result:

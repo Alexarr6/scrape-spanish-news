@@ -92,6 +92,61 @@ def test_normalize_editorial_payload_uses_aliases_and_global_confidence_conserva
     assert result.final_payload.evidence_spans[0].type == "headline"
 
 
+def test_normalize_editorial_payload_salvages_spanish_bias_object_shape_conservatively() -> None:
+    result = normalize_editorial_payload(
+        {
+            "article_type": "noticia_accidente",
+            "ideological_bias_framing": {
+                "bias_type": "sin_sesgo_claro",
+                "direction": "unclear",
+                "confidence": 0.7,
+                "justification": (
+                    "El texto describe un accidente y la respuesta de emergencias con tono "
+                    "informativo; no hay argumentación política ni encuadres ideológicos."
+                ),
+            },
+            "tone_dimensions": {
+                "overall_tone": "informativo_y_sobrio",
+                "sensationalism": "bajo",
+                "emotionality": "baja",
+                "urgency": "baja",
+                "confidence": 0.75,
+            },
+            "framing_devices": [
+                "encuadre_de_sucesos_basado_en_hechos",
+                "atribución_a_fuentes_institucionales/medios_de_emergencia",
+            ],
+            "rationale": (
+                "La estructura es típica de una noticia de sucesos y no incluye juicios "
+                "valorativos ni atribuciones políticas."
+            ),
+            "evidence_spans": [
+                {
+                    "span": "Fallece un motorista de 51 años al salirse de la vía",
+                    "type": "titular",
+                },
+                {
+                    "span": "Un hombre de 51 años ha fallecido este domingo al salirse de la vía.",
+                    "type": "hechos",
+                },
+            ],
+            "confidence": 0.78,
+        }
+    )
+
+    assert result.final_payload.article_type == "news_report"
+    assert result.final_payload.bias_label == "unclear"
+    assert result.final_payload.bias_score == 0.0
+    assert result.final_payload.bias_confidence == 0.6
+    assert result.final_payload.tone_emotional == "calm"
+    assert result.final_payload.sensationalism == "low"
+    assert result.final_payload.evidence_spans[0].type == "headline"
+    assert result.final_payload.evidence_spans[0].text.startswith("Fallece un motorista")
+    assert result.final_payload.framing_devices == []
+    assert any("mapped article_type" in warning for warning in result.warnings)
+    assert any("dropped framing_device" in warning for warning in result.warnings)
+
+
 def test_normalize_editorial_payload_raises_when_no_usable_evidence_exists() -> None:
     with pytest.raises(EditorialNormalizationError, match="no usable evidence_spans"):
         normalize_editorial_payload(

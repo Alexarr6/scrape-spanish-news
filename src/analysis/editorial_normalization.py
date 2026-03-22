@@ -24,6 +24,7 @@ ARTICLE_TYPE_ALIASES = {
     "breaking_news_crime_report": "news_report",
     "crime_report": "news_report",
     "crime_news": "news_report",
+    "noticia_accidente": "news_report",
     "straight_news": "news_report",
     "straight_reporting": "news_report",
     "news": "news_report",
@@ -61,6 +62,11 @@ TONE_EMOTIONAL_ALIASES = {
     "descriptive": "calm",
     "factual": "calm",
     "measured": "calm",
+    "informative_and_sober": "calm",
+    "informativo_y_sobrio": "calm",
+    "low": "calm",
+    "baja": "calm",
+    "bajo": "calm",
     "emotional": "loaded",
     "charged": "loaded",
     "alarmist": "inflammatory",
@@ -91,9 +97,16 @@ OPINIONATEDNESS_ALIASES = {
 SENSATIONALISM_ALIASES = {
     "none": "low",
     "minimal": "low",
+    "low": "low",
+    "bajo": "low",
+    "baja": "low",
     "moderate": "medium",
+    "media": "medium",
+    "medio": "medium",
     "elevated": "medium",
     "very_high": "high",
+    "alta": "high",
+    "alto": "high",
 }
 
 RHETORICAL_CERTAINTY_ALIASES = {
@@ -287,6 +300,20 @@ def normalize_editorial_payload(raw_payload: dict[str, Any]) -> EditorialNormali
     )
 
 
+def _extract_bias_label(value: Any) -> Any:
+    if isinstance(value, str):
+        return value
+    if not isinstance(value, dict):
+        return None
+    direction = value.get("direction")
+    if isinstance(direction, str) and direction.strip() and direction.strip().lower() != "unclear":
+        return direction
+    bias_type = value.get("bias_type")
+    if isinstance(bias_type, str) and bias_type.strip():
+        return bias_type
+    return None
+
+
 def _normalize_choice(
     value: Any,
     *,
@@ -375,11 +402,21 @@ def _normalize_evidence_spans(raw_values: list[Any], warnings: list[str]) -> lis
                 }
             )
         elif isinstance(item, dict):
-            text = str(item.get("text", "")).strip()
+            text = str(item.get("text") or item.get("span") or "").strip()
             note = str(
-                item.get("note") or item.get("explanation") or "quoted evidence span"
+                item.get("note")
+                or item.get("explanation")
+                or item.get("justification")
+                or "quoted evidence span"
             ).strip()
             span_type = str(item.get("type") or item.get("location") or "body").strip().lower()
+            span_type = {
+                "titular": "headline",
+                "hechos": "body",
+                "atribución_fuente": "body",
+                "atribucion_fuente": "body",
+                "respuesta_emergencias": "body",
+            }.get(span_type, span_type)
             if span_type not in EVIDENCE_SPAN_TYPES:
                 warnings.append(f"mapped evidence type {span_type!r} -> 'body'")
                 span_type = "body"

@@ -3,7 +3,10 @@ from __future__ import annotations
 import pytest
 from pydantic import ValidationError
 
-from src.analysis.contracts import ArticleEditorialAnalysisPayload
+from src.analysis.contracts import (
+    ArticleEditorialAnalysisPayload,
+    ArticleEditorialAnalysisRawPayload,
+)
 from src.analysis.llm_client import build_editorial_analysis_prompt, editorial_analysis_json_schema
 
 VALID_PAYLOAD = {
@@ -61,6 +64,23 @@ def test_editorial_payload_rejects_unclear_label_with_confident_extreme_score() 
 
     with pytest.raises(ValidationError):
         ArticleEditorialAnalysisPayload.model_validate(payload)
+
+
+def test_raw_editorial_payload_accepts_bias_object_shape() -> None:
+    payload = ArticleEditorialAnalysisRawPayload.model_validate(
+        {
+            "article_type": "noticia_accidente",
+            "ideological_bias_framing": {
+                "bias_type": "sin_sesgo_claro",
+                "direction": "unclear",
+                "confidence": 0.7,
+                "justification": "No hay encuadre ideológico claro.",
+            },
+        }
+    )
+
+    assert isinstance(payload.ideological_bias_framing, dict)
+    assert payload.ideological_bias_framing["bias_type"] == "sin_sesgo_claro"
 
 
 def test_editorial_prompt_and_schema_expose_raw_generation_contract() -> None:
