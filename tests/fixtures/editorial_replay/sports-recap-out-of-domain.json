@@ -1,0 +1,386 @@
+{
+  "fixture_id": "sports-recap-out-of-domain",
+  "family": "sports_recap",
+  "source_artifact": "20260322T172218Z-article-2969.json",
+  "notes": "Sports recap with rich sports-only analysis. Should stay out_of_domain even when the model offers vivid evaluative language.",
+  "article": {
+    "source": "elpais",
+    "section": "Fútbol",
+    "published_at": "2026-03-22T16:15:23+00:00",
+    "url": "https://elpais.com/deportes/futbol/2026-03-22/joan-garcia-sostiene-al-barcelona-ante-el-rayo.html",
+    "title": "Joan García sostiene al Barcelona ante el Rayo"
+  },
+  "provider": {
+    "model_provider": "openrouter",
+    "model_name": "openai/gpt-5.4-nano",
+    "strict_failure_class": "provider_schema_rejected",
+    "fallback_failure_class": "payload_validation_failed"
+  },
+  "raw_provider_output": "{\n  \"article_type\": \"Crónica deportiva de partido (análisis de desempeño y desenlace)\",\n  \"ideological_bias_framing\": {\n    \"bias_direction\": \"none_detected\",\n    \"framing_summary\": \"El texto se centra en evaluación táctica y rendimiento de jugadores; no emplea marcos ideológicos sociales o políticos.\",\n    \"confidence\": 0.75\n  },\n  \"tone_dimensions\": {\n    \"primary_tone\": \"analítico-valorativo\",\n    \"secondary_tone\": [\n      \"crítico (con el rendimiento/gestión del Barça y decisiones arbitrales)\",\n      \"admirativo (figura de Joan García e Iñigo Pérez como estratega)\"\n    ],\n    \"emotional_valence\": \"mixto (elogio del portero, queja por arbitraje y cansancio; tensión final)\",\n    \"confidence\": 0.7\n  },\n  \"framing_devices\": [\n    \"Protagonismo del rendimiento individual (Joan García) como eje explicativo del resultado\",\n    \"Contraste de equipos/planes tácticos (Barça ante planteamiento del Rayo; enfoque en presión y fuera de juego)\",\n    \"Narrativa de contexto de fatiga y calendario (resaca/cansancio del partido de Newcastle; parón de selecciones)\",\n    \"Lenguaje valorativo con adjetivos (p. ej., 'valiente', 'formidable', 'nervioso y enfadado')\",\n    \"Referencia a decisiones arbitrales y protestas (penaltis ignorados)\"\n  ],\n  \"rationale\": \"La crónica atribuye el devenir del partido sobre todo a factores deportivos (intervenciones del portero, ajustes tácticos, cansancio y dinámica del juego). Solo aparecen elementos valorativos sobre el árbitro y el cansancio, sin construcción de marcos ideológicos.\",\n  \"evidence_spans\": [\n    {\n      \"span\": \"“únicamente reducido por un formidable Joan García”\",\n      \"function\": \"Atribución del resultado al rendimiento de un jugador (protagonismo).\"\n    },\n    {\n      \"span\": \"“Agotado y resacoso después de la feliz noche del miércoles contra el Newcastle”\",\n      \"function\": \"Contextualización narrativa (fatiga/calendario).\"\n    },\n    {\n      \"span\": \"“Flick se la jugó con los titulares ante el parón de selecciones y el Barcelona se apagó con el paso de los minutos”\",\n      \"function\": \"Evaluación crítica del planteamiento/gestión del entrenador.\"\n    },\n    {\n      \"span\": \"“más tarde, de De Frutos y Unai López. Los cambios mejoraron mucho al Rayo”\",\n      \"function\": \"Análisis de impacto de sustituciones.\"\n    },\n    {\n      \"span\": \"“Las oportunidades eran pocas y las protestas se repartían porque Ratiu y Lamine pidieron un penalti cada uno que fueron ignorados por Cordero Vega.”\",\n      \"function\": \"Tratamiento de arbitraje y controversias (queja/protestas).\"\n    },\n    {\n      \"span\": \"“El sufrimiento fue enorme para el Barça, que no sabe descansar con la pelota ni controlar el juego”\",\n      \"function\": \"Juicio crítico sobre el estilo/plan de juego.\"\n    },\n    {\n      \"span\": \"“El líder necesita parar y respirar en la Liga.”\",\n      \"function\": \"Cierre prescriptivo ligado al contexto deportivo.\"\n    }\n  ],\n  \"confidence\": 0.72\n}",
+  "parsed_json": {
+    "article_type": "Crónica deportiva de partido (análisis de desempeño y desenlace)",
+    "ideological_bias_framing": {
+      "bias_direction": "none_detected",
+      "framing_summary": "El texto se centra en evaluación táctica y rendimiento de jugadores; no emplea marcos ideológicos sociales o políticos.",
+      "confidence": 0.75
+    },
+    "tone_dimensions": {
+      "primary_tone": "analítico-valorativo",
+      "secondary_tone": [
+        "crítico (con el rendimiento/gestión del Barça y decisiones arbitrales)",
+        "admirativo (figura de Joan García e Iñigo Pérez como estratega)"
+      ],
+      "emotional_valence": "mixto (elogio del portero, queja por arbitraje y cansancio; tensión final)",
+      "confidence": 0.7
+    },
+    "framing_devices": [
+      "Protagonismo del rendimiento individual (Joan García) como eje explicativo del resultado",
+      "Contraste de equipos/planes tácticos (Barça ante planteamiento del Rayo; enfoque en presión y fuera de juego)",
+      "Narrativa de contexto de fatiga y calendario (resaca/cansancio del partido de Newcastle; parón de selecciones)",
+      "Lenguaje valorativo con adjetivos (p. ej., 'valiente', 'formidable', 'nervioso y enfadado')",
+      "Referencia a decisiones arbitrales y protestas (penaltis ignorados)"
+    ],
+    "rationale": "La crónica atribuye el devenir del partido sobre todo a factores deportivos (intervenciones del portero, ajustes tácticos, cansancio y dinámica del juego). Solo aparecen elementos valorativos sobre el árbitro y el cansancio, sin construcción de marcos ideológicos.",
+    "evidence_spans": [
+      {
+        "span": "“únicamente reducido por un formidable Joan García”",
+        "function": "Atribución del resultado al rendimiento de un jugador (protagonismo)."
+      },
+      {
+        "span": "“Agotado y resacoso después de la feliz noche del miércoles contra el Newcastle”",
+        "function": "Contextualización narrativa (fatiga/calendario)."
+      },
+      {
+        "span": "“Flick se la jugó con los titulares ante el parón de selecciones y el Barcelona se apagó con el paso de los minutos”",
+        "function": "Evaluación crítica del planteamiento/gestión del entrenador."
+      },
+      {
+        "span": "“más tarde, de De Frutos y Unai López. Los cambios mejoraron mucho al Rayo”",
+        "function": "Análisis de impacto de sustituciones."
+      },
+      {
+        "span": "“Las oportunidades eran pocas y las protestas se repartían porque Ratiu y Lamine pidieron un penalti cada uno que fueron ignorados por Cordero Vega.”",
+        "function": "Tratamiento de arbitraje y controversias (queja/protestas)."
+      },
+      {
+        "span": "“El sufrimiento fue enorme para el Barça, que no sabe descansar con la pelota ni controlar el juego”",
+        "function": "Juicio crítico sobre el estilo/plan de juego."
+      },
+      {
+        "span": "“El líder necesita parar y respirar en la Liga.”",
+        "function": "Cierre prescriptivo ligado al contexto deportivo."
+      }
+    ],
+    "confidence": 0.72
+  },
+  "repaired_payload": {
+    "article_type": "Crónica deportiva de partido (análisis de desempeño y desenlace)",
+    "article_type_confidence": null,
+    "bias_label": null,
+    "ideological_bias_framing": {
+      "bias_direction": "none_detected",
+      "framing_summary": "El texto se centra en evaluación táctica y rendimiento de jugadores; no emplea marcos ideológicos sociales o políticos.",
+      "confidence": 0.75
+    },
+    "bias_score": null,
+    "bias_confidence": 0.75,
+    "confidence": 0.72,
+    "tone_emotional": null,
+    "tone_target": null,
+    "opinionatedness": null,
+    "sensationalism": null,
+    "rhetorical_certainty": null,
+    "tone_dimensions": {
+      "primary_tone": "analítico-valorativo",
+      "secondary_tone": [
+        "crítico (con el rendimiento/gestión del Barça y decisiones arbitrales)",
+        "admirativo (figura de Joan García e Iñigo Pérez como estratega)"
+      ],
+      "emotional_valence": "mixto (elogio del portero, queja por arbitraje y cansancio; tensión final)",
+      "confidence": 0.7
+    },
+    "framing_devices": [
+      "Protagonismo del rendimiento individual (Joan García) como eje explicativo del resultado",
+      "Contraste de equipos/planes tácticos (Barça ante planteamiento del Rayo; enfoque en presión y fuera de juego)",
+      "Narrativa de contexto de fatiga y calendario (resaca/cansancio del partido de Newcastle; parón de selecciones)",
+      "Lenguaje valorativo con adjetivos (p. ej., 'valiente', 'formidable', 'nervioso y enfadado')",
+      "Referencia a decisiones arbitrales y protestas (penaltis ignorados)"
+    ],
+    "evidence_spans": [
+      {
+        "type": null,
+        "text": "“únicamente reducido por un formidable Joan García”",
+        "note": "Atribución del resultado al rendimiento de un jugador (protagonismo)."
+      },
+      {
+        "type": null,
+        "text": "“Agotado y resacoso después de la feliz noche del miércoles contra el Newcastle”",
+        "note": "Contextualización narrativa (fatiga/calendario)."
+      },
+      {
+        "type": null,
+        "text": "“Flick se la jugó con los titulares ante el parón de selecciones y el Barcelona se apagó con el paso de los minutos”",
+        "note": "Evaluación crítica del planteamiento/gestión del entrenador."
+      },
+      {
+        "type": null,
+        "text": "“más tarde, de De Frutos y Unai López. Los cambios mejoraron mucho al Rayo”",
+        "note": "Análisis de impacto de sustituciones."
+      },
+      {
+        "type": null,
+        "text": "“Las oportunidades eran pocas y las protestas se repartían porque Ratiu y Lamine pidieron un penalti cada uno que fueron ignorados por Cordero Vega.”",
+        "note": "Tratamiento de arbitraje y controversias (queja/protestas)."
+      },
+      {
+        "type": null,
+        "text": "“El sufrimiento fue enorme para el Barça, que no sabe descansar con la pelota ni controlar el juego”",
+        "note": "Juicio crítico sobre el estilo/plan de juego."
+      }
+    ],
+    "rationale": "La crónica atribuye el devenir del partido sobre todo a factores deportivos (intervenciones del portero, ajustes tácticos, cansancio y dinámica del juego). Solo aparecen elementos valorativos sobre el árbitro y el cansancio, sin construcción de marcos ideológicos.",
+    "notes": null,
+    "uncertainty_reason": null,
+    "repair_warnings": [
+      "repair_promoted_confidence: ideological_bias_framing.confidence -> bias_confidence",
+      "repair_truncated_evidence_spans: 7 -> 6",
+      "repair_regularized_evidence_object",
+      "repair_regularized_evidence_object",
+      "repair_regularized_evidence_object",
+      "repair_regularized_evidence_object",
+      "repair_regularized_evidence_object",
+      "repair_regularized_evidence_object"
+    ],
+    "dropped_fields": [],
+    "truncated_fields": [
+      "evidence_spans"
+    ]
+  },
+  "final_payload": {
+    "article_type": "unclear",
+    "article_type_confidence": 0.6,
+    "bias_label": "unclear",
+    "bias_score": 0.0,
+    "bias_confidence": 0.6,
+    "tone_emotional": "unclear",
+    "tone_target": "unclear",
+    "opinionatedness": "unclear",
+    "sensationalism": "unclear",
+    "rhetorical_certainty": "unclear",
+    "framing_devices": [],
+    "evidence_spans": [
+      {
+        "type": "body",
+        "text": "“únicamente reducido por un formidable Joan García”",
+        "note": "Atribución del resultado al rendimiento de un jugador (protagonismo)."
+      },
+      {
+        "type": "body",
+        "text": "“Agotado y resacoso después de la feliz noche del miércoles contra el Newcastle”",
+        "note": "Contextualización narrativa (fatiga/calendario)."
+      },
+      {
+        "type": "body",
+        "text": "“Flick se la jugó con los titulares ante el parón de selecciones y el Barcelona se apagó con el paso de los minutos”",
+        "note": "Evaluación crítica del planteamiento/gestión del entrenador."
+      }
+    ],
+    "rationale": "La crónica atribuye el devenir del partido sobre todo a factores deportivos (intervenciones del portero, ajustes tácticos, cansancio y dinámica del juego). Solo aparecen elementos valorativos sobre el árbitro y el cansancio, sin construcción de marcos ideológicos."
+  },
+  "diagnostics": {
+    "provider_path": "normalized_local_pipeline",
+    "editorial_applicability": "out_of_domain",
+    "editorial_applicability_reason": "sports_recap",
+    "dimension_status": {
+      "article_type": {
+        "value": "unclear",
+        "status": "out_of_domain",
+        "reason": "content_out_of_domain",
+        "notes": [],
+        "raw_hints": []
+      },
+      "bias": {
+        "value": "unclear",
+        "status": "out_of_domain",
+        "reason": "content_out_of_domain",
+        "notes": [],
+        "raw_hints": [
+          "framing_summary=El texto se centra en evaluación táctica y rendimiento de jugadores; no emplea marcos ideológicos sociales o políticos."
+        ]
+      },
+      "tone_emotional": {
+        "value": "unclear",
+        "status": "out_of_domain",
+        "reason": "content_out_of_domain",
+        "notes": [],
+        "raw_hints": [
+          "primary_tone=analítico-valorativo"
+        ]
+      },
+      "tone_target": {
+        "value": "unclear",
+        "status": "out_of_domain",
+        "reason": "content_out_of_domain",
+        "notes": [],
+        "raw_hints": [
+          "primary_tone=analítico-valorativo"
+        ]
+      },
+      "opinionatedness": {
+        "value": "unclear",
+        "status": "out_of_domain",
+        "reason": "content_out_of_domain",
+        "notes": [],
+        "raw_hints": [
+          "primary_tone=analítico-valorativo"
+        ]
+      },
+      "sensationalism": {
+        "value": "unclear",
+        "status": "out_of_domain",
+        "reason": "content_out_of_domain",
+        "notes": [],
+        "raw_hints": [
+          "primary_tone=analítico-valorativo"
+        ]
+      },
+      "rhetorical_certainty": {
+        "value": "unclear",
+        "status": "out_of_domain",
+        "reason": "content_out_of_domain",
+        "notes": [],
+        "raw_hints": [
+          "primary_tone=analítico-valorativo"
+        ]
+      },
+      "framing": {
+        "value": "unclear",
+        "status": "out_of_domain",
+        "reason": "content_out_of_domain",
+        "notes": [],
+        "raw_hints": [
+          "Protagonismo del rendimiento individual (Joan García) como eje explicativo del resultado",
+          "Contraste de equipos/planes tácticos (Barça ante planteamiento del Rayo; enfoque en presión y fuera de juego)",
+          "Narrativa de contexto de fatiga y calendario (resaca/cansancio del partido de Newcastle; parón de selecciones)",
+          "Lenguaje valorativo con adjetivos (p. ej., 'valiente', 'formidable', 'nervioso y enfadado')",
+          "Referencia a decisiones arbitrales y protestas (penaltis ignorados)"
+        ]
+      }
+    },
+    "repair_warnings": [
+      "repair_promoted_confidence: ideological_bias_framing.confidence -> bias_confidence",
+      "repair_truncated_evidence_spans: 7 -> 6",
+      "repair_regularized_evidence_object",
+      "repair_regularized_evidence_object",
+      "repair_regularized_evidence_object",
+      "repair_regularized_evidence_object",
+      "repair_regularized_evidence_object",
+      "repair_regularized_evidence_object"
+    ],
+    "normalization_warnings": [
+      "unmapped article_type='Crónica deportiva de partido (análisis de desempeño y desenlace)'; using 'unclear'",
+      "unmapped bias_label='none_detected'; using 'unclear'",
+      "unmapped tone_emotional='mixto (elogio del portero, queja por arbitraje y cansancio; tensión final)'; using 'unclear'",
+      "unresolved tone_target; using 'unclear'",
+      "unresolved opinionatedness; using 'unclear'",
+      "unresolved sensationalism; using 'unclear'",
+      "unresolved rhetorical_certainty; using 'unclear'",
+      "dropped framing_device='Protagonismo del rendimiento individual (Joan García) como eje explicativo del resultado'",
+      "dropped framing_device='Contraste de equipos/planes tácticos (Barça ante planteamiento del Rayo; enfoque en presión y fuera de juego)'",
+      "dropped framing_device='Narrativa de contexto de fatiga y calendario (resaca/cansancio del partido de Newcastle; parón de selecciones)'",
+      "dropped framing_device=\"Lenguaje valorativo con adjetivos (p. ej., 'valiente', 'formidable', 'nervioso y enfadado')\"",
+      "dropped framing_device='Referencia a decisiones arbitrales y protestas (penaltis ignorados)'"
+    ],
+    "dropped_fields": [],
+    "truncated_fields": [
+      "evidence_spans"
+    ],
+    "preserved_signals": {
+      "framing_candidates": [
+        "Protagonismo del rendimiento individual (Joan García) como eje explicativo del resultado",
+        "Contraste de equipos/planes tácticos (Barça ante planteamiento del Rayo; enfoque en presión y fuera de juego)",
+        "Narrativa de contexto de fatiga y calendario (resaca/cansancio del partido de Newcastle; parón de selecciones)",
+        "Lenguaje valorativo con adjetivos (p. ej., 'valiente', 'formidable', 'nervioso y enfadado')",
+        "Referencia a decisiones arbitrales y protestas (penaltis ignorados)"
+      ],
+      "tone_hints": [
+        "primary_tone=analítico-valorativo"
+      ]
+    },
+    "provider_failures": [],
+    "unclear_reasons": [
+      "out_of_domain",
+      "repair_data_loss"
+    ]
+  },
+  "expectation": {
+    "mode": "success",
+    "editorial_applicability": "out_of_domain",
+    "editorial_applicability_reason": "sports_recap",
+    "unclear_reasons": [
+      "out_of_domain",
+      "repair_data_loss"
+    ],
+    "final_payload": {
+      "article_type": "unclear",
+      "article_type_confidence": 0.6,
+      "bias_label": "unclear",
+      "bias_score": 0.0,
+      "bias_confidence": 0.6,
+      "tone_emotional": "unclear",
+      "tone_target": "unclear",
+      "opinionatedness": "unclear",
+      "sensationalism": "unclear",
+      "rhetorical_certainty": "unclear",
+      "framing_devices": [],
+      "evidence_spans": [
+        {
+          "type": "body",
+          "text": "“únicamente reducido por un formidable Joan García”",
+          "note": "Atribución del resultado al rendimiento de un jugador (protagonismo)."
+        },
+        {
+          "type": "body",
+          "text": "“Agotado y resacoso después de la feliz noche del miércoles contra el Newcastle”",
+          "note": "Contextualización narrativa (fatiga/calendario)."
+        },
+        {
+          "type": "body",
+          "text": "“Flick se la jugó con los titulares ante el parón de selecciones y el Barcelona se apagó con el paso de los minutos”",
+          "note": "Evaluación crítica del planteamiento/gestión del entrenador."
+        }
+      ],
+      "rationale": "La crónica atribuye el devenir del partido sobre todo a factores deportivos (intervenciones del portero, ajustes tácticos, cansancio y dinámica del juego). Solo aparecen elementos valorativos sobre el árbitro y el cansancio, sin construcción de marcos ideológicos."
+    },
+    "dimension_status": {
+      "article_type": "out_of_domain",
+      "bias": "out_of_domain",
+      "tone_emotional": "out_of_domain",
+      "tone_target": "out_of_domain",
+      "opinionatedness": "out_of_domain",
+      "sensationalism": "out_of_domain",
+      "rhetorical_certainty": "out_of_domain",
+      "framing": "out_of_domain"
+    },
+    "preserved_signal_groups": {
+      "framing_candidates": [
+        "Protagonismo del rendimiento individual (Joan García) como eje explicativo del resultado",
+        "Contraste de equipos/planes tácticos (Barça ante planteamiento del Rayo; enfoque en presión y fuera de juego)",
+        "Narrativa de contexto de fatiga y calendario (resaca/cansancio del partido de Newcastle; parón de selecciones)",
+        "Lenguaje valorativo con adjetivos (p. ej., 'valiente', 'formidable', 'nervioso y enfadado')",
+        "Referencia a decisiones arbitrales y protestas (penaltis ignorados)"
+      ],
+      "tone_hints": [
+        "primary_tone=analítico-valorativo"
+      ]
+    },
+    "repair_warnings_contains": [
+      "repair_promoted_confidence: ideological_bias_framing.confidence -> bias_confidence",
+      "repair_truncated_evidence_spans: 7 -> 6"
+    ],
+    "normalization_warnings_contains": [
+      "unmapped article_type='Crónica deportiva de partido (análisis de desempeño y desenlace)'; using 'unclear'",
+      "unmapped bias_label='none_detected'; using 'unclear'"
+    ]
+  }
+}

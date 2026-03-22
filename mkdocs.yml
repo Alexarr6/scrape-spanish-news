@@ -1,0 +1,38 @@
+site_name: spain-news-bias-scraper
+site_description: Operator and architecture docs for the Spain news scraping, clustering, and semantic explorer stack.
+repo_name: spain-news-bias-scraper
+site_dir: site
+strict: true
+nav:
+  - Home: index.md
+  - Getting Started: getting-started.md
+  - Operator Guide:
+      - Commands: operator-guide/commands.md
+      - Workflows: operator-guide/workflows.md
+      - Scheduler: operator-guide/scheduler.md
+      - Troubleshooting: operator-guide/troubleshooting.md
+  - Semantic Pipeline:
+      - Overview: semantic/overview.md
+      - Workflow: semantic/workflow.md
+  - Web App and API: web-app-api.md
+  - Architecture:
+      - Overview: architecture/overview.md
+      - Analysis Pipeline: architecture/analysis-pipeline.md
+      - Semantic Pipeline: architecture/semantic-pipeline.md
+  - Testing and Quality: testing-quality.md
+  - Reference:
+      - Environment Variables: reference/environment.md
+      - Outputs and State: reference/outputs.md
+  - Historical Notes:
+      - Overview: historical/index.md
+      - Stack Context: STACK_CONTEXT.md
+      - Reviews:
+          - Semantic second pass review: reviews/ARCH_REVIEW_semantic_second_pass_2026-03-17.md
+          - Explorer clustering phase review: reviews/ARCH_REVIEW_explorer_clustering_phase_2026-03-18.md
+          - Cluster first cycle review: reviews/ARCH_REVIEW_cluster_first_cycle_2026-03-18.md
+      - Archive:
+          - Legacy architecture review: archive/ARCH_REVIEW_legacy.md
+markdown_extensions:
+  - admonition
+  - toc:
+      permalink: true

@@ -1,0 +1,46 @@
+[project]
+name = "spain-news-bias-scraper"
+version = "0.1.0"
+description = "Spanish news scraper with PostgreSQL persistence and a small FastAPI surface"
+readme = "README.md"
+requires-python = ">=3.11,<3.14"
+dependencies = [
+  "fastapi>=0.115,<1.0",
+  "numpy>=2.2,<3.0",
+  "openai>=1.68,<2.0",
+  "plotly>=6.0,<7.0",
+  "pydantic>=2.8,<3.0",
+  "psycopg[binary]>=3.2,<4.0",
+  "scikit-learn>=1.6,<2.0",
+  "sqlalchemy>=2.0.39,<3.0",
+  "uvicorn>=0.34,<1.0",
+]
+
+[dependency-groups]
+dev = [
+  "httpx>=0.28,<1.0",
+  "mkdocs>=1.6,<2.0",
+  "pre-commit>=4.2,<5.0",
+  "pytest>=8.3,<9.0",
+  "ruff>=0.11,<0.12",
+]
+
+[tool.uv]
+package = false
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+extend-exclude = [
+  ".git",
+  ".venv",
+  "data",
+  "var",
+  "**/__pycache__",
+]
+
+[tool.ruff.lint]
+select = ["E", "F", "I"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["src"]

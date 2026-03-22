@@ -1,0 +1,9 @@
+{
+  "discovered": 180,
+  "processed": 120,
+  "kept": 27,
+  "discarded_by_date": 93,
+  "errors": 0,
+  "stop_reason": "max_articles_to_extract",
+  "last_url": "https://www.lavanguardia.com/nacional/20250202/10344062/lunes-arranca-juicio-rubiales-agresion-sexual-coacciones-jenni-hermoso-agenciaslv20250202.html"
+}

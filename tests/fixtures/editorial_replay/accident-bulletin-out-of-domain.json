@@ -1,0 +1,340 @@
+{
+  "fixture_id": "accident-bulletin-out-of-domain",
+  "family": "accident_bulletin",
+  "source_artifact": "20260322T170637Z-article-2924.json",
+  "notes": "Representative accident/crime bulletin. Honest abstention should be treated as out_of_domain, with preserved but unmapped factual framing hints.",
+  "article": {
+    "source": "abc",
+    "section": "espana",
+    "published_at": "2026-03-22T16:38:51+00:00",
+    "url": "https://www.abc.es/espana/castilla-la-mancha/fallece-motorista-anos-salirse-via-caer-pendiente-20260322173807-nt.html",
+    "title": "Fallece un motorista de 51 años al salirse de la vía y caer por una pendiente en Hontoba (Guadalajara)"
+  },
+  "provider": {
+    "model_provider": "openrouter",
+    "model_name": "openai/gpt-5.4-nano",
+    "strict_failure_class": "provider_schema_rejected",
+    "fallback_failure_class": "payload_validation_failed"
+  },
+  "raw_provider_output": "{\n  \"article_type\": \"noticia_accidente\",\n  \"ideological_bias_framing\": {\n    \"bias_type\": \"sin_sesgo_claro\",\n    \"direction\": \"unclear\",\n    \"confidence\": 0.7,\n    \"justification\": \"El texto describe un accidente y la respuesta de emergencias con tono informativo; no hay argumentación política ni encuadres ideológicos.\"\n  },\n  \"tone_dimensions\": {\n    \"overall_tone\": \"informativo_y_sobrio\",\n    \"sensationalism\": \"bajo\",\n    \"emotionality\": \"baja\",\n    \"urgency\": \"baja\",\n    \"confidence\": 0.75\n  },\n  \"framing_devices\": [\n    \"encuadre_de_sucesos_basado_en_hechos\",\n    \"atribución_a_fuentes_institucionales/medios_de_emergencia\"\n  ],\n  \"rationale\": \"La estructura es típica de una noticia de sucesos: identifica víctima (51 años), lugar (Hontoba, Guadalajara), circunstancia (salirse de la vía y caer por una pendiente) y actuaciones (Guardia Civil, emergencias 112, helicóptero sanitario y certificación médica). El lenguaje no incluye juicios valorativos ni atribuciones políticas.\",\n  \"evidence_spans\": [\n    {\n      \"span\": \"Fallece un motorista de 51 años al salirse de la vía y caer por una pendiente en Hontoba (Guadalajara)\",\n      \"type\": \"titular\"\n    },\n    {\n      \"span\": \"Un hombre de 51 años ha fallecido este domingo al salirse de la vía con su moto y caer por una pendiente de varios metros en Hontoba (Guadalajara) sin que se pudiera hacer nada por su vida.\",\n      \"type\": \"hechos\"\n    },\n    {\n      \"span\": \"Según han informado a ABC fuentes del ... Servicio de Emergencias 112 de Castilla-La Mancha, el accidente se ha producido a las 15:13 horas de este domingo en la calle Manantiales del municipio\",\n      \"type\": \"atribución_fuente\"\n    },\n    {\n      \"span\": \"Hasta el lugar de los hechos se han desplazado agentes de la Guardia Civil, una ambulancia de soporte vital básico, un helicóptero sanitario y un médico de urgencias que certificó su muerte en el lugar de los hechos.\",\n      \"type\": \"respuesta_emergencias\"\n    }\n  ],\n  \"confidence\": 0.78\n}",
+  "parsed_json": {
+    "article_type": "noticia_accidente",
+    "ideological_bias_framing": {
+      "bias_type": "sin_sesgo_claro",
+      "direction": "unclear",
+      "confidence": 0.7,
+      "justification": "El texto describe un accidente y la respuesta de emergencias con tono informativo; no hay argumentación política ni encuadres ideológicos."
+    },
+    "tone_dimensions": {
+      "overall_tone": "informativo_y_sobrio",
+      "sensationalism": "bajo",
+      "emotionality": "baja",
+      "urgency": "baja",
+      "confidence": 0.75
+    },
+    "framing_devices": [
+      "encuadre_de_sucesos_basado_en_hechos",
+      "atribución_a_fuentes_institucionales/medios_de_emergencia"
+    ],
+    "rationale": "La estructura es típica de una noticia de sucesos: identifica víctima (51 años), lugar (Hontoba, Guadalajara), circunstancia (salirse de la vía y caer por una pendiente) y actuaciones (Guardia Civil, emergencias 112, helicóptero sanitario y certificación médica). El lenguaje no incluye juicios valorativos ni atribuciones políticas.",
+    "evidence_spans": [
+      {
+        "span": "Fallece un motorista de 51 años al salirse de la vía y caer por una pendiente en Hontoba (Guadalajara)",
+        "type": "titular"
+      },
+      {
+        "span": "Un hombre de 51 años ha fallecido este domingo al salirse de la vía con su moto y caer por una pendiente de varios metros en Hontoba (Guadalajara) sin que se pudiera hacer nada por su vida.",
+        "type": "hechos"
+      },
+      {
+        "span": "Según han informado a ABC fuentes del ... Servicio de Emergencias 112 de Castilla-La Mancha, el accidente se ha producido a las 15:13 horas de este domingo en la calle Manantiales del municipio",
+        "type": "atribución_fuente"
+      },
+      {
+        "span": "Hasta el lugar de los hechos se han desplazado agentes de la Guardia Civil, una ambulancia de soporte vital básico, un helicóptero sanitario y un médico de urgencias que certificó su muerte en el lugar de los hechos.",
+        "type": "respuesta_emergencias"
+      }
+    ],
+    "confidence": 0.78
+  },
+  "repaired_payload": {
+    "article_type": "noticia_accidente",
+    "article_type_confidence": null,
+    "bias_label": null,
+    "ideological_bias_framing": {
+      "bias_type": "sin_sesgo_claro",
+      "direction": "unclear",
+      "confidence": 0.7,
+      "justification": "El texto describe un accidente y la respuesta de emergencias con tono informativo; no hay argumentación política ni encuadres ideológicos."
+    },
+    "bias_score": null,
+    "bias_confidence": 0.7,
+    "confidence": 0.78,
+    "tone_emotional": null,
+    "tone_target": null,
+    "opinionatedness": null,
+    "sensationalism": null,
+    "rhetorical_certainty": null,
+    "tone_dimensions": {
+      "overall_tone": "informativo_y_sobrio",
+      "sensationalism": "bajo",
+      "emotionality": "baja",
+      "urgency": "baja",
+      "confidence": 0.75
+    },
+    "framing_devices": [
+      "encuadre_de_sucesos_basado_en_hechos",
+      "atribución_a_fuentes_institucionales/medios_de_emergencia"
+    ],
+    "evidence_spans": [
+      {
+        "type": "titular",
+        "text": "Fallece un motorista de 51 años al salirse de la vía y caer por una pendiente en Hontoba (Guadalajara)",
+        "note": null
+      },
+      {
+        "type": "hechos",
+        "text": "Un hombre de 51 años ha fallecido este domingo al salirse de la vía con su moto y caer por una pendiente de varios metros en Hontoba (Guadalajara) sin que se pudiera hacer nada por su vida.",
+        "note": null
+      },
+      {
+        "type": "atribución_fuente",
+        "text": "Según han informado a ABC fuentes del ... Servicio de Emergencias 112 de Castilla-La Mancha, el accidente se ha producido a las 15:13 horas de este domingo en la calle Manantiales del municipio",
+        "note": null
+      },
+      {
+        "type": "respuesta_emergencias",
+        "text": "Hasta el lugar de los hechos se han desplazado agentes de la Guardia Civil, una ambulancia de soporte vital básico, un helicóptero sanitario y un médico de urgencias que certificó su muerte en el lugar de los hechos.",
+        "note": null
+      }
+    ],
+    "rationale": "La estructura es típica de una noticia de sucesos: identifica víctima (51 años), lugar (Hontoba, Guadalajara), circunstancia (salirse de la vía y caer por una pendiente) y actuaciones (Guardia Civil, emergencias 112, helicóptero sanitario y certificación médica). El lenguaje no incluye juicios valorativos ni atribuciones políticas.",
+    "notes": null,
+    "uncertainty_reason": null,
+    "repair_warnings": [
+      "repair_promoted_confidence: ideological_bias_framing.confidence -> bias_confidence",
+      "repair_regularized_evidence_object",
+      "repair_regularized_evidence_object",
+      "repair_regularized_evidence_object",
+      "repair_regularized_evidence_object"
+    ],
+    "dropped_fields": [],
+    "truncated_fields": []
+  },
+  "final_payload": {
+    "article_type": "news_report",
+    "article_type_confidence": 0.78,
+    "bias_label": "unclear",
+    "bias_score": 0.0,
+    "bias_confidence": 0.6,
+    "tone_emotional": "calm",
+    "tone_target": "unclear",
+    "opinionatedness": "unclear",
+    "sensationalism": "low",
+    "rhetorical_certainty": "unclear",
+    "framing_devices": [],
+    "evidence_spans": [
+      {
+        "type": "headline",
+        "text": "Fallece un motorista de 51 años al salirse de la vía y caer por una pendiente en Hontoba (Guadalajara)",
+        "note": "quoted evidence span"
+      },
+      {
+        "type": "body",
+        "text": "Un hombre de 51 años ha fallecido este domingo al salirse de la vía con su moto y caer por una pendiente de varios metros en Hontoba (Guadalajara) sin que se pudiera hacer nada por su vida.",
+        "note": "quoted evidence span"
+      },
+      {
+        "type": "body",
+        "text": "Según han informado a ABC fuentes del ... Servicio de Emergencias 112 de Castilla-La Mancha, el accidente se ha producido a las 15:13 horas de este domingo en la calle Manantiales del municipio",
+        "note": "quoted evidence span"
+      }
+    ],
+    "rationale": "La estructura es típica de una noticia de sucesos: identifica víctima (51 años), lugar (Hontoba, Guadalajara), circunstancia (salirse de la vía y caer por una pendiente) y actuaciones (Guardia Civil, emergencias 112, helicóptero sanitario y certificación médica). El lenguaje no incluye juicios valorativos ni atribuciones políticas."
+  },
+  "diagnostics": {
+    "provider_path": "normalized_local_pipeline",
+    "editorial_applicability": "out_of_domain",
+    "editorial_applicability_reason": "accident_crime_bulletin",
+    "dimension_status": {
+      "article_type": {
+        "value": "news_report",
+        "status": "out_of_domain",
+        "reason": "content_out_of_domain",
+        "notes": [],
+        "raw_hints": []
+      },
+      "bias": {
+        "value": "unclear",
+        "status": "out_of_domain",
+        "reason": "content_out_of_domain",
+        "notes": [],
+        "raw_hints": [
+          "justification=El texto describe un accidente y la respuesta de emergencias con tono informativo; no hay argumentación política ni encuadres ideológicos."
+        ]
+      },
+      "tone_emotional": {
+        "value": "calm",
+        "status": "out_of_domain",
+        "reason": "content_out_of_domain",
+        "notes": [],
+        "raw_hints": [
+          "overall_tone=informativo_y_sobrio",
+          "urgency=baja"
+        ]
+      },
+      "tone_target": {
+        "value": "unclear",
+        "status": "out_of_domain",
+        "reason": "content_out_of_domain",
+        "notes": [],
+        "raw_hints": [
+          "overall_tone=informativo_y_sobrio",
+          "urgency=baja"
+        ]
+      },
+      "opinionatedness": {
+        "value": "unclear",
+        "status": "out_of_domain",
+        "reason": "content_out_of_domain",
+        "notes": [],
+        "raw_hints": [
+          "overall_tone=informativo_y_sobrio",
+          "urgency=baja"
+        ]
+      },
+      "sensationalism": {
+        "value": "low",
+        "status": "out_of_domain",
+        "reason": "content_out_of_domain",
+        "notes": [],
+        "raw_hints": [
+          "overall_tone=informativo_y_sobrio",
+          "urgency=baja"
+        ]
+      },
+      "rhetorical_certainty": {
+        "value": "unclear",
+        "status": "out_of_domain",
+        "reason": "content_out_of_domain",
+        "notes": [],
+        "raw_hints": [
+          "overall_tone=informativo_y_sobrio",
+          "urgency=baja"
+        ]
+      },
+      "framing": {
+        "value": "unclear",
+        "status": "out_of_domain",
+        "reason": "content_out_of_domain",
+        "notes": [],
+        "raw_hints": [
+          "encuadre_de_sucesos_basado_en_hechos",
+          "atribución_a_fuentes_institucionales/medios_de_emergencia"
+        ]
+      }
+    },
+    "repair_warnings": [
+      "repair_promoted_confidence: ideological_bias_framing.confidence -> bias_confidence",
+      "repair_regularized_evidence_object",
+      "repair_regularized_evidence_object",
+      "repair_regularized_evidence_object",
+      "repair_regularized_evidence_object"
+    ],
+    "normalization_warnings": [
+      "mapped article_type='noticia_accidente' -> 'news_report'",
+      "mapped tone_emotional='baja' -> 'calm'",
+      "unresolved tone_target; using 'unclear'",
+      "unresolved opinionatedness; using 'unclear'",
+      "mapped sensationalism='bajo' -> 'low'",
+      "unresolved rhetorical_certainty; using 'unclear'",
+      "dropped framing_device='encuadre_de_sucesos_basado_en_hechos'",
+      "dropped framing_device='atribución_a_fuentes_institucionales/medios_de_emergencia'"
+    ],
+    "dropped_fields": [],
+    "truncated_fields": [],
+    "preserved_signals": {
+      "framing_candidates": [
+        "encuadre_de_sucesos_basado_en_hechos",
+        "atribución_a_fuentes_institucionales/medios_de_emergencia"
+      ],
+      "tone_hints": [
+        "overall_tone=informativo_y_sobrio",
+        "urgency=baja"
+      ]
+    },
+    "provider_failures": [],
+    "unclear_reasons": [
+      "out_of_domain",
+      "semantic_weak_signal"
+    ]
+  },
+  "expectation": {
+    "mode": "success",
+    "editorial_applicability": "out_of_domain",
+    "editorial_applicability_reason": "accident_crime_bulletin",
+    "unclear_reasons": [
+      "out_of_domain",
+      "semantic_weak_signal"
+    ],
+    "final_payload": {
+      "article_type": "news_report",
+      "article_type_confidence": 0.78,
+      "bias_label": "unclear",
+      "bias_score": 0.0,
+      "bias_confidence": 0.6,
+      "tone_emotional": "calm",
+      "tone_target": "unclear",
+      "opinionatedness": "unclear",
+      "sensationalism": "low",
+      "rhetorical_certainty": "unclear",
+      "framing_devices": [],
+      "evidence_spans": [
+        {
+          "type": "headline",
+          "text": "Fallece un motorista de 51 años al salirse de la vía y caer por una pendiente en Hontoba (Guadalajara)",
+          "note": "quoted evidence span"
+        },
+        {
+          "type": "body",
+          "text": "Un hombre de 51 años ha fallecido este domingo al salirse de la vía con su moto y caer por una pendiente de varios metros en Hontoba (Guadalajara) sin que se pudiera hacer nada por su vida.",
+          "note": "quoted evidence span"
+        },
+        {
+          "type": "body",
+          "text": "Según han informado a ABC fuentes del ... Servicio de Emergencias 112 de Castilla-La Mancha, el accidente se ha producido a las 15:13 horas de este domingo en la calle Manantiales del municipio",
+          "note": "quoted evidence span"
+        }
+      ],
+      "rationale": "La estructura es típica de una noticia de sucesos: identifica víctima (51 años), lugar (Hontoba, Guadalajara), circunstancia (salirse de la vía y caer por una pendiente) y actuaciones (Guardia Civil, emergencias 112, helicóptero sanitario y certificación médica). El lenguaje no incluye juicios valorativos ni atribuciones políticas."
+    },
+    "dimension_status": {
+      "article_type": "out_of_domain",
+      "bias": "out_of_domain",
+      "tone_emotional": "out_of_domain",
+      "tone_target": "out_of_domain",
+      "opinionatedness": "out_of_domain",
+      "sensationalism": "out_of_domain",
+      "rhetorical_certainty": "out_of_domain",
+      "framing": "out_of_domain"
+    },
+    "preserved_signal_groups": {
+      "framing_candidates": [
+        "encuadre_de_sucesos_basado_en_hechos",
+        "atribución_a_fuentes_institucionales/medios_de_emergencia"
+      ],
+      "tone_hints": [
+        "overall_tone=informativo_y_sobrio",
+        "urgency=baja"
+      ]
+    },
+    "repair_warnings_contains": [
+      "repair_promoted_confidence: ideological_bias_framing.confidence -> bias_confidence",
+      "repair_regularized_evidence_object"
+    ],
+    "normalization_warnings_contains": [
+      "mapped article_type='noticia_accidente' -> 'news_report'",
+      "mapped tone_emotional='baja' -> 'calm'"
+    ]
+  }
+}
