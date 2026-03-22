@@ -1,101 +1,99 @@
 - State: DONE
-- Current phase: minimal editorial raw-shape hotfix on `iter/004` for article-2925-style fallback payloads, preserving strict final persistence validation
+- Current phase: implementer pass completed on `iter/004`; editorial analysis now uses explicit raw capture -> shape repair/coercion -> semantic normalization -> strict final validation, with saner `reprocess` selection semantics and warning-aware reporting
 - Last update: 2026-03-22 UTC
 
-## Implementer completion — raw/model-facing editorial payload + deterministic normalization landed
+## Implementer completion — editorial-analysis robustness pass landed
 
-Completed in code:
-- added `ArticleEditorialAnalysisRawPayload` as the model-facing editorial contract
-- added deterministic normalization in `src/analysis/editorial_normalization.py`
-- changed the OpenRouter editorial flow to parse raw JSON, normalize it, then validate against the unchanged strict final `ArticleEditorialAnalysisPayload`
-- switched the provider-facing schema request to a bounded raw schema that tolerates alias fields, nested `tone_dimensions`, string evidence spans, freeform framing labels, and global `confidence`
-- preserved strict persistence semantics by writing only normalized final payloads
-- preserved/improved debug visibility by attaching normalization warnings to failure artifacts
-- added focused regression tests, including the captured minimax-style payload shape
-- hotfixed the remaining raw validation failure for article `2924` by accepting object-form `ideological_bias_framing` and normalizing the observed Spanish raw shape conservatively
-- manually verified normalization against `.artifacts/editorial-analysis/20260322T164233Z-article-2800.json`
+Implemented the architect-approved hardening slice without article-id hacks.
+
+### What changed
+- widened `ArticleEditorialAnalysisRawPayload` so recoverable provider drift does not die at the raw boundary
+- added an explicit shape-repair/coercion stage in `src/analysis/editorial_normalization.py`
+- kept semantic normalization separate from repair and preserved the strict final payload as the authority
+- added repair/normalization warning classes plus explicit `unclear` reason signals
+- expanded run metrics/artifact detail for fallback success, dropped fields, truncation, and warning-heavy successful rows
+- fixed `--reprocess` semantics so default pending selection widens to `status=any` unless the operator explicitly targets article ids
+- updated CLI dry-run reporting to show effective selection status and counts by current row status
+- added regression coverage for object rationale, object ideological bias, confidence-label coercion, overlong evidence, framing-device objects, nested tone structures, and fallback-success warning reporting
+
+### Bounded verification completed
+- `~/.local/bin/uv run --project . ruff check src/analysis/contracts.py src/analysis/editorial_normalization.py src/analysis/llm_client.py src/analysis/pipeline.py scripts/analyze_editorial.py tests/test_editorial_analysis_contracts.py tests/test_editorial_normalization.py tests/test_editorial_analysis_pipeline.py`
+- `~/.local/bin/uv run --project . pytest -q tests/test_api_editorial.py tests/test_editorial_analysis_contracts.py tests/test_editorial_normalization.py tests/test_editorial_analysis_pipeline.py`
 
 Result:
-- parseable off-ontology provider JSON no longer has to die just because it is not already DB-shaped
-- ambiguous fields still degrade conservatively to `unclear` or safe defaults
-- the final strict schema remains the persistence gatekeeper
+- `ruff check`: passed
+- `pytest`: `19 passed`
+- bounded operator-style CLI verification against a temp sqlite URL: intentionally failed fast with `ValueError("Postgres-only mode: db URL must start with 'postgresql'")`, which is expected under the repo's DB policy and therefore not a valid end-to-end operator path without a real Postgres target
 
-## Architect review follow-up — final-schema portability is the real blocker
+## Architect re-review completion — remaining editorial failures are now well-localized
 
-A repo-grounded architect review has now been added in `ARCH_REVIEW.md`.
+A deeper architecture pass has been completed using the new real operator artifacts and recent hotfix/test state.
 
-Key conclusion:
-- transport robustness work fixed honest request accounting and parse-path diagnosis
-- but repeated failures across `minimax/minimax-m2.7`, `gpt-5.4 nano` via OpenRouter, and `openai/gpt-4.1-mini` show the deeper issue is architectural
-- the pipeline currently asks routed LLMs to emit the final persistence contract directly
-- that direct-to-final-schema approach is brittle across providers/models even when JSON is parseable
+### Main conclusion
+The repo fixed the first half of the problem, but not the second.
 
-Recommended next implementation scope from the architect review:
-1. add a portable raw editorial payload contract
-2. add deterministic normalization/mapping into the existing strict final payload
-3. keep final strict validation as the persistence gate
-4. capture normalization warnings/raw payload in artifacts
-5. optionally keep a provider/model allowlist as an ops guardrail, not as the main fix
+What is now clearly true:
+- separating raw generation from strict final persistence was the right move
+- honest request accounting and strict->fallback retry were also correct
+- **but the current raw layer is still too narrow**
+- it is rejecting recoverable provider variation before repair/normalization can salvage it
 
-This is the recommended prerequisite before any further editorial-analysis expansion or Phase 3 comparison work.
+That is why the pipeline now shows this awkward behavior:
+- single runs sometimes succeed
+- fallback often returns parseable, useful JSON
+- batch runs still fail on raw validation details like overlong evidence lists, object rationales, object framing structures, and string confidence labels
+- successful rows often land in `unclear`, but operator reporting does not explain whether that is genuine abstention or mapping/data-loss degradation
 
-## Why this new planning pass exists
+### Real operator/artifact findings carried into the revised recommendation
+Observed directly in `.artifacts/editorial-analysis/`:
+- article `2924`: object-form `ideological_bias_framing`
+- article `2925`: object-form `rationale`
+- article `2926`: 9-item `evidence_spans`
+- article `2969`: 7-item `evidence_spans`
+- article `2927`: 10-item string `evidence_spans`
+- article `2928`: fallback JSON with `confidence="moderate"` and useful but off-ontology political framing
 
-Recent operator testing exposed that the editorial-analysis pipeline is not robust across OpenRouter model/provider combinations.
+Interpretation:
+- these are mostly **shape-repair** cases, not semantic nonsense cases
+- the raw layer should capture them
+- a distinct repair/coercion phase should handle them
+- only then should semantic normalization and final validation decide what survives
 
-Observed failures to carry forward into implementation:
-- `minimax/minimax-m2.7` via OpenRouter: billed requests, but pipeline ended with `failed_count=3`, `request_count=0`, `analyzed_count=0`; DB `failure_reason` was `Expecting value: line 1 column 1 (char 0)`
-- GPT-5.4 nano route via OpenRouter: provider returned `400 invalid schema for response_format article_editorial_analysis`, pointing at `properties.framing_devices`
-- `openai/gpt-4.1-mini` via OpenRouter: operator reports same parse-failure pattern as minimax
+### Revised architecture recommendation
+The recommended editorial pipeline is now:
 
-## Planning conclusion
+`raw capture -> shape repair/coercion -> semantic normalization -> strict final validation -> persistence/reporting`
 
-The current code path is too brittle because it:
-- assumes `message.content` is directly parseable JSON text
-- increments `request_count` only after successful parse
-- collapses transport/schema/parse/validation failures into the same generic failed path
-- does not preserve raw failed-response artifacts for debugging
-- has no fallback mode when strict `response_format=json_schema` is rejected or returns unusable content
+Key policy implications:
+- raw capture should accept bounded but variable shapes
+- overlong evidence lists should truncate with warnings, not fail at capture time
+- confidence labels like `moderate` should coerce conservatively
+- object rationales / ideological framing / framing devices should be repaired before semantic mapping
+- final strict payload remains the persistence gatekeeper
 
-## Approved next implementation scope
+### Operator-facing conclusion
+Two operator issues are now explicit design targets, not incidental annoyances:
 
-Implement the bounded remediation plan now captured in `PLAN.md`:
+1. **`REPROCESS` semantics are confusing**
+   - current default `status=pending` means `reprocess` does not widen selection
+   - that makes `REPROCESS=1` appear ineffective unless the operator already knows the internal selection model
+   - recommended fix: `--reprocess` should imply `status=any` unless status was explicitly passed
 
-1. response capture + normalized failure taxonomy
-2. robust response parsing + honest request accounting
-3. fallback mode when strict structured outputs are rejected or malformed
-4. focused regression tests + operator runbook notes
+2. **`unclear` is overloaded**
+   - some rows are genuinely weak-signal
+   - others become `unclear` because mapping/repair dropped information
+   - reporting must distinguish these cases
 
-## Explicit handoff to implementer
+### Updated planning direction
+`ARCH_REVIEW.md` and `PLAN.md` now call for the next implementer slice to focus on:
+1. widening the raw editorial contract
+2. adding an explicit shape-repair/coercion stage
+3. making normalization warning-aware and reason-aware
+4. fixing `REPROCESS` / selection semantics
+5. improving metrics and artifacts so fallback success, truncation, dropped fields, and `unclear` reasons are visible
+6. locking the observed failures into regression coverage
 
-Touch backend/integration files only for this pass. Do not drift back into unrelated frontend work.
-
-Priority order:
-1. `src/analysis/llm_client.py`
-2. `src/analysis/pipeline.py`
-3. `scripts/analyze_editorial.py`
-4. focused tests
-5. small contract/docs updates only as needed
-
-Key expected outcomes:
-- billed attempts reflected in metrics
-- failure class visible and truthful
-- raw failed-response artifacts available for diagnosis
-- schema rejection can fall back to JSON-text mode instead of hard failing immediately
-
-## Implementer progress update
-
-Completed in code:
-- normalized failure classes + multi-attempt result envelope in `src/analysis/llm_client.py`
-- honest request accounting and failure bucket counters in `src/analysis/pipeline.py`
-- bounded fallback from strict schema mode to JSON-text mode
-- failed-response artifact writing under `.artifacts/editorial-analysis/`
-- focused regression coverage for parse failure, schema rejection fallback, validation failure, and unchanged-row skipping
-
-Pending before closure:
-- none for this hotfix slice once focused test passes and atomic commit lands
-
-## Notes on previous Phase 2 status
-
-The earlier Phase 2 usability/read-side work is still valid.
-This new pass does **not** replace that work; it fixes the backend reliability gap discovered during operator testing.
+### Important non-recommendation
+Do **not** spend the next pass mostly on prompt tweaks.
+That would be cargo-cult nonsense.
+The artifacts already show the model often returns usable JSON; the remaining issue is where the pipeline draws its boundaries and how little it tells the operator.

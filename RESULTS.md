@@ -1,5 +1,146 @@
 # RESULTS.md
 
+## 2026-03-22 — implementer pass for editorial-analysis shape repair, warning-aware normalization, and reprocess semantics
+
+**Role:** implementer  
+**Outcome:** ✅ Complete  
+**Scope:** raw-shape permissiveness, explicit repair/coercion, operator-visible warning reporting, and `--reprocess` semantics cleanup
+
+### What I accomplished
+Implemented the architect-approved robustness slice for editorial analysis:
+- widened the raw editorial contract to accept recoverable shape variation without failing too early
+- added an explicit repair/coercion phase before semantic normalization
+- kept semantic normalization separate from repair and left final strict validation intact
+- added repair warnings, normalization warnings, dropped/truncated field reporting, and explicit `unclear` reason classes
+- expanded run metrics so fallback success and warning-heavy successful rows are visible
+- improved failure artifacts so each attempt can show repair warnings, truncation, dropped fields, fallback success, and final unclear reasons
+- fixed `--reprocess` behavior so the effective default selection becomes `status=any` unless the operator is explicitly targeting article ids
+- improved CLI selection output with effective status and per-status counts
+- added regression tests covering the real observed shape families rather than article-specific hacks
+
+### Files changed
+- `src/analysis/contracts.py`
+- `src/analysis/editorial_normalization.py`
+- `src/analysis/llm_client.py`
+- `src/analysis/pipeline.py`
+- `scripts/analyze_editorial.py`
+- `tests/test_editorial_analysis_contracts.py`
+- `tests/test_editorial_normalization.py`
+- `tests/test_editorial_analysis_pipeline.py`
+- `docs/operator-guide/editorial-analysis-manual-test.md`
+- `STATUS.md`
+- `RESULTS.md`
+
+### Verification
+Commands run:
+- `~/.local/bin/uv run --project . ruff check src/analysis/contracts.py src/analysis/editorial_normalization.py src/analysis/llm_client.py src/analysis/pipeline.py scripts/analyze_editorial.py tests/test_editorial_analysis_contracts.py tests/test_editorial_normalization.py tests/test_editorial_analysis_pipeline.py`
+- `~/.local/bin/uv run --project . pytest -q tests/test_api_editorial.py tests/test_editorial_analysis_contracts.py tests/test_editorial_normalization.py tests/test_editorial_analysis_pipeline.py`
+- `tmpdb=$(mktemp /tmp/editorial-cli-XXXXXX.db) && ~/.local/bin/uv run --project . python3 scripts/analyze_editorial.py --db-url sqlite:///$tmpdb --dry-run --days-back 2 --limit 5 --reprocess`
+
+Results:
+- `ruff check`: passed
+- `pytest`: `19 passed`
+- bounded CLI verification: expected fast failure with `ValueError("Postgres-only mode: db URL must start with 'postgresql'")`; this confirms the repo still enforces Postgres-only operator paths, so a true operator-style dry run needs a real Postgres target
+
+### Remaining risks / follow-ups
+- warning details are currently surfaced in artifacts and run metrics, not persisted as first-class DB columns
+- `unclear` reasoning is now much more explainable, but API/read-side exposure of those reason classes is still a possible next slice if operators want them outside artifacts
+- strict structured-output mode is still an opportunistic first attempt rather than a reliable foundation on this route
+- I did not run a live provider-backed editorial batch because that would require real API credentials plus a real Postgres target; pretending otherwise would be bullshit
+
+### Git / rollback
+- Branch: `iter/004`
+- Commit(s): pending final atomic commit(s)
+- Rollback hint after commit: `git log --oneline -n 5`
+
+## 2026-03-22 — architect re-review of editorial-analysis pipeline after real operator testing
+
+**Role:** architect  
+**Outcome:** ✅ Complete  
+**Scope:** investigation/design only, no implementation
+
+### What I accomplished
+Performed a second architecture pass using the updated code, tests, and the new real operator artifacts from `.artifacts/editorial-analysis/`.
+
+Reviewed:
+- `src/analysis/contracts.py`
+- `src/analysis/editorial_normalization.py`
+- `src/analysis/llm_client.py`
+- `src/analysis/pipeline.py`
+- `scripts/analyze_editorial.py`
+- `Makefile`
+- editorial contracts/docs/operator guide
+- planner/status/result artifacts
+- focused editorial tests
+- real failure artifacts for articles `2924`, `2925`, `2926`, `2969`, `2927`, `2928`
+- relevant OpenAI structured-output/docs behavior for schema requirements and content-shape assumptions
+
+### Key findings
+1. **The raw layer is still too strict.**  
+   The repo correctly separated raw generation from final persistence, but the current raw contract still rejects ordinary provider variation before repair/normalization can act.
+
+2. **Most remaining failures are shape-repair failures, not useless-model failures.**  
+   Real artifacts show parseable, semantically useful JSON failing because of:
+   - overlong `evidence_spans`
+   - string confidence labels like `moderate`
+   - object-form `rationale`
+   - object-form `ideological_bias_framing`
+   - object-form `framing_devices`
+
+3. **`unclear` is overloaded.**  
+   The operator currently cannot tell whether `unclear` means the article truly had weak editorial signal, or the pipeline lost information during mapping/repair.
+
+4. **`REPROCESS` semantics are confusing.**  
+   With default `status=pending`, `reprocess` changes skip behavior but does not widen selection, so operator expectation and actual behavior diverge.
+
+5. **Reporting is still too shallow.**  
+   Current metrics say pass/fail, but they do not explain fallback success, truncation, dropped fields, normalization warnings, or why rows degraded to `unclear`.
+
+### Revised architecture recommendation
+Recommended pipeline:
+
+`raw capture -> shape repair/coercion -> semantic normalization -> strict final validation -> persistence/reporting`
+
+Specific recommendations:
+- widen raw capture to accept bounded but variable provider shapes
+- add an explicit repair/coercion stage before semantic normalization
+- move list-length enforcement like `evidence_spans <= 6` out of raw capture and into repair/final stages
+- coerce confidence labels conservatively instead of failing rows
+- extract text from rationale objects and framing/bias objects before normalization
+- keep the final strict payload authoritative for persistence
+- report whether `unclear` came from weak signal or mapping/data-loss degradation
+- fix `--reprocess` semantics so selection behavior matches human expectations
+
+### Files changed
+- `ARCH_REVIEW.md`
+- `PLAN.md`
+- `STATUS.md`
+- `RESULTS.md`
+
+### Recommended implementation scope and order
+1. widen `ArticleEditorialAnalysisRawPayload`
+2. add explicit shape-repair/coercion stage
+3. make normalization emit warning classes and `unclear` reasons
+4. fix CLI/pipeline `REPROCESS` + effective selection behavior
+5. extend metrics/artifacts for fallback success, truncation, dropped fields, warning-heavy rows, and `unclear` causes
+6. add regression tests from the observed artifacts
+
+### Critical tradeoffs / unresolved choices
+- raw capture should be loose on shape variability but still bounded on total size and pathological junk
+- strict structured outputs can remain a first attempt, but they should not be treated as the trusted production path on this route
+- DB persistence of repair warnings is optional for the next slice; artifacts + run summaries are enough to unblock the architecture fix
+- sports/non-political content may still legitimately normalize to many `unclear` values, but the operator must be able to distinguish that from mapping loss
+
+### Verification
+No code implementation was performed. Verification was architectural and artifact-based:
+- repo code/docs/test inspection
+- artifact inspection of real failing rows
+- lightweight external docs review for structured-output/schema behavior
+
+---
+
+## Previous result entries
+
 ## 2026-03-22 — minimal raw-payload hotfix for article-2925-style editorial fallback payloads
 
 **Role:** implementer  
@@ -230,328 +371,3 @@ Results:
 - artifact paths are stored in truncated `failure_reason`, so very long provider errors may lose some tail detail; the artifact is the real debug source
 - this pass did not add DB columns like `failure_class`; taxonomy remains visible through `failure_reason` plus artifact contents
 - manual verification against the three reported real-world models is still recommended before calling any provider “stable”
-
-### Git / rollback
-- Branch: `iter/004`
-- Commit(s): pending final atomic commit for this remediation pass
-- Rollback hint after commit: `git log --oneline -n 5`
-
-## 2026-03-21 — editorial analysis phase 1 implementation for `spain-news-bias-scraper`
-
-**Role:** implementer  
-**Outcome:** ✅ Complete for scoped phase 1  
-**Scope:** dedicated article-level editorial analysis only
-
----
-
-## What was added
-
-### Persistence / ORM
-- Added new dedicated ORM model and table: `article_editorial_analysis`
-- Kept this additive and separate from existing `article_analysis`
-- Stored bounded JSON payloads in:
-  - `framing_devices_json`
-  - `evidence_spans_json`
-- Included operational/versioning fields for status, model, prompt/schema version, content hash, and timestamps
-
-### Contracts / validation
-- Added strict editorial contracts in `src/analysis/contracts.py`
-- Added dedicated evidence span model
-- Added semantic guards beyond raw JSON parsing, including:
-  - score/confidence bounds
-  - no duplicate framing devices
-  - at least one evidence span
-  - `unclear` bias requiring near-neutral/low-confidence outputs
-  - pragmatic consistency checks for tone/opinionatedness/certainty
-
-### Prompt / schema / OpenRouter client
-- Added dedicated prompt builder: `build_editorial_analysis_prompt(...)`
-- Added dedicated strict JSON schema builder: `editorial_analysis_json_schema()`
-- Added dedicated OpenRouter client method: `analyze_editorial(...)`
-- Kept this path separate from the existing enrichment prompt/schema/client flow
-
-### Pipeline / job
-- Added dedicated `EditorialAnalysisPipeline`
-- Added `scripts/analyze_editorial.py`
-- Added Make target: `make analyze-editorial DATABASE_URL=...`
-- Implemented:
-  - recent article loading
-  - content-hash skip behavior
-  - OpenRouter call
-  - strict payload validation
-  - persistence into the new table
-  - simple failed/completed status handling
-
-### Read surface
-- Added minimal article-level read endpoint:
-  - `GET /api/v1/editorial-analysis/{article_id}`
-- Did **not** add cluster-level ideological summaries
-
----
-
-## Validation run
-
-Ran focused checks only:
-- `ruff check src/analysis/contracts.py src/analysis/llm_client.py src/analysis/orm_models.py src/analysis/pipeline.py src/analysis/readside.py src/api/app.py src/api/contracts/editorial.py src/api/v1/editorial.py scripts/analyze_editorial.py tests/test_editorial_analysis_contracts.py tests/test_editorial_analysis_pipeline.py tests/test_api_editorial.py`
-- `pytest -q tests/test_editorial_analysis_contracts.py tests/test_editorial_analysis_pipeline.py tests/test_api_editorial.py tests/test_api_articles.py tests/test_openrouter_extraction_contract.py`
-
-Result:
-- `13 passed`
-- lint passed on touched files
-
----
-
-## Caveats / deferred items
-
-Still intentionally out of scope:
-- cluster/story ideological rollups
-- media-level comparison endpoints
-- replacing or refactoring current `article_analysis.article_type`
-- frontend polish for this feature
-- migration framework overhaul
-
-One practical caveat:
-- failed editorial rows are persisted with `analysis_status="failed"` plus `failure_reason`, using placeholder `unclear` values for required classification columns so the row stays storable without inventing fake successful analysis
-
----
-
-## Previous result entries
-
-### 2026-03-21 — planner handoff for editorial analysis feature
-
-**Role:** planner  
-**Outcome:** ✅ Complete  
-**Scope:** planning only, no implementation
-
----
-
-## What was accomplished
-
-Created a concrete implementation plan for adding **LLM-driven article editorial analysis** to `spain-news-bias-scraper`.
-
-The plan was grounded in:
-- `docs/contracts/editorial-analysis-v1.md`
-- `docs/contracts/editorial-analysis-prompt-v1.md`
-- the current OpenRouter client path in `src/analysis/llm_client.py`
-- the current analysis ORM/contracts/pipeline stack
-- current FastAPI read-side structure and CRUD style
-
-Updated:
-- `PLAN.md`
-- `STATUS.md`
-- `RESULTS.md`
-
-No implementation work was performed.
-
----
-
-## Planner recommendations in one shot
-
-### 1) Persistence / naming
-- Add a new dedicated table and ORM model: **`article_editorial_analysis`**
-- Keep **one row per article** in v1
-- Do **not** stuff editorial bias/tone fields into the existing `article_analysis` table
-- Keep `framing_devices` and `evidence_spans` as bounded JSON fields in v1
-
-### 2) OpenRouter integration
-- Add a separate editorial payload contract and schema instead of extending `ArticleEnrichmentPayload`
-- Add a dedicated prompt builder + client method for editorial analysis
-- Reuse OpenRouter `response_format={type: json_schema}` style, then validate with Pydantic and extra semantic guards
-- Treat the prompt/template as **versioned core infrastructure**
-
-### 3) Pipeline design
-- Build a **new dedicated editorial-analysis pipeline/job**
-- Do not fold it into the current enrichment job in v1
-- Use content-hash skip logic and explicit status/failure fields
-- Do **not** add a heuristic fallback for ideology/tone classification
-
-### 4) Schema evolution
-- The repo currently relies on ORM registration + `Base.metadata.create_all()` via init scripts
-- Plan assumes additive schema evolution in that existing style
-- No default full-corpus backfill on first release; start with bounded recent windows
-
-### 5) API surface
-- Start with article-level read access:
-  - `GET /api/v1/articles/{article_id}/editorial-analysis`
-- Optionally add list/filter reads later
-- Defer cluster-level ideological rollups; they need explicit aggregation rules and are easy to bullshit
-
-### 6) Testing / validation
-- Add contract tests, JSON schema tests, prompt/version tests, client parsing tests, DB persistence tests, and API route tests
-- Add manual review fixtures for ambiguous vs obvious cases before any broader backfill
-
----
-
-## Recommended atomic implementation order
-
-1. editorial Pydantic models + validators
-2. prompt/template runtime infrastructure
-3. dedicated OpenRouter client method
-4. ORM model + schema init support
-5. dedicated editorial pipeline/CLI target
-6. article-level read API
-7. optional cluster detail integration
-8. later operator/backfill controls
-
----
-
-## Important decisions locked by this planner pass
-
-- **Best table name:** `article_editorial_analysis`
-- **Best v1 architecture:** dedicated pipeline, not enrichment-job overloading
-- **Best evidence modeling:** JSON in v1, not child-table normalization yet
-- **Best prompt handling:** explicit versioned asset/module, not ad hoc inline strings
-- **Best read-side scope:** article-level first, cluster aggregation later if ever justified
-
----
-
-## Relevant repo details for implementer
-
-- Existing OpenRouter integration already uses strict JSON schema mode in `src/analysis/llm_client.py`
-- Existing topical enrichment uses `ArticleEnrichmentPayload` and writes to `article_analysis`
-- Existing schema init is driven by `Base.metadata.create_all()` via `scripts/init_analysis_schema.py`
-- Existing CRUD style is explicit, lightweight, and a good fit for article-level editorial reads
-- Current clustering depends on existing `article_analysis.article_type`, so any unification of article-type sources should be treated as a later deliberate follow-up, not part of the first feature slice
-
----
-
-## Previous result entries
-
-### 2026-03-21 — cleanup implementation for `spain-news-bias-scraper`
-
-**Role:** implementer
-**Outcome:** ✅ Complete for scoped items
-**Scope:** P0 duplicate semantic schema SQL, P1 cluster rebuild safety, P1 legacy scheduler deprecation/guarding
-
----
-
-## What changed
-
-### 1) P0 — deduplicated semantic schema SQL
-- Replaced the duplicated `INIT_SQL_TEMPLATE` and `ADDITIVE_SCHEMA_SQL` bodies in `src/semantic/dbstore.py` with a single canonical `SCHEMA_SQL_TEMPLATE`.
-- Kept `render_init_sql()` and `render_additive_schema_sql()` as compatibility wrappers so call sites and behavior stay unchanged.
-
-**Commit:** `refactor(db): deduplicate schema sql constants`
-
-### 2) P1 — made cluster rebuild rollback explicit
-- Tightened `ClusterPipeline.build_clusters()` so the destructive cluster rebuild persists inside an explicit `try/except` that calls `session.rollback()` on any failure before re-raising.
-- This closes the operator trap where a failed rebuild could leave pending destructive work hanging around in the session and accidentally get committed later by a caller.
-- Added a focused regression test covering rollback-on-failure.
-
-**Commit:** `fix(clustering): make cluster rebuild transactional`
-
-### 3) P1 — deprecated the legacy scrape-only scheduler wrapper
-- Kept `scripts/run_scheduled.sh` callable for legacy usage, but made it loud and unmistakable:
-  - logs a deprecation warning on dry-run and real execution
-  - explicitly says it does **not** run `enrich-articles` or `build-story-clusters`
-  - points operators to `scripts/run_stories_refresh.sh`
-- Updated Makefile help text and operator-facing docs/README to mark the wrapper as legacy/deprecated.
-
-**Commit:** `chore(ops): deprecate legacy scheduled wrapper`
-
----
-
-## Validation run
-
-- `~/.local/bin/uv run --project . python - <<'PY' ...` to confirm both semantic schema render helpers still emit the same SQL and the embedding dimension substitution still works.
-- `~/.local/bin/uv run --project . pytest -q tests/test_story_clustering.py`
-  - result: `3 passed`
-- `DATABASE_URL='postgresql+psycopg://user:pass@host:5432/dbname' make scheduler-dry-run`
-  - verified the legacy warning is written to `var/log/scheduler.log`
-- `make help | grep -n "LEGACY" | head`
-  - verified operator-facing legacy labeling in help output
-
----
-
-## Blocked architect-level decisions
-
-None for the scoped items completed here.
-
-The remaining P1/P2 audit items (`article_enrichment_runs`, SQLite compatibility leakage, etc.) were intentionally left untouched because they were outside this implementation pass.
-
-## 2026-03-20 — architect audit handoff for `spain-news-bias-scraper`
-
-**Role:** architect
-**Outcome:** ✅ Complete
-**Scope:** audit-only, no implementation
-
----
-
-## What was accomplished
-
-A full, repo-grounded architecture audit has been completed and written to `ARCH_AUDIT.md`.
-
-All five audit tracks from `PLAN.md` were executed:
-
-1. **DB/schema audit** — every table classified by role (source-of-truth / derived / dead)
-2. **Codebase/legacy audit** — cleanup candidate register with evidence and removal confidence
-3. **Pipeline/data-flow audit** — end-to-end runtime map with risks annotated
-4. **API/frontend contract audit** — Python/TypeScript alignment verified, issues identified
-5. **Simplification/de-scope audit** — "remove tomorrow" and "not worth carrying yet" lists
-
----
-
-## `ARCH_AUDIT.md` structure
-
-The audit document contains:
-
-- Executive summary with the five real problems in severity order
-- **Deliverable A**: System audit memo (five tracks, each finding has severity/confidence/evidence/recommendation)
-- **Deliverable B**: Data model decision table (all 15 tables)
-- **Deliverable C**: Runtime/data-flow map (scrape to frontend, annotated with destructive/additive/risk markers)
-- **Deliverable D**: Cleanup candidate register (6 items with proof requirements)
-- **Deliverable E**: Recommended execution order (Phase 0/1/2/3)
-
----
-
-## Summary findings by priority
-
-### P0 — fix now
-- **Duplicate SQL constants** (`INIT_SQL_TEMPLATE` == `ADDITIVE_SCHEMA_SQL` byte-for-byte): 5-minute fix, no behavior change
-
-### P1 — important before scaling
-- **Legacy `run_scheduled.sh`**: scrape-only scheduler coexists with newer full-pipeline wrappers; operator confusion risk; silent under-enrichment if wrong wrapper is used
-- **Cluster rebuild has no transaction safety**: full DELETE before rebuild, no atomic swap; API returns empty cluster state on failed rebuild
-- **`article_enrichment_runs`**: written every enrichment cycle, never read anywhere; dead write overhead dressed as auditing
-- **SQLite dialect branch in production `dbstore.py`**: test infrastructure leaking into production code
-
-### P2 — cleanup/clarity
-- `entity_aliases`: write-only, no read path
-- `ExplorerArticleDetail.semantic_summary` duplicates `point.analysis`
-- `cluster_key` is not stable across rebuilds but is exposed in API/frontend types
-- Threshold mismatch (0.68 in Makefile, 0.45 in stories refresh wrapper)
-- `generate_comparison_summary.py` is an orphan script
-
----
-
-## Table ownership summary
-
-| Classification | Tables |
-|---|---|
-| Source-of-truth | `articles` |
-| Semi-durable (expensive) | `article_embeddings` |
-| Reference/seed | `tags` |
-| Derived rebuild artifacts | `article_analysis`, `article_tags`, `entity_mentions`, `entities`, `story_clusters`, `cluster_members`, `cluster_entities`, `article_projections`, `semantic_point_analysis`, `semantic_clusters` |
-| No read path (dead writes) | `article_enrichment_runs`, `entity_aliases` |
-
----
-
-## What is not a problem
-
-- Story clustering vs. semantic clustering: clearly different products, no schema overlap
-- `articles.tags` raw field: still used as heuristic input signal, justified
-- Semantic tables using raw SQL DDL instead of ORM: acceptable given pgvector constraints
-- Frontend types manually mirrored from Python: acceptable at current scale
-- `analysis-db-init` on every stories refresh: idempotent, harmless, low priority
-
----
-
-## Previous result entries
-
-### 2026-03-20 — planner handoff for serious repo audit
-
-**Role:** planner
-**Outcome:** ✅ Complete
-**Scope:** planning only, no implementation
-
-A full audit-planning handoff was placed in `PLAN.md` and this file. The planner established the five audit tracks, required deliverables, prioritization model, and architect workflow. See the earlier entry in git history for the full planner summary.

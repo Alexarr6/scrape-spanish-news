@@ -36,6 +36,9 @@ Use dry run to confirm:
 - selection logic is correct
 - pending/failed targeting behaves as expected
 - CLI flags behave sanely
+- the reported `effective_status` matches operator intent
+- `--reprocess` widens default `status=pending` runs to `status=any` unless explicit article ids are supplied
+- `selection.status_counts` looks plausible before you spend tokens
 
 ### Step 2 — real small-batch run
 Run a small real batch, ideally 10 to 20 articles.
@@ -151,6 +154,10 @@ After the first review, classify the system state into one of three buckets:
 - `provider_rejected_count` captures pre-generation schema rejection cases
 - `parse_failed_count` captures empty/non-JSON/unexpected response content
 - `validation_failed_count` captures local payload validation failures after JSON was parsed
+- `strict_success_count` vs `fallback_success_count` now shows whether fallback actually saved the row
+- warning-heavy successful rows should now increment `rows_with_warnings_count`
+- truncation/data-loss cases should now be visible through metrics like `rows_with_truncated_evidence_count`, failure artifacts, and row-level warning details
+- `unclear` should be interpreted with the new reason classes in artifacts (`semantic_weak_signal`, `mapping_unresolved`, `repair_data_loss`, etc.), not as a useless black-box shrug
 
 ### Artifact hygiene
 - Artifacts are runtime debug files, not source docs
