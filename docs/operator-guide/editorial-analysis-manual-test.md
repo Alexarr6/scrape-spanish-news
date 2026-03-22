@@ -24,6 +24,26 @@ For a small mixed set of articles, check:
 
 ## Recommended order
 
+### Step 0 — replay the offline corpus first
+Before spending provider calls, run the captured replay corpus.
+
+```bash
+cd /home/node/.openclaw/workspace/repos/spain-news-bias-scraper
+PYTHONPATH=. ~/.local/bin/uv run --project . python3 scripts/replay_editorial_corpus.py
+```
+
+Use this to check whether recent code changes altered:
+- applicability buckets
+- `unclear` reason mix
+- dimension-level statuses
+- preserved non-canonical signals
+- known normalization failures
+
+If the replay corpus moves in a surprising way, stop and inspect that first.
+
+See also:
+- `docs/operator-guide/editorial-analysis-replay-corpus.md`
+
 ### Step 1 — dry run first
 Run a dry run on a small bounded slice.
 

@@ -1,5 +1,45 @@
 # RESULTS.md
 
+## 2026-03-22 — implementer pass for offline editorial replay corpus and calibration harness
+
+**Role:** implementer  
+**Outcome:** ✅ Complete  
+**Scope:** bounded additive implementation of an offline replay corpus, evaluation harness, report output, regression tests, and operator guidance using real captured artifacts
+
+### What I accomplished
+- added `src/analysis/editorial_replay.py` with fixture loading, offline replay execution, expectation checking, and a compact operator-facing report
+- created a real replay corpus under `tests/fixtures/editorial_replay/` using representative captured artifacts from current debugging work
+- recorded fixture expectations for applicability, unclear reasons, final canonical payloads, dimension statuses, preserved signals, and a known normalization-error case
+- added `scripts/replay_editorial_corpus.py` so the corpus can be run locally without provider calls
+- added `tests/test_editorial_replay.py` so corpus behavior is regression-tested in CI/local development
+- updated operator docs to make replay-first calibration the default workflow before ad-hoc live probing
+
+### Files changed
+- `src/analysis/editorial_replay.py`
+- `scripts/replay_editorial_corpus.py`
+- `tests/fixtures/editorial_replay/*.json`
+- `tests/test_editorial_replay.py`
+- `docs/operator-guide/editorial-analysis-replay-corpus.md`
+- `docs/operator-guide/editorial-analysis-manual-test.md`
+- `STATUS.md`
+- `RESULTS.md`
+
+### Verification
+Commands run:
+- `PYTHONPATH=. ~/.local/bin/uv run --project . pytest -q tests/test_editorial_replay.py tests/test_editorial_normalization.py tests/test_editorial_analysis_pipeline.py`
+- `PYTHONPATH=. ~/.local/bin/uv run --project . python3 scripts/replay_editorial_corpus.py`
+- `PYTHONPATH=. ~/.local/bin/uv run --project . ruff check src/analysis/editorial_replay.py scripts/replay_editorial_corpus.py tests/test_editorial_replay.py`
+
+Results:
+- replay/regression pytest suite: `13 passed in 0.96s`
+- replay script: `6 passed, 0 failed, 6 total` with buckets `out_of_domain=2`, `limited=1`, `mapping_loss=2`, `normalization_error=1`
+- `ruff check`: passed for replay harness, script, and replay tests
+
+### Remaining risks / follow-ups
+- the corpus is intentionally small and representative; it covers major article families but not the full live distribution yet
+- one fixture intentionally captures a still-failing raw-shape case (`framing_devices` as object) so future repair expansion can be measured cleanly
+- if normalization intentionally changes, fixture expectations must be updated explicitly rather than silently drifting
+
 ## 2026-03-22 — implementer pass for editorial diagnostics, applicability, and explainable `unclear`
 
 **Role:** implementer  
@@ -111,6 +151,13 @@ But add a second persistent product:
 - `PLAN.md`
 - `STATUS.md`
 - `RESULTS.md`
+
+### Final proposal additions in this pass
+- reframed the mission as **first-pass editorial analysis proportionate to signal**, not forced ideology scoring
+- added an explicit end-state architecture section covering applicability-first routing, canonical-vs-diagnostics persistence, field tiering, and operator-trust requirements
+- made the structured-output-helper position explicit: useful only as an optional allowlisted fast path, not the default architecture
+- made the offline calibration corpus position explicit: build it from real captured outputs and use it as the main replay/regression harness for future iterations
+- updated the next implementation order so the very next work is corpus/replay/calibration and operator presentation, not more blind prompt fiddling
 
 ### Explicit view on structured-output helper alternative
 Blunt version:

@@ -1,5 +1,5 @@
 - State: DONE
-- Current phase: implementer pass completed on `iter/004`; editorial-analysis now persists applicability + per-dimension diagnostics so `unclear` is explainable instead of a black box
+- Current phase: implementer pass completed on `iter/004`; editorial-analysis now persists applicability + per-dimension diagnostics so `unclear` is explainable instead of a black box, and now has an offline replay corpus/harness for cheap calibration against captured real outputs
 - Last update: 2026-03-22 UTC
 
 ## Implementer completion — editorial diagnostics, applicability, and explainable `unclear`
@@ -14,6 +14,7 @@ Completed the bounded implementation pass approved in the architect review.
 - extended run metrics / CLI JSON with aggregate unclear-reason and dimension-status counters
 - exposed diagnostics/applicability/path through read-side + API detail/list responses
 - added regression coverage for weak-signal abstention, mapping loss, provider-missing behavior, and out-of-domain article types
+- built an offline replay corpus from captured real artifacts plus a replay harness/report so future calibration can run locally without provider calls
 
 ### Important constraint preserved
 - the strict final editorial payload remains authoritative for filtering/aggregation
