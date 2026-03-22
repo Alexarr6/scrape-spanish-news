@@ -105,10 +105,10 @@ preflight:
 	mkdir -p "$(LOCK_DIR)" "$(LOG_DIR)" "$(STATE_DIR)" "data"; \
 	printf 'app_root=%s\n' "$(APP_ROOT)"; \
 	command -v "$(UV)" >/dev/null || { echo 'uv missing'; exit 1; }; \
-	command -v flock >/dev/null || { echo 'flock missing'; exit 1; }; \
 	[[ -f "$(APP_ROOT)/src/main.py" ]] || { echo 'src/main.py missing under repo root'; exit 1; }; \
 	if [[ -z "$(DATABASE_URL)" ]]; then echo 'warning: DATABASE_URL not set; persist/api targets will fail until you provide it'; fi; \
 	if ! command -v docker >/dev/null 2>&1; then echo 'warning: docker not found; host-based mode is the intended default'; fi; \
+	if ! command -v flock >/dev/null 2>&1; then echo 'warning: flock not found; scheduler wrappers that rely on file locks may not work on this host'; fi; \
 	PYTHONPATH="$(APP_ROOT):$${PYTHONPATH:-}" $(PYTHON) -m src.main --help >/dev/null; \
 	echo 'python entrypoint ok'
 

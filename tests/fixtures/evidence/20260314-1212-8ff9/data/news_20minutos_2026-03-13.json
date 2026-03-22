@@ -1,0 +1,13 @@
+[
+  {
+    "source": "20minutos",
+    "title": "Fixture article for 20minutos",
+    "url": "https://example.com/20minutos/2026-03-13/1",
+    "published_at": "2026-03-13T08:00:00+00:00",
+    "section": "fixture",
+    "author": "fixture-bot",
+    "summary": "Stable fixture summary for 20minutos",
+    "article_text": "Stable fixture article text for 20minutos.",
+    "tags": "fixture,test"
+  }
+]

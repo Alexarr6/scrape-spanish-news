@@ -1,0 +1,13 @@
+[
+  {
+    "source": "lavanguardia",
+    "title": "Fixture article for lavanguardia",
+    "url": "https://example.com/lavanguardia/2026-03-13/1",
+    "published_at": "2026-03-13T08:00:00+00:00",
+    "section": "fixture",
+    "author": "fixture-bot",
+    "summary": "Stable fixture summary for lavanguardia",
+    "article_text": "Stable fixture article text for lavanguardia.",
+    "tags": "fixture,test"
+  }
+]

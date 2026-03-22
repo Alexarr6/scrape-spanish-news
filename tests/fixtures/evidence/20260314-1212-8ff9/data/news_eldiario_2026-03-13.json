@@ -1,0 +1,13 @@
+[
+  {
+    "source": "eldiario",
+    "title": "Fixture article for eldiario",
+    "url": "https://example.com/eldiario/2026-03-13/1",
+    "published_at": "2026-03-13T08:00:00+00:00",
+    "section": "fixture",
+    "author": "fixture-bot",
+    "summary": "Stable fixture summary for eldiario",
+    "article_text": "Stable fixture article text for eldiario.",
+    "tags": "fixture,test"
+  }
+]
