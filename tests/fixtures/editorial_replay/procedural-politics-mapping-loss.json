@@ -1,0 +1,441 @@
+{
+  "fixture_id": "procedural-politics-mapping-loss",
+  "family": "procedural_hard_news",
+  "source_artifact": "20260322T172213Z-article-2926.json",
+  "notes": "Political hard-news article with real editorial signal hints, but substantial taxonomy compression and truncation. Good mapping-loss calibration case.",
+  "article": {
+    "source": "abc",
+    "section": "espana",
+    "published_at": "2026-03-22T16:20:23+00:00",
+    "url": "https://www.abc.es/espana/andalucia/juanma-moreno-asegura-andalucia-preparada-semana-santa-20260322171614-nts.html",
+    "title": "Juanma Moreno asegura que Andalucía está «más que preparada» para la Semana Santa pese a los problemas con los trenes"
+  },
+  "provider": {
+    "model_provider": "openrouter",
+    "model_name": "openai/gpt-5.4-nano",
+    "strict_failure_class": "provider_schema_rejected",
+    "fallback_failure_class": "payload_validation_failed"
+  },
+  "raw_provider_output": "{\n  \"article_type\": \"política nacional/regional y economía local (reacciones oficiales sobre infraestructura ferroviaria y Semana Santa)\",\n  \"ideological_bias_framing\": {\n    \"direction\": \"unclear\",\n    \"confidence\": 0.35,\n    \"rationale\": \"El texto presenta declaraciones de representantes regionales (p.ej., Juanma Moreno y Carolina España) con críticas al Gobierno central, pero no se observa un posicionamiento editorial inequívoco del medio; el artículo se articula como relator de posturas y efectos económicos.\"\n  },\n  \"tone_dimensions\": {\n    \"overall_tone\": \"mixto (informativo con carga crítica en citas y efectos negativos)\",\n    \"confidence\": 0.6,\n    \"emotional_valence\": \"negativa hacia el desempeño del sistema ferroviario; positiva sobre la Semana Santa\",\n    \"certainty_level\": \"moderada\",\n    \"sensationalism\": \"bajo\"\n  },\n  \"framing_devices\": [\n    {\n      \"type\": \"contraste\",\n      \"description\": \"Contrapone la afirmación de preparación para la Semana Santa con el problema ferroviario y sus efectos.\",\n      \"evidence_spans\": [\n        \"aseguró que Andalucía está «más que preparada» para acoger la Semana Santa\",\n        \"pese a los problemas con los trenes\"\n      ]\n    },\n    {\n      \"type\": \"citas con eslógan/etiqueta\",\n      \"description\": \"Usa expresiones identitarias para enmarcar la crítica institucional al Gobierno central.\",\n      \"evidence_spans\": [\n        \"define al Ejecutivo como el «Gobierno de los retrasos»\"\n      ]\n    },\n    {\n      \"type\": \"enmarcado económico por costes\",\n      \"description\": \"Aporta magnitudes económicas para subrayar el impacto del colapso ferroviario.\",\n      \"evidence_spans\": [\n        \"Se calcula una pérdida de 1.300 millones de euros en Málaga\"\n      ]\n    },\n    {\n      \"type\": \"apoyo en causalidad/condicionalidad\",\n      \"description\": \"Presenta explicaciones sobre por qué se está sin AVE y sugiere que decisiones previas habrían evitado el problema.\",\n      \"evidence_spans\": [\n        \"«si se hubiera adoptado la decisión correcta en su momento, a lo mejor no estaríamos sin AVE ahora mismo»\"\n      ]\n    },\n    {\n      \"type\": \"llamado/agenda de propuestas\",\n      \"description\": \"Incluye demandas y medidas concretas (bonificar peajes, rebajar precios, campañas) como parte del marco de solución.\",\n      \"evidence_spans\": [\n        \"ha pedido al Ejecutivo a que «reconozcan sus errores» y a que «pidan perdón»\",\n        \"solicitó que se rebajen los precios de los aviones\",\n        \"ha pedido que se bonifique el peaje a la Costa del Sol\"\n      ]\n    }\n  ],\n  \"rationale\": \"El artículo se centra en la Semana Santa y la preparación regional, pero enmarca el contexto mediante el “caos ferroviario” y sus consecuencias económicas, apoyándose principalmente en declaraciones de actores políticos andaluces. La crítica al Gobierno central aparece en forma de citas y formulaciones contundentes (p.ej., «Gobierno de los retrasos»), mientras que la valoración cultural y turística de la Semana Santa se formula como postura positiva atribuida al presidente andaluz.\",\n  \"evidence_spans\": [\n    {\n      \"span\": \"Juanma Moreno aseguró que Andalucía está «más que preparada» para acoger la Semana Santa\",\n      \"context\": \"Afirmación principal de preparación pese a la falta de conexión ferroviaria\"\n    },\n    {\n      \"span\": \"pese a los problemas con los trenes\",\n      \"context\": \"Indicador explícito en el título del obstáculo principal\"\n    },\n    {\n      \"span\": \"define al Ejecutivo como el «Gobierno de los retrasos»\",\n      \"context\": \"Etiqueta crítica hacia el Gobierno central atribuida a la portavoz Carolina España\"\n    },\n    {\n      \"span\": \"Se calcula una pérdida de 1.300 millones de euros en Málaga debido a este problema en el transporte.\",\n      \"context\": \"Cuantificación del impacto económico\"\n    },\n    {\n      \"span\": \"al tiempo que la restauración «va a sufrir» a causa de que «el Gobierno Sánchez-Montero-Puente ha dejado tirada a Málaga»\",\n      \"context\": \"Enmarcado negativo del impacto institucional y económico con personalización en nombres\"\n    },\n    {\n      \"span\": \"ha asegurado que «está todo listo» para tener « una de las mejores Semanas Santas de todos los tiempos »\",\n      \"context\": \"Enmarcado positivo de expectativa pese a problemas logísticos\"\n    },\n    {\n      \"span\": \"«Algo que va más allá de la fe que cada uno pueda profesar».\",\n      \"context\": \"Marco cultural/identitario de la Semana Santa, atribuido al presidente\"\n    },\n    {\n      \"span\": \"ha pedido al Ejecutivo a que «reconozcan sus errores» y a que «pidan perdón»\",\n      \"context\": \"Demandas de accountability dirigidas al Gobierno central\"\n    },\n    {\n      \"span\": \"ha pedido que se bonifique el peaje a la Costa del Sol\",\n      \"context\": \"Propuesta concreta de mitigación\"\n    }\n  ],\n  \"confidence\": 0.64\n}",
+  "parsed_json": {
+    "article_type": "política nacional/regional y economía local (reacciones oficiales sobre infraestructura ferroviaria y Semana Santa)",
+    "ideological_bias_framing": {
+      "direction": "unclear",
+      "confidence": 0.35,
+      "rationale": "El texto presenta declaraciones de representantes regionales (p.ej., Juanma Moreno y Carolina España) con críticas al Gobierno central, pero no se observa un posicionamiento editorial inequívoco del medio; el artículo se articula como relator de posturas y efectos económicos."
+    },
+    "tone_dimensions": {
+      "overall_tone": "mixto (informativo con carga crítica en citas y efectos negativos)",
+      "confidence": 0.6,
+      "emotional_valence": "negativa hacia el desempeño del sistema ferroviario; positiva sobre la Semana Santa",
+      "certainty_level": "moderada",
+      "sensationalism": "bajo"
+    },
+    "framing_devices": [
+      {
+        "type": "contraste",
+        "description": "Contrapone la afirmación de preparación para la Semana Santa con el problema ferroviario y sus efectos.",
+        "evidence_spans": [
+          "aseguró que Andalucía está «más que preparada» para acoger la Semana Santa",
+          "pese a los problemas con los trenes"
+        ]
+      },
+      {
+        "type": "citas con eslógan/etiqueta",
+        "description": "Usa expresiones identitarias para enmarcar la crítica institucional al Gobierno central.",
+        "evidence_spans": [
+          "define al Ejecutivo como el «Gobierno de los retrasos»"
+        ]
+      },
+      {
+        "type": "enmarcado económico por costes",
+        "description": "Aporta magnitudes económicas para subrayar el impacto del colapso ferroviario.",
+        "evidence_spans": [
+          "Se calcula una pérdida de 1.300 millones de euros en Málaga"
+        ]
+      },
+      {
+        "type": "apoyo en causalidad/condicionalidad",
+        "description": "Presenta explicaciones sobre por qué se está sin AVE y sugiere que decisiones previas habrían evitado el problema.",
+        "evidence_spans": [
+          "«si se hubiera adoptado la decisión correcta en su momento, a lo mejor no estaríamos sin AVE ahora mismo»"
+        ]
+      },
+      {
+        "type": "llamado/agenda de propuestas",
+        "description": "Incluye demandas y medidas concretas (bonificar peajes, rebajar precios, campañas) como parte del marco de solución.",
+        "evidence_spans": [
+          "ha pedido al Ejecutivo a que «reconozcan sus errores» y a que «pidan perdón»",
+          "solicitó que se rebajen los precios de los aviones",
+          "ha pedido que se bonifique el peaje a la Costa del Sol"
+        ]
+      }
+    ],
+    "rationale": "El artículo se centra en la Semana Santa y la preparación regional, pero enmarca el contexto mediante el “caos ferroviario” y sus consecuencias económicas, apoyándose principalmente en declaraciones de actores políticos andaluces. La crítica al Gobierno central aparece en forma de citas y formulaciones contundentes (p.ej., «Gobierno de los retrasos»), mientras que la valoración cultural y turística de la Semana Santa se formula como postura positiva atribuida al presidente andaluz.",
+    "evidence_spans": [
+      {
+        "span": "Juanma Moreno aseguró que Andalucía está «más que preparada» para acoger la Semana Santa",
+        "context": "Afirmación principal de preparación pese a la falta de conexión ferroviaria"
+      },
+      {
+        "span": "pese a los problemas con los trenes",
+        "context": "Indicador explícito en el título del obstáculo principal"
+      },
+      {
+        "span": "define al Ejecutivo como el «Gobierno de los retrasos»",
+        "context": "Etiqueta crítica hacia el Gobierno central atribuida a la portavoz Carolina España"
+      },
+      {
+        "span": "Se calcula una pérdida de 1.300 millones de euros en Málaga debido a este problema en el transporte.",
+        "context": "Cuantificación del impacto económico"
+      },
+      {
+        "span": "al tiempo que la restauración «va a sufrir» a causa de que «el Gobierno Sánchez-Montero-Puente ha dejado tirada a Málaga»",
+        "context": "Enmarcado negativo del impacto institucional y económico con personalización en nombres"
+      },
+      {
+        "span": "ha asegurado que «está todo listo» para tener « una de las mejores Semanas Santas de todos los tiempos »",
+        "context": "Enmarcado positivo de expectativa pese a problemas logísticos"
+      },
+      {
+        "span": "«Algo que va más allá de la fe que cada uno pueda profesar».",
+        "context": "Marco cultural/identitario de la Semana Santa, atribuido al presidente"
+      },
+      {
+        "span": "ha pedido al Ejecutivo a que «reconozcan sus errores» y a que «pidan perdón»",
+        "context": "Demandas de accountability dirigidas al Gobierno central"
+      },
+      {
+        "span": "ha pedido que se bonifique el peaje a la Costa del Sol",
+        "context": "Propuesta concreta de mitigación"
+      }
+    ],
+    "confidence": 0.64
+  },
+  "repaired_payload": {
+    "article_type": "política nacional/regional y economía local (reacciones oficiales sobre infraestructura ferroviaria y Semana Santa)",
+    "article_type_confidence": null,
+    "bias_label": null,
+    "ideological_bias_framing": {
+      "direction": "unclear",
+      "confidence": 0.35,
+      "rationale": "El texto presenta declaraciones de representantes regionales (p.ej., Juanma Moreno y Carolina España) con críticas al Gobierno central, pero no se observa un posicionamiento editorial inequívoco del medio; el artículo se articula como relator de posturas y efectos económicos."
+    },
+    "bias_score": null,
+    "bias_confidence": 0.35,
+    "confidence": 0.64,
+    "tone_emotional": null,
+    "tone_target": null,
+    "opinionatedness": null,
+    "sensationalism": null,
+    "rhetorical_certainty": null,
+    "tone_dimensions": {
+      "overall_tone": "mixto (informativo con carga crítica en citas y efectos negativos)",
+      "confidence": 0.6,
+      "emotional_valence": "negativa hacia el desempeño del sistema ferroviario; positiva sobre la Semana Santa",
+      "certainty_level": "moderada",
+      "sensationalism": "bajo"
+    },
+    "framing_devices": [
+      "contraste",
+      "citas con eslógan/etiqueta",
+      "enmarcado económico por costes",
+      "apoyo en causalidad/condicionalidad",
+      "llamado/agenda de propuestas"
+    ],
+    "evidence_spans": [
+      {
+        "type": null,
+        "text": "Juanma Moreno aseguró que Andalucía está «más que preparada» para acoger la Semana Santa",
+        "note": null
+      },
+      {
+        "type": null,
+        "text": "pese a los problemas con los trenes",
+        "note": null
+      },
+      {
+        "type": null,
+        "text": "define al Ejecutivo como el «Gobierno de los retrasos»",
+        "note": null
+      },
+      {
+        "type": null,
+        "text": "Se calcula una pérdida de 1.300 millones de euros en Málaga debido a este problema en el transporte.",
+        "note": null
+      },
+      {
+        "type": null,
+        "text": "al tiempo que la restauración «va a sufrir» a causa de que «el Gobierno Sánchez-Montero-Puente ha dejado tirada a Málaga»",
+        "note": null
+      },
+      {
+        "type": null,
+        "text": "ha asegurado que «está todo listo» para tener « una de las mejores Semanas Santas de todos los tiempos »",
+        "note": null
+      }
+    ],
+    "rationale": "El artículo se centra en la Semana Santa y la preparación regional, pero enmarca el contexto mediante el “caos ferroviario” y sus consecuencias económicas, apoyándose principalmente en declaraciones de actores políticos andaluces. La crítica al Gobierno central aparece en forma de citas y formulaciones contundentes (p.ej., «Gobierno de los retrasos»), mientras que la valoración cultural y turística de la Semana Santa se formula como postura positiva atribuida al presidente andaluz.",
+    "notes": null,
+    "uncertainty_reason": null,
+    "repair_warnings": [
+      "repair_promoted_confidence: ideological_bias_framing.confidence -> bias_confidence",
+      "repair_framing_device_object_extracted",
+      "repair_framing_device_object_extracted",
+      "repair_framing_device_object_extracted",
+      "repair_framing_device_object_extracted",
+      "repair_framing_device_object_extracted",
+      "repair_truncated_evidence_spans: 9 -> 6",
+      "repair_regularized_evidence_object",
+      "repair_regularized_evidence_object",
+      "repair_regularized_evidence_object",
+      "repair_regularized_evidence_object",
+      "repair_regularized_evidence_object",
+      "repair_regularized_evidence_object"
+    ],
+    "dropped_fields": [],
+    "truncated_fields": [
+      "evidence_spans"
+    ]
+  },
+  "final_payload": {
+    "article_type": "unclear",
+    "article_type_confidence": 0.6,
+    "bias_label": "unclear",
+    "bias_score": 0.0,
+    "bias_confidence": 0.35,
+    "tone_emotional": "unclear",
+    "tone_target": "unclear",
+    "opinionatedness": "unclear",
+    "sensationalism": "low",
+    "rhetorical_certainty": "unclear",
+    "framing_devices": [],
+    "evidence_spans": [
+      {
+        "type": "body",
+        "text": "Juanma Moreno aseguró que Andalucía está «más que preparada» para acoger la Semana Santa",
+        "note": "quoted evidence span"
+      },
+      {
+        "type": "body",
+        "text": "pese a los problemas con los trenes",
+        "note": "quoted evidence span"
+      },
+      {
+        "type": "body",
+        "text": "define al Ejecutivo como el «Gobierno de los retrasos»",
+        "note": "quoted evidence span"
+      }
+    ],
+    "rationale": "El artículo se centra en la Semana Santa y la preparación regional, pero enmarca el contexto mediante el “caos ferroviario” y sus consecuencias económicas, apoyándose principalmente en declaraciones de actores políticos andaluces. La crítica al Gobierno central aparece en forma de citas y formulaciones contundentes (p.ej., «Gobierno de los retrasos»), mientras que la valoración cultural y turística de la Semana Santa se formula como postura positiva atribuida al presidente andaluz."
+  },
+  "diagnostics": {
+    "provider_path": "normalized_local_pipeline",
+    "editorial_applicability": "full",
+    "editorial_applicability_reason": "general_editorial_content",
+    "dimension_status": {
+      "article_type": {
+        "value": "unclear",
+        "status": "mapping_loss",
+        "reason": "repair_or_mapping_loss_visible",
+        "notes": [],
+        "raw_hints": []
+      },
+      "bias": {
+        "value": "unclear",
+        "status": "mapping_loss",
+        "reason": "repair_or_mapping_loss_visible",
+        "notes": [],
+        "raw_hints": []
+      },
+      "tone_emotional": {
+        "value": "unclear",
+        "status": "mapping_loss",
+        "reason": "repair_or_mapping_loss_visible",
+        "notes": [],
+        "raw_hints": [
+          "overall_tone=mixto (informativo con carga crítica en citas y efectos negativos)",
+          "certainty_level=moderada"
+        ]
+      },
+      "tone_target": {
+        "value": "unclear",
+        "status": "provider_missing",
+        "reason": "no_raw_value_present",
+        "notes": [],
+        "raw_hints": [
+          "overall_tone=mixto (informativo con carga crítica en citas y efectos negativos)",
+          "certainty_level=moderada"
+        ]
+      },
+      "opinionatedness": {
+        "value": "unclear",
+        "status": "provider_missing",
+        "reason": "no_raw_value_present",
+        "notes": [],
+        "raw_hints": [
+          "overall_tone=mixto (informativo con carga crítica en citas y efectos negativos)",
+          "certainty_level=moderada"
+        ]
+      },
+      "sensationalism": {
+        "value": "low",
+        "status": "resolved",
+        "reason": "canonical_value_resolved",
+        "notes": [],
+        "raw_hints": [
+          "overall_tone=mixto (informativo con carga crítica en citas y efectos negativos)",
+          "certainty_level=moderada"
+        ]
+      },
+      "rhetorical_certainty": {
+        "value": "unclear",
+        "status": "provider_missing",
+        "reason": "no_raw_value_present",
+        "notes": [],
+        "raw_hints": [
+          "overall_tone=mixto (informativo con carga crítica en citas y efectos negativos)",
+          "certainty_level=moderada"
+        ]
+      },
+      "framing": {
+        "value": "unclear",
+        "status": "mapping_loss",
+        "reason": "framing_taxonomy_dropped_signal",
+        "notes": [],
+        "raw_hints": [
+          "contraste",
+          "citas con eslógan/etiqueta",
+          "enmarcado económico por costes",
+          "apoyo en causalidad/condicionalidad",
+          "llamado/agenda de propuestas"
+        ]
+      }
+    },
+    "repair_warnings": [
+      "repair_promoted_confidence: ideological_bias_framing.confidence -> bias_confidence",
+      "repair_framing_device_object_extracted",
+      "repair_framing_device_object_extracted",
+      "repair_framing_device_object_extracted",
+      "repair_framing_device_object_extracted",
+      "repair_framing_device_object_extracted",
+      "repair_truncated_evidence_spans: 9 -> 6",
+      "repair_regularized_evidence_object",
+      "repair_regularized_evidence_object",
+      "repair_regularized_evidence_object",
+      "repair_regularized_evidence_object",
+      "repair_regularized_evidence_object",
+      "repair_regularized_evidence_object"
+    ],
+    "normalization_warnings": [
+      "unmapped article_type='política nacional/regional y economía local (reacciones oficiales sobre infraestructura ferroviaria y Semana Santa)'; using 'unclear'",
+      "unmapped tone_emotional='negativa hacia el desempeño del sistema ferroviario; positiva sobre la Semana Santa'; using 'unclear'",
+      "unresolved tone_target; using 'unclear'",
+      "unresolved opinionatedness; using 'unclear'",
+      "mapped sensationalism='bajo' -> 'low'",
+      "unresolved rhetorical_certainty; using 'unclear'",
+      "dropped framing_device='contraste'",
+      "dropped framing_device='citas con eslógan/etiqueta'",
+      "dropped framing_device='enmarcado económico por costes'",
+      "dropped framing_device='apoyo en causalidad/condicionalidad'",
+      "dropped framing_device='llamado/agenda de propuestas'"
+    ],
+    "dropped_fields": [],
+    "truncated_fields": [
+      "evidence_spans"
+    ],
+    "preserved_signals": {
+      "framing_candidates": [
+        "contraste",
+        "citas con eslógan/etiqueta",
+        "enmarcado económico por costes",
+        "apoyo en causalidad/condicionalidad",
+        "llamado/agenda de propuestas"
+      ],
+      "tone_hints": [
+        "overall_tone=mixto (informativo con carga crítica en citas y efectos negativos)",
+        "certainty_level=moderada"
+      ]
+    },
+    "provider_failures": [],
+    "unclear_reasons": [
+      "mapping_loss",
+      "provider_missing",
+      "repair_data_loss",
+      "semantic_weak_signal"
+    ]
+  },
+  "expectation": {
+    "mode": "success",
+    "editorial_applicability": "full",
+    "editorial_applicability_reason": "general_editorial_content",
+    "unclear_reasons": [
+      "mapping_loss",
+      "provider_missing",
+      "repair_data_loss",
+      "semantic_weak_signal"
+    ],
+    "final_payload": {
+      "article_type": "unclear",
+      "article_type_confidence": 0.6,
+      "bias_label": "unclear",
+      "bias_score": 0.0,
+      "bias_confidence": 0.35,
+      "tone_emotional": "unclear",
+      "tone_target": "unclear",
+      "opinionatedness": "unclear",
+      "sensationalism": "low",
+      "rhetorical_certainty": "unclear",
+      "framing_devices": [],
+      "evidence_spans": [
+        {
+          "type": "body",
+          "text": "Juanma Moreno aseguró que Andalucía está «más que preparada» para acoger la Semana Santa",
+          "note": "quoted evidence span"
+        },
+        {
+          "type": "body",
+          "text": "pese a los problemas con los trenes",
+          "note": "quoted evidence span"
+        },
+        {
+          "type": "body",
+          "text": "define al Ejecutivo como el «Gobierno de los retrasos»",
+          "note": "quoted evidence span"
+        }
+      ],
+      "rationale": "El artículo se centra en la Semana Santa y la preparación regional, pero enmarca el contexto mediante el “caos ferroviario” y sus consecuencias económicas, apoyándose principalmente en declaraciones de actores políticos andaluces. La crítica al Gobierno central aparece en forma de citas y formulaciones contundentes (p.ej., «Gobierno de los retrasos»), mientras que la valoración cultural y turística de la Semana Santa se formula como postura positiva atribuida al presidente andaluz."
+    },
+    "dimension_status": {
+      "article_type": "mapping_loss",
+      "bias": "mapping_loss",
+      "tone_emotional": "mapping_loss",
+      "tone_target": "provider_missing",
+      "opinionatedness": "provider_missing",
+      "sensationalism": "resolved",
+      "rhetorical_certainty": "provider_missing",
+      "framing": "mapping_loss"
+    },
+    "preserved_signal_groups": {
+      "framing_candidates": [
+        "contraste",
+        "citas con eslógan/etiqueta",
+        "enmarcado económico por costes",
+        "apoyo en causalidad/condicionalidad",
+        "llamado/agenda de propuestas"
+      ],
+      "tone_hints": [
+        "overall_tone=mixto (informativo con carga crítica en citas y efectos negativos)",
+        "certainty_level=moderada"
+      ]
+    },
+    "repair_warnings_contains": [
+      "repair_promoted_confidence: ideological_bias_framing.confidence -> bias_confidence",
+      "repair_framing_device_object_extracted"
+    ],
+    "normalization_warnings_contains": [
+      "unmapped article_type='política nacional/regional y economía local (reacciones oficiales sobre infraestructura ferroviaria y Semana Santa)'; using 'unclear'",
+      "unmapped tone_emotional='negativa hacia el desempeño del sistema ferroviario; positiva sobre la Semana Santa'; using 'unclear'"
+    ]
+  }
+}

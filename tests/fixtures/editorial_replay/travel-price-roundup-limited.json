@@ -1,0 +1,413 @@
+{
+  "fixture_id": "travel-price-roundup-limited",
+  "family": "consumer_price_roundup",
+  "source_artifact": "20260322T171315Z-article-2925.json",
+  "notes": "Consumer price roundup / travel cost article. Useful for limited applicability plus visible mapping loss and provider-missing dimensions.",
+  "article": {
+    "source": "abc",
+    "section": "espana",
+    "published_at": "2026-03-22T16:35:41+00:00",
+    "url": "https://www.abc.es/espana/andalucia/cordoba/cordoba-posiciona-ciudades-caras-alojarse-semana-santa-20260322173538-nts.html",
+    "title": "Córdoba se posiciona entre las ciudades más caras para alojarse en Semana Santa con precios de hasta 1.900 euros por noche"
+  },
+  "provider": {
+    "model_provider": "openrouter",
+    "model_name": "openai/gpt-5.4-nano",
+    "strict_failure_class": "provider_schema_rejected",
+    "fallback_failure_class": "payload_validation_failed"
+  },
+  "raw_provider_output": "{\n  \"article_type\": \"noticia_reporte_estudio_precios_turismo\",\n  \"ideological_bias_framing\": {\n    \"bias\": \"none_detected\",\n    \"confidence\": 0.75,\n    \"framing_summary\": \"El texto se centra en datos de precios de alojamiento durante Semana Santa, sin apelaciones ideológicas ni valoración política explícita.\"\n  },\n  \"tone_dimensions\": {\n    \"overall_tone\": \"informativo\",\n    \"confidence\": 0.8,\n    \"emotional_valence\": {\n      \"valence\": \"neutral\",\n      \"confidence\": 0.8\n    },\n    \"sensationalism\": {\n      \"level\": \"bajo\",\n      \"confidence\": 0.7\n    },\n    \"alarmism\": {\n      \"level\": \"bajo\",\n      \"confidence\": 0.7\n    }\n  },\n  \"framing_devices\": [\n    {\n      \"device\": \"comparacion_cuantitativa\",\n      \"description\": \"Contrasta precios por ciudades y días concretos con cifras máximas y mínimas.\",\n      \"confidence\": 0.85\n    },\n    {\n      \"device\": \"contexto_motivador_demanda_turistica\",\n      \"description\": \"Atribuye el aumento de precios a la llegada de turistas y la demanda durante la Semana Santa.\",\n      \"confidence\": 0.7\n    },\n    {\n      \"device\": \"jerarquizacion_por_rankings\",\n      \"description\": \"Presenta una jerarquía implícita (Sevilla encabezando; Córdoba entre las más caras).\",\n      \"confidence\": 0.75\n    }\n  ],\n  \"rationale\": {\n    \"summary\": \"La cobertura describe el encarecimiento de alojamientos en Andalucía durante Semana Santa con cifras y comparación entre ciudades (Sevilla, Córdoba, etc.). No hay citas, evaluación normativa o carga ideológica visible; el marco principal es informativo y de demanda turística.\",\n    \"confidence\": 0.78\n  },\n  \"evidence_spans\": [\n    {\n      \"span\": \"“Córdoba se posiciona entre las ciudades más caras para alojarse en Semana Santa con precios de hasta 1.900 euros por noche”\",\n      \"type\": \"titulo\"\n    },\n    {\n      \"span\": \"“La Semana Santa en Andalucía se prepara para atraer a miles de turistas nacionales e internacionales, lo que provoca un aumento considerable en los precios de los alojamientos en las principales ciudades de la región.”\",\n      \"type\": \"cuerpo\"\n    },\n    {\n      \"span\": \"“Sevilla es, sin lugar a dudas, la ciudad con los alojamientos más caros.”\",\n      \"type\": \"cuerpo\"\n    },\n    {\n      \"span\": \"“Durante el Domingo de Ramos, Lunes y Martes Santo, los precios pueden alcanzar hasta los 9.000 euros por una noche en una habitación doble.”\",\n      \"type\": \"cuerpo\"\n    },\n    {\n      \"span\": \"“En Córdoba , el precio más elevado por noche de una habitación doble se sitúa en torno a los 1.900 euros”\",\n      \"type\": \"cuerpo\"\n    },\n    {\n      \"span\": \"“Huelva , en contraste, es la provincia con los precios más bajos, con opciones que empiezan en los 30 euros por noche”\",\n      \"type\": \"cuerpo\"\n    }\n  ]\n}",
+  "parsed_json": {
+    "article_type": "noticia_reporte_estudio_precios_turismo",
+    "ideological_bias_framing": {
+      "bias": "none_detected",
+      "confidence": 0.75,
+      "framing_summary": "El texto se centra en datos de precios de alojamiento durante Semana Santa, sin apelaciones ideológicas ni valoración política explícita."
+    },
+    "tone_dimensions": {
+      "overall_tone": "informativo",
+      "confidence": 0.8,
+      "emotional_valence": {
+        "valence": "neutral",
+        "confidence": 0.8
+      },
+      "sensationalism": {
+        "level": "bajo",
+        "confidence": 0.7
+      },
+      "alarmism": {
+        "level": "bajo",
+        "confidence": 0.7
+      }
+    },
+    "framing_devices": [
+      {
+        "device": "comparacion_cuantitativa",
+        "description": "Contrasta precios por ciudades y días concretos con cifras máximas y mínimas.",
+        "confidence": 0.85
+      },
+      {
+        "device": "contexto_motivador_demanda_turistica",
+        "description": "Atribuye el aumento de precios a la llegada de turistas y la demanda durante la Semana Santa.",
+        "confidence": 0.7
+      },
+      {
+        "device": "jerarquizacion_por_rankings",
+        "description": "Presenta una jerarquía implícita (Sevilla encabezando; Córdoba entre las más caras).",
+        "confidence": 0.75
+      }
+    ],
+    "rationale": {
+      "summary": "La cobertura describe el encarecimiento de alojamientos en Andalucía durante Semana Santa con cifras y comparación entre ciudades (Sevilla, Córdoba, etc.). No hay citas, evaluación normativa o carga ideológica visible; el marco principal es informativo y de demanda turística.",
+      "confidence": 0.78
+    },
+    "evidence_spans": [
+      {
+        "span": "“Córdoba se posiciona entre las ciudades más caras para alojarse en Semana Santa con precios de hasta 1.900 euros por noche”",
+        "type": "titulo"
+      },
+      {
+        "span": "“La Semana Santa en Andalucía se prepara para atraer a miles de turistas nacionales e internacionales, lo que provoca un aumento considerable en los precios de los alojamientos en las principales ciudades de la región.”",
+        "type": "cuerpo"
+      },
+      {
+        "span": "“Sevilla es, sin lugar a dudas, la ciudad con los alojamientos más caros.”",
+        "type": "cuerpo"
+      },
+      {
+        "span": "“Durante el Domingo de Ramos, Lunes y Martes Santo, los precios pueden alcanzar hasta los 9.000 euros por una noche en una habitación doble.”",
+        "type": "cuerpo"
+      },
+      {
+        "span": "“En Córdoba , el precio más elevado por noche de una habitación doble se sitúa en torno a los 1.900 euros”",
+        "type": "cuerpo"
+      },
+      {
+        "span": "“Huelva , en contraste, es la provincia con los precios más bajos, con opciones que empiezan en los 30 euros por noche”",
+        "type": "cuerpo"
+      }
+    ]
+  },
+  "repaired_payload": {
+    "article_type": "noticia_reporte_estudio_precios_turismo",
+    "article_type_confidence": null,
+    "bias_label": null,
+    "ideological_bias_framing": {
+      "bias": "none_detected",
+      "confidence": 0.75,
+      "framing_summary": "El texto se centra en datos de precios de alojamiento durante Semana Santa, sin apelaciones ideológicas ni valoración política explícita."
+    },
+    "bias_score": null,
+    "bias_confidence": 0.75,
+    "confidence": null,
+    "tone_emotional": null,
+    "tone_target": null,
+    "opinionatedness": null,
+    "sensationalism": null,
+    "rhetorical_certainty": null,
+    "tone_dimensions": {
+      "overall_tone": "informativo",
+      "confidence": 0.8,
+      "emotional_valence": {
+        "valence": "neutral",
+        "confidence": 0.8
+      },
+      "sensationalism": {
+        "level": "bajo",
+        "confidence": 0.7
+      },
+      "alarmism": {
+        "level": "bajo",
+        "confidence": 0.7
+      }
+    },
+    "framing_devices": [
+      "comparacion_cuantitativa",
+      "contexto_motivador_demanda_turistica",
+      "jerarquizacion_por_rankings"
+    ],
+    "evidence_spans": [
+      {
+        "type": "titulo",
+        "text": "“Córdoba se posiciona entre las ciudades más caras para alojarse en Semana Santa con precios de hasta 1.900 euros por noche”",
+        "note": null
+      },
+      {
+        "type": "cuerpo",
+        "text": "“La Semana Santa en Andalucía se prepara para atraer a miles de turistas nacionales e internacionales, lo que provoca un aumento considerable en los precios de los alojamientos en las principales ciudades de la región.”",
+        "note": null
+      },
+      {
+        "type": "cuerpo",
+        "text": "“Sevilla es, sin lugar a dudas, la ciudad con los alojamientos más caros.”",
+        "note": null
+      },
+      {
+        "type": "cuerpo",
+        "text": "“Durante el Domingo de Ramos, Lunes y Martes Santo, los precios pueden alcanzar hasta los 9.000 euros por una noche en una habitación doble.”",
+        "note": null
+      },
+      {
+        "type": "cuerpo",
+        "text": "“En Córdoba , el precio más elevado por noche de una habitación doble se sitúa en torno a los 1.900 euros”",
+        "note": null
+      },
+      {
+        "type": "cuerpo",
+        "text": "“Huelva , en contraste, es la provincia con los precios más bajos, con opciones que empiezan en los 30 euros por noche”",
+        "note": null
+      }
+    ],
+    "rationale": "La cobertura describe el encarecimiento de alojamientos en Andalucía durante Semana Santa con cifras y comparación entre ciudades (Sevilla, Córdoba, etc.). No hay citas, evaluación normativa o carga ideológica visible; el marco principal es informativo y de demanda turística.",
+    "notes": null,
+    "uncertainty_reason": null,
+    "repair_warnings": [
+      "repair_object_text_extracted: rationale",
+      "repair_promoted_confidence: ideological_bias_framing.confidence -> bias_confidence",
+      "repair_regularized_nested_tone: emotional_valence",
+      "repair_regularized_nested_tone: sensationalism",
+      "repair_regularized_nested_tone: alarmism",
+      "repair_framing_device_object_extracted",
+      "repair_framing_device_object_extracted",
+      "repair_framing_device_object_extracted",
+      "repair_regularized_evidence_object",
+      "repair_regularized_evidence_object",
+      "repair_regularized_evidence_object",
+      "repair_regularized_evidence_object",
+      "repair_regularized_evidence_object",
+      "repair_regularized_evidence_object"
+    ],
+    "dropped_fields": [],
+    "truncated_fields": []
+  },
+  "final_payload": {
+    "article_type": "unclear",
+    "article_type_confidence": 0.3,
+    "bias_label": "unclear",
+    "bias_score": 0.0,
+    "bias_confidence": 0.6,
+    "tone_emotional": "calm",
+    "tone_target": "unclear",
+    "opinionatedness": "unclear",
+    "sensationalism": "low",
+    "rhetorical_certainty": "unclear",
+    "framing_devices": [],
+    "evidence_spans": [
+      {
+        "type": "body",
+        "text": "“Córdoba se posiciona entre las ciudades más caras para alojarse en Semana Santa con precios de hasta 1.900 euros por noche”",
+        "note": "quoted evidence span"
+      },
+      {
+        "type": "body",
+        "text": "“La Semana Santa en Andalucía se prepara para atraer a miles de turistas nacionales e internacionales, lo que provoca un aumento considerable en los precios de los alojamientos en las principales ciudades de la región.”",
+        "note": "quoted evidence span"
+      },
+      {
+        "type": "body",
+        "text": "“Sevilla es, sin lugar a dudas, la ciudad con los alojamientos más caros.”",
+        "note": "quoted evidence span"
+      }
+    ],
+    "rationale": "La cobertura describe el encarecimiento de alojamientos en Andalucía durante Semana Santa con cifras y comparación entre ciudades (Sevilla, Córdoba, etc.). No hay citas, evaluación normativa o carga ideológica visible; el marco principal es informativo y de demanda turística."
+  },
+  "diagnostics": {
+    "provider_path": "normalized_local_pipeline",
+    "editorial_applicability": "limited",
+    "editorial_applicability_reason": "consumer_price_roundup",
+    "dimension_status": {
+      "article_type": {
+        "value": "unclear",
+        "status": "weak_signal_abstain",
+        "reason": "limited_editorial_signal",
+        "notes": [],
+        "raw_hints": []
+      },
+      "bias": {
+        "value": "unclear",
+        "status": "mapping_loss",
+        "reason": "non_canonical_signal_preserved_in_diagnostics",
+        "notes": [],
+        "raw_hints": [
+          "framing_summary=El texto se centra en datos de precios de alojamiento durante Semana Santa, sin apelaciones ideológicas ni valoración política explícita."
+        ]
+      },
+      "tone_emotional": {
+        "value": "calm",
+        "status": "resolved",
+        "reason": "canonical_value_resolved",
+        "notes": [],
+        "raw_hints": [
+          "overall_tone=informativo"
+        ]
+      },
+      "tone_target": {
+        "value": "unclear",
+        "status": "provider_missing",
+        "reason": "no_raw_value_present",
+        "notes": [],
+        "raw_hints": [
+          "overall_tone=informativo"
+        ]
+      },
+      "opinionatedness": {
+        "value": "unclear",
+        "status": "provider_missing",
+        "reason": "no_raw_value_present",
+        "notes": [],
+        "raw_hints": [
+          "overall_tone=informativo"
+        ]
+      },
+      "sensationalism": {
+        "value": "low",
+        "status": "resolved",
+        "reason": "canonical_value_resolved",
+        "notes": [],
+        "raw_hints": [
+          "overall_tone=informativo"
+        ]
+      },
+      "rhetorical_certainty": {
+        "value": "unclear",
+        "status": "provider_missing",
+        "reason": "no_raw_value_present",
+        "notes": [],
+        "raw_hints": [
+          "overall_tone=informativo"
+        ]
+      },
+      "framing": {
+        "value": "unclear",
+        "status": "mapping_loss",
+        "reason": "framing_taxonomy_dropped_signal",
+        "notes": [],
+        "raw_hints": [
+          "comparacion_cuantitativa",
+          "contexto_motivador_demanda_turistica",
+          "jerarquizacion_por_rankings"
+        ]
+      }
+    },
+    "repair_warnings": [
+      "repair_object_text_extracted: rationale",
+      "repair_promoted_confidence: ideological_bias_framing.confidence -> bias_confidence",
+      "repair_regularized_nested_tone: emotional_valence",
+      "repair_regularized_nested_tone: sensationalism",
+      "repair_regularized_nested_tone: alarmism",
+      "repair_framing_device_object_extracted",
+      "repair_framing_device_object_extracted",
+      "repair_framing_device_object_extracted",
+      "repair_regularized_evidence_object",
+      "repair_regularized_evidence_object",
+      "repair_regularized_evidence_object",
+      "repair_regularized_evidence_object",
+      "repair_regularized_evidence_object",
+      "repair_regularized_evidence_object"
+    ],
+    "normalization_warnings": [
+      "unmapped article_type='noticia_reporte_estudio_precios_turismo'; using 'unclear'",
+      "unmapped bias_label='none_detected'; using 'unclear'",
+      "mapped tone_emotional='neutral' -> 'calm'",
+      "unresolved tone_target; using 'unclear'",
+      "unresolved opinionatedness; using 'unclear'",
+      "mapped sensationalism='bajo' -> 'low'",
+      "unresolved rhetorical_certainty; using 'unclear'",
+      "dropped framing_device='comparacion_cuantitativa'",
+      "dropped framing_device='contexto_motivador_demanda_turistica'",
+      "dropped framing_device='jerarquizacion_por_rankings'",
+      "mapped evidence type 'titulo' -> 'body'",
+      "mapped evidence type 'cuerpo' -> 'body'",
+      "mapped evidence type 'cuerpo' -> 'body'"
+    ],
+    "dropped_fields": [],
+    "truncated_fields": [],
+    "preserved_signals": {
+      "framing_candidates": [
+        "comparacion_cuantitativa",
+        "contexto_motivador_demanda_turistica",
+        "jerarquizacion_por_rankings"
+      ],
+      "tone_hints": [
+        "overall_tone=informativo"
+      ]
+    },
+    "provider_failures": [],
+    "unclear_reasons": [
+      "limited_applicability",
+      "mapping_loss",
+      "provider_missing",
+      "weak_signal_abstain"
+    ]
+  },
+  "expectation": {
+    "mode": "success",
+    "editorial_applicability": "limited",
+    "editorial_applicability_reason": "consumer_price_roundup",
+    "unclear_reasons": [
+      "limited_applicability",
+      "mapping_loss",
+      "provider_missing",
+      "weak_signal_abstain"
+    ],
+    "final_payload": {
+      "article_type": "unclear",
+      "article_type_confidence": 0.3,
+      "bias_label": "unclear",
+      "bias_score": 0.0,
+      "bias_confidence": 0.6,
+      "tone_emotional": "calm",
+      "tone_target": "unclear",
+      "opinionatedness": "unclear",
+      "sensationalism": "low",
+      "rhetorical_certainty": "unclear",
+      "framing_devices": [],
+      "evidence_spans": [
+        {
+          "type": "body",
+          "text": "“Córdoba se posiciona entre las ciudades más caras para alojarse en Semana Santa con precios de hasta 1.900 euros por noche”",
+          "note": "quoted evidence span"
+        },
+        {
+          "type": "body",
+          "text": "“La Semana Santa en Andalucía se prepara para atraer a miles de turistas nacionales e internacionales, lo que provoca un aumento considerable en los precios de los alojamientos en las principales ciudades de la región.”",
+          "note": "quoted evidence span"
+        },
+        {
+          "type": "body",
+          "text": "“Sevilla es, sin lugar a dudas, la ciudad con los alojamientos más caros.”",
+          "note": "quoted evidence span"
+        }
+      ],
+      "rationale": "La cobertura describe el encarecimiento de alojamientos en Andalucía durante Semana Santa con cifras y comparación entre ciudades (Sevilla, Córdoba, etc.). No hay citas, evaluación normativa o carga ideológica visible; el marco principal es informativo y de demanda turística."
+    },
+    "dimension_status": {
+      "article_type": "weak_signal_abstain",
+      "bias": "mapping_loss",
+      "tone_emotional": "resolved",
+      "tone_target": "provider_missing",
+      "opinionatedness": "provider_missing",
+      "sensationalism": "resolved",
+      "rhetorical_certainty": "provider_missing",
+      "framing": "mapping_loss"
+    },
+    "preserved_signal_groups": {
+      "framing_candidates": [
+        "comparacion_cuantitativa",
+        "contexto_motivador_demanda_turistica",
+        "jerarquizacion_por_rankings"
+      ],
+      "tone_hints": [
+        "overall_tone=informativo"
+      ]
+    },
+    "repair_warnings_contains": [
+      "repair_object_text_extracted: rationale",
+      "repair_promoted_confidence: ideological_bias_framing.confidence -> bias_confidence"
+    ],
+    "normalization_warnings_contains": [
+      "unmapped article_type='noticia_reporte_estudio_precios_turismo'; using 'unclear'",
+      "unmapped bias_label='none_detected'; using 'unclear'"
+    ]
+  }
+}

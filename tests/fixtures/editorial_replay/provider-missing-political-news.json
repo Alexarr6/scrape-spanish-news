@@ -1,0 +1,317 @@
+{
+  "fixture_id": "provider-missing-political-news",
+  "family": "provider_missing_political_news",
+  "source_artifact": "20260322T172425Z-article-2928.json",
+  "notes": "Political news case where strict path blew up and fallback salvaged a usable bias/article-type read, but several dimensions stayed provider-missing.",
+  "article": {
+    "source": "abc",
+    "section": "espana",
+    "published_at": "2026-03-22T15:45:22+00:00",
+    "url": "https://www.abc.es/espana/andalucia/prioridad-cuesta-gobierno-despedira-pp-montero-20260322164507-nts.html",
+    "title": "«Cuál ha sido su prioridad?» y «¿cuánto cuesta su gobierno?» Así despedirá el PP a Montero"
+  },
+  "provider": {
+    "model_provider": "openrouter",
+    "model_name": "minimax/minimax-m2.7",
+    "strict_failure_class": "unknown_response_shape",
+    "fallback_failure_class": "payload_validation_failed"
+  },
+  "raw_provider_output": "{\"article_type\":\"news\",\"ideological_bias_framing\":\"center-right\",\"tone_dimensions\":{\"government_assessment\":\"critical\",\"informational_balance\":\"partial\",\"emotional_charge\":\"moderate\"},\"framing_devices\":[\"opposition questions as headline focus\",\"temporal framing emphasizing finality\",\"direct quotation of critical questions\",\"multiple party coverage for balance\"],\"source_treatment\":{\"pp\":\"primary framing\",\"psoe\":\"subject of criticism\",\"otros_parties\":\"included for balance\"},\"rationale\":\"ABC, a center-right outlet, frames this parliamentary coverage around PP opposition questions to the government. The headline directly quotes PP criticisms of Montero. While the article includes questions from Podemos and Bildu for apparent balance, the framing and emphasis favor PP's interrogative approach, highlighting budget failures, ethics concerns, and government costs.\",\"evidence_spans\":[\"«¿Cómo será recordado su paso por el Gobierno, vicepresidenta?»\",\"«cuál ha sido la verdadera prioridad de su Ministerio (de Hacienda) durante todos estos años»\",\"preguntará a María Jesús Montero si viven hoy mejor los españoles que cuando llegó al Ministerio\",\"quiere saber si «ha regido la ética y la transparencia el desempeño de sus funciones públicas»\",\"le pedirá que detalle cuánto cuesta a los españoles su Gobierno\"],\"confidence\":\"moderate\",\"classification_notes\":\"The article presents factual parliamentary information but frames it through the lens of PP opposition criticism, consistent with ABC's editorial alignment.\"}",
+  "parsed_json": {
+    "article_type": "news",
+    "ideological_bias_framing": "center-right",
+    "tone_dimensions": {
+      "government_assessment": "critical",
+      "informational_balance": "partial",
+      "emotional_charge": "moderate"
+    },
+    "framing_devices": [
+      "opposition questions as headline focus",
+      "temporal framing emphasizing finality",
+      "direct quotation of critical questions",
+      "multiple party coverage for balance"
+    ],
+    "source_treatment": {
+      "pp": "primary framing",
+      "psoe": "subject of criticism",
+      "otros_parties": "included for balance"
+    },
+    "rationale": "ABC, a center-right outlet, frames this parliamentary coverage around PP opposition questions to the government. The headline directly quotes PP criticisms of Montero. While the article includes questions from Podemos and Bildu for apparent balance, the framing and emphasis favor PP's interrogative approach, highlighting budget failures, ethics concerns, and government costs.",
+    "evidence_spans": [
+      "«¿Cómo será recordado su paso por el Gobierno, vicepresidenta?»",
+      "«cuál ha sido la verdadera prioridad de su Ministerio (de Hacienda) durante todos estos años»",
+      "preguntará a María Jesús Montero si viven hoy mejor los españoles que cuando llegó al Ministerio",
+      "quiere saber si «ha regido la ética y la transparencia el desempeño de sus funciones públicas»",
+      "le pedirá que detalle cuánto cuesta a los españoles su Gobierno"
+    ],
+    "confidence": "moderate",
+    "classification_notes": "The article presents factual parliamentary information but frames it through the lens of PP opposition criticism, consistent with ABC's editorial alignment."
+  },
+  "repaired_payload": {
+    "article_type": "news",
+    "article_type_confidence": null,
+    "bias_label": null,
+    "ideological_bias_framing": "center-right",
+    "bias_score": null,
+    "bias_confidence": null,
+    "confidence": 0.5,
+    "tone_emotional": null,
+    "tone_target": null,
+    "opinionatedness": null,
+    "sensationalism": null,
+    "rhetorical_certainty": null,
+    "tone_dimensions": {
+      "government_assessment": "critical",
+      "informational_balance": "partial",
+      "emotional_charge": "moderate"
+    },
+    "framing_devices": [
+      "opposition questions as headline focus",
+      "temporal framing emphasizing finality",
+      "direct quotation of critical questions",
+      "multiple party coverage for balance"
+    ],
+    "evidence_spans": [
+      "«¿Cómo será recordado su paso por el Gobierno, vicepresidenta?»",
+      "«cuál ha sido la verdadera prioridad de su Ministerio (de Hacienda) durante todos estos años»",
+      "preguntará a María Jesús Montero si viven hoy mejor los españoles que cuando llegó al Ministerio",
+      "quiere saber si «ha regido la ética y la transparencia el desempeño de sus funciones públicas»",
+      "le pedirá que detalle cuánto cuesta a los españoles su Gobierno"
+    ],
+    "rationale": "ABC, a center-right outlet, frames this parliamentary coverage around PP opposition questions to the government. The headline directly quotes PP criticisms of Montero. While the article includes questions from Podemos and Bildu for apparent balance, the framing and emphasis favor PP's interrogative approach, highlighting budget failures, ethics concerns, and government costs.",
+    "notes": null,
+    "uncertainty_reason": null,
+    "repair_warnings": [
+      "repair_confidence_label_mapped: confidence='moderate' -> 0.5"
+    ],
+    "dropped_fields": [],
+    "truncated_fields": []
+  },
+  "final_payload": {
+    "article_type": "news_report",
+    "article_type_confidence": 0.5,
+    "bias_label": "center_right",
+    "bias_score": 0.35,
+    "bias_confidence": 0.5,
+    "tone_emotional": "unclear",
+    "tone_target": "unclear",
+    "opinionatedness": "unclear",
+    "sensationalism": "unclear",
+    "rhetorical_certainty": "unclear",
+    "framing_devices": [],
+    "evidence_spans": [
+      {
+        "type": "body",
+        "text": "«¿Cómo será recordado su paso por el Gobierno, vicepresidenta?»",
+        "note": "quoted evidence span from article body"
+      },
+      {
+        "type": "body",
+        "text": "«cuál ha sido la verdadera prioridad de su Ministerio (de Hacienda) durante todos estos años»",
+        "note": "quoted evidence span from article body"
+      },
+      {
+        "type": "body",
+        "text": "preguntará a María Jesús Montero si viven hoy mejor los españoles que cuando llegó al Ministerio",
+        "note": "quoted evidence span from article body"
+      }
+    ],
+    "rationale": "ABC, a center-right outlet, frames this parliamentary coverage around PP opposition questions to the government. The headline directly quotes PP criticisms of Montero. While the article includes questions from Podemos and Bildu for apparent balance, the framing and emphasis favor PP's interrogative approach, highlighting budget failures, ethics concerns, and government costs."
+  },
+  "diagnostics": {
+    "provider_path": "normalized_local_pipeline",
+    "editorial_applicability": "full",
+    "editorial_applicability_reason": "general_editorial_content",
+    "dimension_status": {
+      "article_type": {
+        "value": "news_report",
+        "status": "resolved",
+        "reason": "canonical_value_resolved",
+        "notes": [],
+        "raw_hints": []
+      },
+      "bias": {
+        "value": "center_right",
+        "status": "resolved",
+        "reason": "canonical_value_resolved",
+        "notes": [],
+        "raw_hints": [
+          "center-right"
+        ]
+      },
+      "tone_emotional": {
+        "value": "unclear",
+        "status": "provider_missing",
+        "reason": "no_raw_value_present",
+        "notes": [],
+        "raw_hints": [
+          "government_assessment=critical",
+          "informational_balance=partial",
+          "emotional_charge=moderate"
+        ]
+      },
+      "tone_target": {
+        "value": "unclear",
+        "status": "provider_missing",
+        "reason": "no_raw_value_present",
+        "notes": [],
+        "raw_hints": [
+          "government_assessment=critical",
+          "informational_balance=partial",
+          "emotional_charge=moderate"
+        ]
+      },
+      "opinionatedness": {
+        "value": "unclear",
+        "status": "provider_missing",
+        "reason": "no_raw_value_present",
+        "notes": [],
+        "raw_hints": [
+          "government_assessment=critical",
+          "informational_balance=partial",
+          "emotional_charge=moderate"
+        ]
+      },
+      "sensationalism": {
+        "value": "unclear",
+        "status": "provider_missing",
+        "reason": "no_raw_value_present",
+        "notes": [],
+        "raw_hints": [
+          "government_assessment=critical",
+          "informational_balance=partial",
+          "emotional_charge=moderate"
+        ]
+      },
+      "rhetorical_certainty": {
+        "value": "unclear",
+        "status": "provider_missing",
+        "reason": "no_raw_value_present",
+        "notes": [],
+        "raw_hints": [
+          "government_assessment=critical",
+          "informational_balance=partial",
+          "emotional_charge=moderate"
+        ]
+      },
+      "framing": {
+        "value": "unclear",
+        "status": "mapping_loss",
+        "reason": "framing_taxonomy_dropped_signal",
+        "notes": [],
+        "raw_hints": [
+          "opposition questions as headline focus",
+          "temporal framing emphasizing finality",
+          "direct quotation of critical questions",
+          "multiple party coverage for balance"
+        ]
+      }
+    },
+    "repair_warnings": [
+      "repair_confidence_label_mapped: confidence='moderate' -> 0.5"
+    ],
+    "normalization_warnings": [
+      "mapped article_type='news' -> 'news_report'",
+      "mapped bias_label='center-right' -> 'center_right'",
+      "unresolved tone_emotional; using 'unclear'",
+      "unresolved tone_target; using 'unclear'",
+      "unresolved opinionatedness; using 'unclear'",
+      "unresolved sensationalism; using 'unclear'",
+      "unresolved rhetorical_certainty; using 'unclear'",
+      "dropped framing_device='opposition questions as headline focus'",
+      "dropped framing_device='temporal framing emphasizing finality'",
+      "dropped framing_device='direct quotation of critical questions'",
+      "dropped framing_device='multiple party coverage for balance'"
+    ],
+    "dropped_fields": [],
+    "truncated_fields": [],
+    "preserved_signals": {
+      "framing_candidates": [
+        "opposition questions as headline focus",
+        "temporal framing emphasizing finality",
+        "direct quotation of critical questions",
+        "multiple party coverage for balance"
+      ],
+      "tone_hints": [
+        "government_assessment=critical",
+        "informational_balance=partial",
+        "emotional_charge=moderate"
+      ]
+    },
+    "provider_failures": [],
+    "unclear_reasons": [
+      "mapping_loss",
+      "provider_missing"
+    ]
+  },
+  "expectation": {
+    "mode": "success",
+    "editorial_applicability": "full",
+    "editorial_applicability_reason": "general_editorial_content",
+    "unclear_reasons": [
+      "mapping_loss",
+      "provider_missing"
+    ],
+    "final_payload": {
+      "article_type": "news_report",
+      "article_type_confidence": 0.5,
+      "bias_label": "center_right",
+      "bias_score": 0.35,
+      "bias_confidence": 0.5,
+      "tone_emotional": "unclear",
+      "tone_target": "unclear",
+      "opinionatedness": "unclear",
+      "sensationalism": "unclear",
+      "rhetorical_certainty": "unclear",
+      "framing_devices": [],
+      "evidence_spans": [
+        {
+          "type": "body",
+          "text": "«¿Cómo será recordado su paso por el Gobierno, vicepresidenta?»",
+          "note": "quoted evidence span from article body"
+        },
+        {
+          "type": "body",
+          "text": "«cuál ha sido la verdadera prioridad de su Ministerio (de Hacienda) durante todos estos años»",
+          "note": "quoted evidence span from article body"
+        },
+        {
+          "type": "body",
+          "text": "preguntará a María Jesús Montero si viven hoy mejor los españoles que cuando llegó al Ministerio",
+          "note": "quoted evidence span from article body"
+        }
+      ],
+      "rationale": "ABC, a center-right outlet, frames this parliamentary coverage around PP opposition questions to the government. The headline directly quotes PP criticisms of Montero. While the article includes questions from Podemos and Bildu for apparent balance, the framing and emphasis favor PP's interrogative approach, highlighting budget failures, ethics concerns, and government costs."
+    },
+    "dimension_status": {
+      "article_type": "resolved",
+      "bias": "resolved",
+      "tone_emotional": "provider_missing",
+      "tone_target": "provider_missing",
+      "opinionatedness": "provider_missing",
+      "sensationalism": "provider_missing",
+      "rhetorical_certainty": "provider_missing",
+      "framing": "mapping_loss"
+    },
+    "preserved_signal_groups": {
+      "framing_candidates": [
+        "opposition questions as headline focus",
+        "temporal framing emphasizing finality",
+        "direct quotation of critical questions",
+        "multiple party coverage for balance"
+      ],
+      "tone_hints": [
+        "government_assessment=critical",
+        "informational_balance=partial",
+        "emotional_charge=moderate"
+      ]
+    },
+    "repair_warnings_contains": [
+      "repair_confidence_label_mapped: confidence='moderate' -> 0.5"
+    ],
+    "normalization_warnings_contains": [
+      "mapped article_type='news' -> 'news_report'",
+      "mapped bias_label='center-right' -> 'center_right'"
+    ]
+  }
+}
