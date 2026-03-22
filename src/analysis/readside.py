@@ -6,7 +6,7 @@ import json
 from dataclasses import dataclass
 from datetime import date, datetime
 
-from sqlalchemy import Select, func, or_, select
+from sqlalchemy import Select, and_, func, or_, select
 from sqlalchemy.orm import Session
 
 from src.analysis.orm_models import (
@@ -34,41 +34,130 @@ class ClusterListFilters:
     search: str | None = None
 
 
+@dataclass
+class EditorialAnalysisListFilters:
+    limit: int = 20
+    offset: int = 0
+    source: str | None = None
+    bias_label: str | None = None
+    article_type: str | None = None
+    analysis_status: str | None = None
+    tone_emotional: str | None = None
+    opinionatedness: str | None = None
+    min_bias_confidence: float | None = None
+    date_from: date | None = None
+    date_to: date | None = None
+    sort: str = "published_at_desc"
+
+
 def load_article_editorial_analysis(session: Session, article_id: int) -> dict | None:
     row = session.execute(
-        select(ArticleEditorialAnalysisORM).where(
-            ArticleEditorialAnalysisORM.article_id == article_id
-        )
-    ).scalar_one_or_none()
+        select(ArticleORM, ArticleEditorialAnalysisORM)
+        .join(ArticleEditorialAnalysisORM, ArticleEditorialAnalysisORM.article_id == ArticleORM.id)
+        .where(ArticleEditorialAnalysisORM.article_id == article_id)
+    ).one_or_none()
     if row is None:
         return None
+    article, analysis = row
+    evidence_spans = json.loads(analysis.evidence_spans_json or "[]")
+    review_flags = _build_review_flags(
+        analysis_status=analysis.analysis_status,
+        bias_label=analysis.bias_label,
+        bias_confidence=float(analysis.bias_confidence),
+        evidence_spans=evidence_spans,
+    )
     return {
-        "article_id": row.article_id,
-        "article_type": row.article_type,
-        "article_type_confidence": float(row.article_type_confidence),
-        "bias_label": row.bias_label,
-        "bias_score": float(row.bias_score),
-        "bias_confidence": float(row.bias_confidence),
-        "tone_emotional": row.tone_emotional,
-        "tone_target": row.tone_target,
-        "opinionatedness": row.opinionatedness,
-        "sensationalism": row.sensationalism,
-        "rhetorical_certainty": row.rhetorical_certainty,
-        "framing_devices": json.loads(row.framing_devices_json or "[]"),
-        "evidence_spans": json.loads(row.evidence_spans_json or "[]"),
-        "rationale": row.rationale,
-        "analysis_status": row.analysis_status,
-        "failure_reason": row.failure_reason,
-        "model_provider": row.model_provider,
-        "model_name": row.model_name,
-        "model_version": row.model_version,
-        "prompt_version": row.prompt_version,
-        "schema_version": row.schema_version,
-        "content_hash": row.content_hash,
-        "source_text_version": row.source_text_version,
-        "analyzed_at": _iso(row.analyzed_at),
-        "updated_at": _iso(row.updated_at),
+        "article_id": analysis.article_id,
+        "source": article.source,
+        "section": article.section or "",
+        "title": article.title,
+        "url": article.url,
+        "published_at": _iso(article.published_at),
+        "summary": article.summary or "",
+        "content_preview": (article.article_text or "")[:280],
+        "article_type": analysis.article_type,
+        "article_type_confidence": float(analysis.article_type_confidence),
+        "bias_label": analysis.bias_label,
+        "bias_score": float(analysis.bias_score),
+        "bias_confidence": float(analysis.bias_confidence),
+        "tone_emotional": analysis.tone_emotional,
+        "tone_target": analysis.tone_target,
+        "opinionatedness": analysis.opinionatedness,
+        "sensationalism": analysis.sensationalism,
+        "rhetorical_certainty": analysis.rhetorical_certainty,
+        "editorial_applicability": analysis.editorial_applicability,
+        "editorial_applicability_reason": analysis.editorial_applicability_reason,
+        "analysis_path": analysis.analysis_path,
+        "framing_devices": json.loads(analysis.framing_devices_json or "[]"),
+        "evidence_spans": evidence_spans,
+        "diagnostics": _parse_json_object(analysis.diagnostics_json),
+        "rationale": analysis.rationale,
+        "analysis_status": analysis.analysis_status,
+        "failure_reason": analysis.failure_reason,
+        "model_provider": analysis.model_provider,
+        "model_name": analysis.model_name,
+        "model_version": analysis.model_version,
+        "prompt_version": analysis.prompt_version,
+        "schema_version": analysis.schema_version,
+        "content_hash": analysis.content_hash,
+        "source_text_version": analysis.source_text_version,
+        "analyzed_at": _iso(analysis.analyzed_at),
+        "updated_at": _iso(analysis.updated_at),
+        "review_flags": review_flags,
     }
+
+
+def load_article_editorial_analysis_list(
+    session: Session, filters: EditorialAnalysisListFilters
+) -> tuple[list[dict], int]:
+    stmt = _matching_editorial_analysis_stmt(filters)
+    total = session.execute(select(func.count()).select_from(stmt.subquery())).scalar_one()
+    sort_columns = _editorial_sort_columns(filters.sort)
+    rows = session.execute(
+        stmt.order_by(*sort_columns).offset(filters.offset).limit(filters.limit)
+    ).all()
+    items = []
+    for article, analysis in rows:
+        evidence_spans = _parse_json_list(analysis.evidence_spans_json if analysis else "[]")
+        analysis_status = analysis.analysis_status if analysis else "pending"
+        bias_label = analysis.bias_label if analysis else "unclear"
+        bias_confidence = float(analysis.bias_confidence) if analysis else 0.0
+        review_flags = _build_review_flags(
+            analysis_status=analysis_status,
+            bias_label=bias_label,
+            bias_confidence=bias_confidence,
+            evidence_spans=evidence_spans,
+        )
+        items.append(
+            {
+                "article_id": article.id,
+                "source": article.source,
+                "section": article.section or "",
+                "title": article.title,
+                "url": article.url,
+                "published_at": _iso(article.published_at),
+                "summary": article.summary or "",
+                "article_type": analysis.article_type if analysis else "unclear",
+                "article_type_confidence": float(analysis.article_type_confidence)
+                if analysis
+                else 0.0,
+                "editorial_applicability": analysis.editorial_applicability if analysis else "full",
+                "analysis_path": analysis.analysis_path if analysis else "",
+                "bias_label": bias_label,
+                "bias_score": float(analysis.bias_score) if analysis else 0.0,
+                "bias_confidence": bias_confidence,
+                "tone_emotional": analysis.tone_emotional if analysis else "unclear",
+                "opinionatedness": analysis.opinionatedness if analysis else "unclear",
+                "analysis_status": analysis_status,
+                "rationale": analysis.rationale if analysis else "",
+                "evidence_count": len(evidence_spans),
+                "evidence_spans": evidence_spans[:2],
+                "failure_reason": analysis.failure_reason if analysis else "",
+                "analyzed_at": _iso(analysis.analyzed_at) if analysis else None,
+                "review_flags": review_flags,
+            }
+        )
+    return items, total
 
 
 def load_story_clusters(session: Session, filters: ClusterListFilters) -> tuple[list[dict], int]:
@@ -292,6 +381,74 @@ def load_story_cluster_filters(session: Session, filters: ClusterListFilters) ->
     }
 
 
+def _matching_editorial_analysis_stmt(filters: EditorialAnalysisListFilters):
+    stmt = select(ArticleORM, ArticleEditorialAnalysisORM).outerjoin(
+        ArticleEditorialAnalysisORM, ArticleEditorialAnalysisORM.article_id == ArticleORM.id
+    )
+    conditions = []
+    if filters.source:
+        conditions.append(ArticleORM.source == filters.source)
+    if filters.bias_label:
+        conditions.append(ArticleEditorialAnalysisORM.bias_label == filters.bias_label)
+    if filters.article_type:
+        conditions.append(ArticleEditorialAnalysisORM.article_type == filters.article_type)
+    if filters.tone_emotional:
+        conditions.append(ArticleEditorialAnalysisORM.tone_emotional == filters.tone_emotional)
+    if filters.opinionatedness:
+        conditions.append(ArticleEditorialAnalysisORM.opinionatedness == filters.opinionatedness)
+    if filters.min_bias_confidence is not None:
+        conditions.append(
+            ArticleEditorialAnalysisORM.bias_confidence >= filters.min_bias_confidence
+        )
+    if filters.date_from:
+        conditions.append(
+            ArticleORM.published_at >= datetime.combine(filters.date_from, datetime.min.time())
+        )
+    if filters.date_to:
+        conditions.append(
+            ArticleORM.published_at <= datetime.combine(filters.date_to, datetime.max.time())
+        )
+    if filters.analysis_status:
+        if filters.analysis_status == "pending":
+            conditions.append(
+                or_(
+                    ArticleEditorialAnalysisORM.id.is_(None),
+                    ArticleEditorialAnalysisORM.analysis_status == "pending",
+                )
+            )
+        else:
+            conditions.append(
+                ArticleEditorialAnalysisORM.analysis_status == filters.analysis_status
+            )
+    if conditions:
+        stmt = stmt.where(and_(*conditions))
+    return stmt
+
+
+def _editorial_sort_columns(sort: str):
+    mapping = {
+        "published_at_asc": [ArticleORM.published_at.asc().nullsfirst(), ArticleORM.id.asc()],
+        "published_at_desc": [ArticleORM.published_at.desc().nullslast(), ArticleORM.id.desc()],
+        "analyzed_at_desc": [
+            ArticleEditorialAnalysisORM.analyzed_at.desc().nullslast(),
+            ArticleORM.published_at.desc().nullslast(),
+        ],
+        "bias_score_asc": [
+            ArticleEditorialAnalysisORM.bias_score.asc().nullsfirst(),
+            ArticleORM.id.asc(),
+        ],
+        "bias_score_desc": [
+            ArticleEditorialAnalysisORM.bias_score.desc().nullslast(),
+            ArticleORM.id.desc(),
+        ],
+        "bias_confidence_desc": [
+            ArticleEditorialAnalysisORM.bias_confidence.desc().nullslast(),
+            ArticleORM.id.desc(),
+        ],
+    }
+    return mapping.get(sort, mapping["published_at_desc"])
+
+
 def _matching_cluster_ids_stmt(filters: ClusterListFilters) -> Select:
     stmt = (
         select(StoryClusterORM.id)
@@ -391,6 +548,47 @@ def _load_article_entities(session: Session, article_ids: list[int]) -> dict[int
             }
         )
     return result
+
+
+def _build_review_flags(
+    *, analysis_status: str, bias_label: str, bias_confidence: float, evidence_spans: list[dict]
+) -> dict[str, bool]:
+    missing_evidence = analysis_status == "completed" and not evidence_spans
+    low_confidence = analysis_status == "completed" and bias_confidence < 0.45
+    failed_analysis = analysis_status == "failed"
+    unclear_bias = bias_label == "unclear"
+    pending_analysis = analysis_status == "pending"
+    needs_review = any(
+        [missing_evidence, low_confidence, failed_analysis, unclear_bias, pending_analysis]
+    )
+    return {
+        "missing_evidence": missing_evidence,
+        "low_confidence": low_confidence,
+        "failed_analysis": failed_analysis,
+        "unclear_bias": unclear_bias,
+        "pending_analysis": pending_analysis,
+        "needs_review": needs_review,
+    }
+
+
+def _parse_json_object(raw: str | None) -> dict:
+    if not raw:
+        return {}
+    try:
+        value = json.loads(raw)
+    except json.JSONDecodeError:
+        return {}
+    return value if isinstance(value, dict) else {}
+
+
+def _parse_json_list(raw: str | None) -> list[dict]:
+    if not raw:
+        return []
+    try:
+        value = json.loads(raw)
+    except json.JSONDecodeError:
+        return []
+    return value if isinstance(value, list) else []
 
 
 def _iso(value: datetime | None) -> str | None:

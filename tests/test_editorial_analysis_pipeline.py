@@ -72,8 +72,13 @@ def _attempt(
     dropped_fields=(),
     truncated_fields=(),
     unclear_reasons=(),
+    diagnostics=None,
 ):
-    from src.analysis.contracts import ArticleEditorialAnalysisPayload, OpenRouterUsage
+    from src.analysis.contracts import (
+        ArticleEditorialAnalysisPayload,
+        EditorialAnalysisDiagnostics,
+        OpenRouterUsage,
+    )
 
     return EditorialAnalysisAttempt(
         mode=mode,
@@ -92,6 +97,9 @@ def _attempt(
         dropped_fields=tuple(dropped_fields),
         truncated_fields=tuple(truncated_fields),
         unclear_reasons=tuple(unclear_reasons),
+        diagnostics=None
+        if diagnostics is None
+        else EditorialAnalysisDiagnostics.model_validate(diagnostics),
         raw_response={"id": "resp_test"},
     )
 
@@ -214,7 +222,37 @@ def test_editorial_pipeline_retries_schema_rejection_with_fallback_success() -> 
                     ),
                     normalization_warnings=("mapped bias_label='neutral' -> 'unclear'",),
                     truncated_fields=("evidence_spans",),
-                    unclear_reasons=("repair_data_loss", "mapping_unresolved"),
+                    unclear_reasons=("repair_data_loss", "mapping_loss"),
+                    diagnostics={
+                        "provider_path": "fallback_success",
+                        "editorial_applicability": "limited",
+                        "editorial_applicability_reason": "procedural_hard_news",
+                        "dimension_status": {
+                            "bias": {
+                                "value": "unclear",
+                                "status": "mapping_loss",
+                                "reason": "repair_or_mapping_loss_visible",
+                                "notes": [],
+                                "raw_hints": ["neutral"],
+                            },
+                            "framing": {
+                                "value": "unclear",
+                                "status": "mapping_loss",
+                                "reason": "framing_taxonomy_dropped_signal",
+                                "notes": [],
+                                "raw_hints": ["official_source_attribution"],
+                            },
+                        },
+                        "repair_warnings": [],
+                        "normalization_warnings": [],
+                        "dropped_fields": [],
+                        "truncated_fields": ["evidence_spans"],
+                        "preserved_signals": {
+                            "framing_candidates": ["official_source_attribution"]
+                        },
+                        "provider_failures": [],
+                        "unclear_reasons": ["repair_data_loss", "mapping_loss"],
+                    },
                 ),
             )
         )
@@ -230,7 +268,12 @@ def test_editorial_pipeline_retries_schema_rejection_with_fallback_success() -> 
     assert metrics.rows_with_warnings_count == 1
     assert metrics.rows_with_truncated_evidence_count == 1
     assert metrics.unclear_due_to_mapping_count == 1
+    assert metrics.fallback_after_strict_reject_count == 1
+    assert metrics.limited_applicability_count == 1
+    assert metrics.bias_mapping_loss_count == 1
     assert stored.analysis_status == "completed"
+    assert stored.editorial_applicability == "limited"
+    assert "official_source_attribution" in stored.diagnostics_json
     assert stored.failure_reason == ""
 
 

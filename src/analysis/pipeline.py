@@ -441,12 +441,19 @@ class EditorialAnalysisPipeline:
                     analysis=analysis,
                     payload=success_attempt.payload,
                     content_hash=content_hash,
+                    diagnostics=success_attempt.diagnostics,
+                    analysis_path=self._analysis_path_for_result(result),
                 )
                 metrics.analyzed_count += 1
                 if success_attempt.mode == "strict_json_schema":
                     metrics.strict_success_count += 1
                 else:
                     metrics.fallback_success_count += 1
+                if (
+                    any(a.failure_class == "provider_schema_rejected" for a in result.attempts[:-1])
+                    and success_attempt.mode == "fallback_json_text"
+                ):
+                    metrics.fallback_after_strict_reject_count += 1
                 if (
                     success_attempt.repair_warnings
                     or success_attempt.normalization_warnings
@@ -460,8 +467,35 @@ class EditorialAnalysisPipeline:
                     metrics.rows_with_dropped_fields_count += 1
                 if success_attempt.payload.bias_label == "unclear":
                     metrics.unclear_bias_count += 1
+                diagnostics = success_attempt.diagnostics
+                if diagnostics is not None:
+                    if diagnostics.editorial_applicability == "out_of_domain":
+                        metrics.out_of_domain_count += 1
+                    elif diagnostics.editorial_applicability == "limited":
+                        metrics.limited_applicability_count += 1
+                    if diagnostics.preserved_signals:
+                        metrics.rows_with_unmapped_signals_count += 1
+                    for reason in diagnostics.unclear_reasons:
+                        metrics.unclear_reason_counts[reason] = (
+                            metrics.unclear_reason_counts.get(reason, 0) + 1
+                        )
+                    for name, diag in diagnostics.dimension_status.items():
+                        bucket = metrics.dimension_status_counts.setdefault(name, {})
+                        bucket[diag.status] = bucket.get(diag.status, 0) + 1
+                        if name == "bias" and diag.status == "weak_signal_abstain":
+                            metrics.bias_weak_signal_count += 1
+                        if name == "bias" and diag.status == "mapping_loss":
+                            metrics.bias_mapping_loss_count += 1
+                        if name == "framing" and diag.status == "mapping_loss":
+                            metrics.framing_mapping_loss_count += 1
+                        if diag.status == "provider_missing":
+                            metrics.provider_missing_dimension_count += 1
+                    for group, values in diagnostics.preserved_signals.items():
+                        bucket = metrics.preserved_signal_counts.setdefault(group, {})
+                        for value in values:
+                            bucket[value] = bucket.get(value, 0) + 1
                 if (
-                    "mapping_unresolved" in success_attempt.unclear_reasons
+                    "mapping_loss" in success_attempt.unclear_reasons
                     or "repair_data_loss" in success_attempt.unclear_reasons
                 ):
                     metrics.unclear_due_to_mapping_count += 1
@@ -590,6 +624,8 @@ class EditorialAnalysisPipeline:
         analysis: ArticleEditorialAnalysisORM,
         payload: ArticleEditorialAnalysisPayload,
         content_hash: str,
+        diagnostics=None,
+        analysis_path: str = "",
     ) -> None:
         analysis.article_type = payload.article_type
         analysis.article_type_confidence = payload.article_type_confidence
@@ -601,12 +637,26 @@ class EditorialAnalysisPipeline:
         analysis.opinionatedness = payload.opinionatedness
         analysis.sensationalism = payload.sensationalism
         analysis.rhetorical_certainty = payload.rhetorical_certainty
+        analysis.editorial_applicability = (
+            diagnostics.editorial_applicability if diagnostics is not None else "full"
+        )
+        analysis.editorial_applicability_reason = (
+            diagnostics.editorial_applicability_reason
+            if diagnostics is not None
+            else "general_editorial_content"
+        )
+        analysis.analysis_path = analysis_path
         analysis.framing_devices_json = json.dumps(payload.framing_devices, ensure_ascii=False)
         analysis.evidence_spans_json = json.dumps(
             [item.model_dump(mode="json") for item in payload.evidence_spans],
             ensure_ascii=False,
         )
         analysis.rationale = payload.rationale
+        analysis.diagnostics_json = (
+            json.dumps(diagnostics.model_dump(mode="json"), ensure_ascii=False)
+            if diagnostics is not None
+            else "{}"
+        )
         analysis.analysis_status = "completed"
         analysis.failure_reason = ""
         analysis.content_hash = content_hash
@@ -628,12 +678,29 @@ class EditorialAnalysisPipeline:
         analysis.opinionatedness = analysis.opinionatedness or "unclear"
         analysis.sensationalism = analysis.sensationalism or "unclear"
         analysis.rhetorical_certainty = analysis.rhetorical_certainty or "unclear"
+        analysis.editorial_applicability = analysis.editorial_applicability or "full"
+        analysis.editorial_applicability_reason = (
+            analysis.editorial_applicability_reason or "general_editorial_content"
+        )
+        analysis.analysis_path = analysis.analysis_path or failure_class
+        analysis.diagnostics_json = analysis.diagnostics_json or "{}"
         analysis.analysis_status = "failed"
         summary = f"{failure_class}: {failure_message}".strip()
         if artifact_path:
             summary = f"{summary} [artifact={artifact_path}]"
         analysis.failure_reason = summary[:255]
         analysis.updated_at = datetime.now(UTC)
+
+    def _analysis_path_for_result(self, result: EditorialAnalysisResult) -> str:
+        parts = []
+        for attempt in result.attempts:
+            if attempt.payload is not None:
+                parts.append("strict" if attempt.mode == "strict_json_schema" else "fallback")
+            elif attempt.failure_class:
+                parts.append(f"{attempt.mode}:{attempt.failure_class}")
+            else:
+                parts.append(attempt.mode)
+        return " -> ".join(parts)
 
     def _write_failure_artifact(
         self,
@@ -671,6 +738,9 @@ class EditorialAnalysisPipeline:
                     "dropped_fields": list(attempt.dropped_fields),
                     "truncated_fields": list(attempt.truncated_fields),
                     "final_unclear_reasons": list(attempt.unclear_reasons),
+                    "diagnostics": None
+                    if attempt.diagnostics is None
+                    else attempt.diagnostics.model_dump(mode="json"),
                     "fallback_success": attempt.mode == "fallback_json_text"
                     and attempt.payload is not None,
                     "raw_response": attempt.raw_response,

@@ -8,7 +8,11 @@ from typing import Any, Literal
 
 from openai import BadRequestError, OpenAI
 
-from src.analysis.contracts import ArticleEnrichmentPayload, OpenRouterUsage
+from src.analysis.contracts import (
+    ArticleEnrichmentPayload,
+    EditorialAnalysisDiagnostics,
+    OpenRouterUsage,
+)
 from src.analysis.editorial_normalization import (
     EditorialNormalizationError,
     normalize_editorial_payload,
@@ -92,6 +96,7 @@ class EditorialAnalysisAttempt:
     dropped_fields: tuple[str, ...] = ()
     truncated_fields: tuple[str, ...] = ()
     unclear_reasons: tuple[str, ...] = ()
+    diagnostics: EditorialAnalysisDiagnostics | None = None
 
 
 @dataclass(frozen=True)
@@ -295,6 +300,13 @@ class OpenRouterClient:
                 unclear_reasons=exc.unclear_reasons,
             )
 
+        diagnostics = normalization.diagnostics.model_copy(
+            update={
+                "provider_path": "strict_success"
+                if mode == "strict_json_schema"
+                else "fallback_success"
+            }
+        )
         return EditorialAnalysisAttempt(
             mode=mode,
             request_accepted=True,
@@ -309,6 +321,7 @@ class OpenRouterClient:
             dropped_fields=normalization.dropped_fields,
             truncated_fields=normalization.truncated_fields,
             unclear_reasons=normalization.unclear_reasons,
+            diagnostics=diagnostics,
         )
 
     def _should_retry_with_fallback(self, attempt: EditorialAnalysisAttempt) -> bool:

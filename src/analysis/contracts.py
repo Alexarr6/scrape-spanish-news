@@ -67,6 +67,24 @@ FRAMING_DEVICE_VALUES = (
 )
 EVIDENCE_SPAN_TYPES = ("headline", "summary", "body")
 EDITORIAL_ANALYSIS_STATUSES = ("pending", "completed", "failed", "skipped")
+EDITORIAL_APPLICABILITY_VALUES = ("full", "limited", "out_of_domain")
+EDITORIAL_APPLICABILITY_REASONS = (
+    "general_editorial_content",
+    "procedural_hard_news",
+    "accident_crime_bulletin",
+    "sports_recap",
+    "consumer_price_roundup",
+    "weather_or_service_info",
+    "insufficient_text",
+)
+EDITORIAL_DIMENSION_STATUS_VALUES = (
+    "resolved",
+    "weak_signal_abstain",
+    "mapping_loss",
+    "provider_missing",
+    "out_of_domain",
+    "conflicted_signal",
+)
 
 
 class ArticleAnalysisExtractedEntity(BaseModel):
@@ -156,6 +174,43 @@ class ArticleEditorialAnalysisRawPayload(BaseModel):
     rationale: str | dict[str, Any] | None = Field(default=None)
     notes: str | dict[str, Any] | None = Field(default=None)
     uncertainty_reason: str | dict[str, Any] | None = Field(default=None)
+
+
+class EditorialDimensionDiagnostic(BaseModel):
+    value: str
+    status: Literal[
+        "resolved",
+        "weak_signal_abstain",
+        "mapping_loss",
+        "provider_missing",
+        "out_of_domain",
+        "conflicted_signal",
+    ]
+    reason: str
+    notes: list[str] = Field(default_factory=list, max_length=8)
+    raw_hints: list[str] = Field(default_factory=list, max_length=12)
+
+
+class EditorialAnalysisDiagnostics(BaseModel):
+    provider_path: str
+    editorial_applicability: Literal["full", "limited", "out_of_domain"]
+    editorial_applicability_reason: Literal[
+        "general_editorial_content",
+        "procedural_hard_news",
+        "accident_crime_bulletin",
+        "sports_recap",
+        "consumer_price_roundup",
+        "weather_or_service_info",
+        "insufficient_text",
+    ]
+    dimension_status: dict[str, EditorialDimensionDiagnostic] = Field(default_factory=dict)
+    repair_warnings: list[str] = Field(default_factory=list)
+    normalization_warnings: list[str] = Field(default_factory=list)
+    dropped_fields: list[str] = Field(default_factory=list)
+    truncated_fields: list[str] = Field(default_factory=list)
+    preserved_signals: dict[str, list[str]] = Field(default_factory=dict)
+    provider_failures: list[str] = Field(default_factory=list)
+    unclear_reasons: list[str] = Field(default_factory=list)
 
 
 class ArticleEditorialAnalysisPayload(BaseModel):
@@ -321,8 +376,12 @@ class ArticleEditorialAnalysisRead(BaseModel):
     opinionatedness: str
     sensationalism: str
     rhetorical_certainty: str
+    editorial_applicability: str = "full"
+    editorial_applicability_reason: str = "general_editorial_content"
+    analysis_path: str = ""
     framing_devices_json: str = "[]"
     evidence_spans_json: str = "[]"
+    diagnostics_json: str = "{}"
     rationale: str
     analysis_status: str
     failure_reason: str = ""
@@ -441,11 +500,22 @@ class EditorialAnalysisRunMetrics(BaseModel):
     validation_failed_count: int = 0
     strict_success_count: int = 0
     fallback_success_count: int = 0
+    fallback_after_strict_reject_count: int = 0
     rows_with_warnings_count: int = 0
     rows_with_truncated_evidence_count: int = 0
     rows_with_dropped_fields_count: int = 0
+    rows_with_unmapped_signals_count: int = 0
     unclear_bias_count: int = 0
     unclear_due_to_mapping_count: int = 0
+    out_of_domain_count: int = 0
+    limited_applicability_count: int = 0
+    bias_weak_signal_count: int = 0
+    bias_mapping_loss_count: int = 0
+    framing_mapping_loss_count: int = 0
+    provider_missing_dimension_count: int = 0
+    unclear_reason_counts: dict[str, int] = Field(default_factory=dict)
+    dimension_status_counts: dict[str, dict[str, int]] = Field(default_factory=dict)
+    preserved_signal_counts: dict[str, dict[str, int]] = Field(default_factory=dict)
     started_at: datetime | None = None
     finished_at: datetime | None = None
 

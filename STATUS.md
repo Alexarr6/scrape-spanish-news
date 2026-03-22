@@ -1,99 +1,58 @@
 - State: DONE
-- Current phase: implementer pass completed on `iter/004`; editorial analysis now uses explicit raw capture -> shape repair/coercion -> semantic normalization -> strict final validation, with saner `reprocess` selection semantics and warning-aware reporting
+- Current phase: implementer pass completed on `iter/004`; editorial-analysis now persists applicability + per-dimension diagnostics so `unclear` is explainable instead of a black box
 - Last update: 2026-03-22 UTC
 
-## Implementer completion — editorial-analysis robustness pass landed
+## Implementer completion — editorial diagnostics, applicability, and explainable `unclear`
 
-Implemented the architect-approved hardening slice without article-id hacks.
+Completed the bounded implementation pass approved in the architect review.
 
-### What changed
-- widened `ArticleEditorialAnalysisRawPayload` so recoverable provider drift does not die at the raw boundary
-- added an explicit shape-repair/coercion stage in `src/analysis/editorial_normalization.py`
-- kept semantic normalization separate from repair and preserved the strict final payload as the authority
-- added repair/normalization warning classes plus explicit `unclear` reason signals
-- expanded run metrics/artifact detail for fallback success, dropped fields, truncation, and warning-heavy successful rows
-- fixed `--reprocess` semantics so default pending selection widens to `status=any` unless the operator explicitly targets article ids
-- updated CLI dry-run reporting to show effective selection status and counts by current row status
-- added regression coverage for object rationale, object ideological bias, confidence-label coercion, overlong evidence, framing-device objects, nested tone structures, and fallback-success warning reporting
+### Landed
+- added first-class `editorial_applicability` and reason classification on persisted rows
+- added per-dimension diagnostic statuses for article type / bias / tone / framing surfaces
+- persisted diagnostics JSON on the editorial-analysis row so operators can inspect loss, abstention, provider omission, and preserved raw hints without opening raw failure artifacts first
+- preserved non-canonical framing/tone hints inside diagnostics instead of silently discarding them
+- extended run metrics / CLI JSON with aggregate unclear-reason and dimension-status counters
+- exposed diagnostics/applicability/path through read-side + API detail/list responses
+- added regression coverage for weak-signal abstention, mapping loss, provider-missing behavior, and out-of-domain article types
 
-### Bounded verification completed
-- `~/.local/bin/uv run --project . ruff check src/analysis/contracts.py src/analysis/editorial_normalization.py src/analysis/llm_client.py src/analysis/pipeline.py scripts/analyze_editorial.py tests/test_editorial_analysis_contracts.py tests/test_editorial_normalization.py tests/test_editorial_analysis_pipeline.py`
-- `~/.local/bin/uv run --project . pytest -q tests/test_api_editorial.py tests/test_editorial_analysis_contracts.py tests/test_editorial_normalization.py tests/test_editorial_analysis_pipeline.py`
+### Important constraint preserved
+- the strict final editorial payload remains authoritative for filtering/aggregation
+- diagnostics explain uncertainty/loss/applicability; they do not bypass validation
 
-Result:
-- `ruff check`: passed
-- `pytest`: `19 passed`
-- bounded operator-style CLI verification against a temp sqlite URL: intentionally failed fast with `ValueError("Postgres-only mode: db URL must start with 'postgresql'")`, which is expected under the repo's DB policy and therefore not a valid end-to-end operator path without a real Postgres target
+## Architect completion — editorial `unclear` semantics and explainability re-review
 
-## Architect re-review completion — remaining editorial failures are now well-localized
+Completed a deeper architecture pass focused on the operator complaint that too many final fields end up as `unclear`.
 
-A deeper architecture pass has been completed using the new real operator artifacts and recent hotfix/test state.
+### Main findings
+- the current pipeline shape is directionally right, but it still hides too much of the middle
+- `unclear` currently conflates at least four realities:
+  - honest weak-signal abstention
+  - mapping loss / dropped signal
+  - provider omission / malformed output
+  - out-of-domain or low-editorial-value article classes
+- the final schema is only partly too ambitious; the main problem is not the existence of the fields but the lack of tiering and diagnostics around them
+- `tone_target` and `framing_devices` are the shakiest first-pass dimensions and should be treated as compressed/derived summaries, not equally trustworthy peers of core fields
+- strict/native structured output helpers are not a real architectural fix on the current OpenRouter mixed-model route; they may help ergonomics on allowlisted providers, but they do not solve compatibility drift or semantic compression
 
-### Main conclusion
-The repo fixed the first half of the problem, but not the second.
+### Revised recommendation
+Keep the current raw -> repair -> normalize -> strict flow, but add a second persistent product:
+- canonical final row for filtering/aggregation
+- diagnostics sidecar (or compact diagnostics JSON) preserving:
+  - raw/repaired excerpts
+  - dimension-level statuses
+  - unmapped signals
+  - dropped/truncated fields
+  - provider path / fallback path
+  - applicability / out-of-domain assessment
 
-What is now clearly true:
-- separating raw generation from strict final persistence was the right move
-- honest request accounting and strict->fallback retry were also correct
-- **but the current raw layer is still too narrow**
-- it is rejecting recoverable provider variation before repair/normalization can salvage it
+### Recommended next implementation scope
+1. add `editorial_applicability` / reason classification
+2. add per-dimension outcome statuses (`resolved`, `weak_signal_abstain`, `mapping_loss`, `provider_missing`, `out_of_domain`, `conflicted_signal`)
+3. persist diagnostics as first-class DB/API-visible data
+4. preserve unmapped framing/tone meaning instead of silently dropping it
+5. extend metrics/CLI summaries so operators can see why `unclear` happened
+6. add regression coverage for weak-signal vs mapping-loss vs provider-missing vs out-of-domain behavior
 
-That is why the pipeline now shows this awkward behavior:
-- single runs sometimes succeed
-- fallback often returns parseable, useful JSON
-- batch runs still fail on raw validation details like overlong evidence lists, object rationales, object framing structures, and string confidence labels
-- successful rows often land in `unclear`, but operator reporting does not explain whether that is genuine abstention or mapping/data-loss degradation
-
-### Real operator/artifact findings carried into the revised recommendation
-Observed directly in `.artifacts/editorial-analysis/`:
-- article `2924`: object-form `ideological_bias_framing`
-- article `2925`: object-form `rationale`
-- article `2926`: 9-item `evidence_spans`
-- article `2969`: 7-item `evidence_spans`
-- article `2927`: 10-item string `evidence_spans`
-- article `2928`: fallback JSON with `confidence="moderate"` and useful but off-ontology political framing
-
-Interpretation:
-- these are mostly **shape-repair** cases, not semantic nonsense cases
-- the raw layer should capture them
-- a distinct repair/coercion phase should handle them
-- only then should semantic normalization and final validation decide what survives
-
-### Revised architecture recommendation
-The recommended editorial pipeline is now:
-
-`raw capture -> shape repair/coercion -> semantic normalization -> strict final validation -> persistence/reporting`
-
-Key policy implications:
-- raw capture should accept bounded but variable shapes
-- overlong evidence lists should truncate with warnings, not fail at capture time
-- confidence labels like `moderate` should coerce conservatively
-- object rationales / ideological framing / framing devices should be repaired before semantic mapping
-- final strict payload remains the persistence gatekeeper
-
-### Operator-facing conclusion
-Two operator issues are now explicit design targets, not incidental annoyances:
-
-1. **`REPROCESS` semantics are confusing**
-   - current default `status=pending` means `reprocess` does not widen selection
-   - that makes `REPROCESS=1` appear ineffective unless the operator already knows the internal selection model
-   - recommended fix: `--reprocess` should imply `status=any` unless status was explicitly passed
-
-2. **`unclear` is overloaded**
-   - some rows are genuinely weak-signal
-   - others become `unclear` because mapping/repair dropped information
-   - reporting must distinguish these cases
-
-### Updated planning direction
-`ARCH_REVIEW.md` and `PLAN.md` now call for the next implementer slice to focus on:
-1. widening the raw editorial contract
-2. adding an explicit shape-repair/coercion stage
-3. making normalization warning-aware and reason-aware
-4. fixing `REPROCESS` / selection semantics
-5. improving metrics and artifacts so fallback success, truncation, dropped fields, and `unclear` reasons are visible
-6. locking the observed failures into regression coverage
-
-### Important non-recommendation
-Do **not** spend the next pass mostly on prompt tweaks.
-That would be cargo-cult nonsense.
-The artifacts already show the model often returns usable JSON; the remaining issue is where the pipeline draws its boundaries and how little it tells the operator.
+### Important explicit conclusion
+Do **not** bet the next pass on LangChain/OpenAI-style `with_structured_output(...)` or direct Pydantic parsing as the primary fix.
+On this provider route that would mostly move the same failures under a nicer helper API.

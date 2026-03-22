@@ -81,6 +81,17 @@ def main() -> int:
             batch_size=args.batch_size,
         )
         payload = metrics.model_dump(mode="json")
+        payload["diagnostic_summary"] = {
+            "top_unclear_reasons": sorted(
+                payload.get("unclear_reason_counts", {}).items(),
+                key=lambda item: item[1],
+                reverse=True,
+            )[:5],
+            "top_preserved_signals": {
+                key: sorted(values.items(), key=lambda item: item[1], reverse=True)[:5]
+                for key, values in payload.get("preserved_signal_counts", {}).items()
+            },
+        }
         payload["selection"] = {
             "status": status,
             "effective_status": effective_status,

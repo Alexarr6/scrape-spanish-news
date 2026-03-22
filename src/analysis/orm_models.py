@@ -101,8 +101,14 @@ class ArticleEditorialAnalysisORM(Base):
     opinionatedness: Mapped[str] = mapped_column(String(40), nullable=False)
     sensationalism: Mapped[str] = mapped_column(String(40), nullable=False)
     rhetorical_certainty: Mapped[str] = mapped_column(String(40), nullable=False)
+    editorial_applicability: Mapped[str] = mapped_column(String(40), default="full", nullable=False)
+    editorial_applicability_reason: Mapped[str] = mapped_column(
+        String(80), default="general_editorial_content", nullable=False
+    )
+    analysis_path: Mapped[str] = mapped_column(String(80), default="", nullable=False)
     framing_devices_json: Mapped[str] = mapped_column(Text, default="[]", nullable=False)
     evidence_spans_json: Mapped[str] = mapped_column(Text, default="[]", nullable=False)
+    diagnostics_json: Mapped[str] = mapped_column(Text, default="{}", nullable=False)
     rationale: Mapped[str] = mapped_column(Text, default="", nullable=False)
     analysis_status: Mapped[str] = mapped_column(String(40), default="pending", nullable=False)
     failure_reason: Mapped[str] = mapped_column(String(255), default="", nullable=False)

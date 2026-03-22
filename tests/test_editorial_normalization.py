@@ -162,9 +162,42 @@ def test_normalize_editorial_payload_truncates_overlong_evidence_lists_determini
     assert result.final_payload.evidence_spans[0].text == "evidence span 1"
     assert len(result.final_payload.evidence_spans) == 3
     assert "repair_data_loss" in result.unclear_reasons
+    assert result.diagnostics.dimension_status["framing"].status == "resolved"
     assert any(
         "repair_truncated_evidence_spans: 9 -> 6" == warning for warning in result.repair_warnings
     )
+
+
+def test_normalize_editorial_payload_marks_provider_missing_vs_weak_signal_vs_out_of_domain() -> (
+    None
+):
+    weak_signal = normalize_editorial_payload(
+        {
+            "article_type": "explainer",
+            "bias_label": "unclear",
+            "evidence_spans": ["Claves para entender la reforma del mercado eléctrico"],
+            "rationale": "Useful explainer with limited ideological signal and descriptive framing.",
+        }
+    )
+    provider_missing = normalize_editorial_payload(
+        {
+            "article_type": "analysis",
+            "evidence_spans": ["El texto describe posiciones enfrentadas sin definir una propia."],
+            "rationale": "The provider omitted several dimensions entirely.",
+        }
+    )
+    out_of_domain = normalize_editorial_payload(
+        {
+            "article_type": "news_report",
+            "evidence_spans": ["El delantero marcó dos goles para cerrar la victoria."],
+            "rationale": "Sports recap focused on match events rather than editorial framing.",
+        }
+    )
+
+    assert weak_signal.diagnostics.dimension_status["bias"].status == "weak_signal_abstain"
+    assert provider_missing.diagnostics.dimension_status["bias"].status == "provider_missing"
+    assert out_of_domain.diagnostics.editorial_applicability == "out_of_domain"
+    assert out_of_domain.diagnostics.dimension_status["bias"].status == "out_of_domain"
 
 
 def test_normalize_editorial_payload_raises_when_no_usable_evidence_exists() -> None:
