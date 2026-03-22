@@ -605,6 +605,7 @@ class EditorialAnalysisPipeline:
                     "raw_message": attempt.raw_message,
                     "raw_content": attempt.raw_content,
                     "parsed_json": attempt.parsed_json,
+                    "normalization_warnings": list(attempt.normalization_warnings),
                     "raw_response": attempt.raw_response,
                 }
                 for attempt in result.attempts

@@ -53,7 +53,8 @@ class _FakeLLM:
 
     def analyze_editorial(self, *, article_prompt: str, schema: dict[str, object]):
         assert "ARTICLE_METADATA:" in article_prompt
-        assert schema["properties"]["bias_label"]["enum"][-1] == "unclear"
+        assert "bias_label" in schema["properties"]
+        assert "ideological_bias_framing" in schema["properties"]
         return self.result
 
 

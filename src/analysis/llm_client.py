@@ -7,12 +7,11 @@ from pathlib import Path
 from typing import Any, Literal
 
 from openai import BadRequestError, OpenAI
-from pydantic import ValidationError
 
-from src.analysis.contracts import (
-    ArticleEditorialAnalysisPayload,
-    ArticleEnrichmentPayload,
-    OpenRouterUsage,
+from src.analysis.contracts import ArticleEnrichmentPayload, OpenRouterUsage
+from src.analysis.editorial_normalization import (
+    EditorialNormalizationError,
+    normalize_editorial_payload,
 )
 
 DEFAULT_BASE_URL = "https://openrouter.ai/api/v1"
@@ -35,7 +34,7 @@ Rules:
 5. Distinguish between the article's own framing and quotations from sources.
 6. Evidence spans must quote real text from the provided article content.
 7. Keep rationale concise and specific."""
-EDITORIAL_ANALYSIS_SCHEMA_VERSION = "editorial-analysis-v1"
+EDITORIAL_ANALYSIS_SCHEMA_VERSION = "editorial-analysis-v1-normalized"
 EDITORIAL_ANALYSIS_SOURCE_TEXT_VERSION = "title_summary_body_v1"
 
 FailureClass = Literal[
@@ -80,7 +79,7 @@ class OpenRouterSettings:
 class EditorialAnalysisAttempt:
     mode: SchemaMode
     request_accepted: bool
-    payload: ArticleEditorialAnalysisPayload | None = None
+    payload: Any | None = None
     usage: OpenRouterUsage | None = None
     failure_class: FailureClass | None = None
     failure_message: str = ""
@@ -88,6 +87,7 @@ class EditorialAnalysisAttempt:
     raw_message: Any = None
     raw_content: str | None = None
     parsed_json: dict[str, Any] | list[Any] | None = None
+    normalization_warnings: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -272,8 +272,8 @@ class OpenRouterClient:
                 )
 
         try:
-            payload = ArticleEditorialAnalysisPayload.model_validate(parsed_json)
-        except ValidationError as exc:
+            normalization = normalize_editorial_payload(parsed_json)
+        except EditorialNormalizationError as exc:
             return EditorialAnalysisAttempt(
                 mode=mode,
                 request_accepted=True,
@@ -284,17 +284,19 @@ class OpenRouterClient:
                 raw_message=raw_message,
                 raw_content=extracted_content,
                 parsed_json=parsed_json,
+                normalization_warnings=exc.warnings,
             )
 
         return EditorialAnalysisAttempt(
             mode=mode,
             request_accepted=True,
-            payload=payload,
+            payload=normalization.final_payload,
             usage=usage,
             raw_response=raw_response,
             raw_message=raw_message,
             raw_content=extracted_content,
             parsed_json=parsed_json,
+            normalization_warnings=normalization.warnings,
         )
 
     def _should_retry_with_fallback(self, attempt: EditorialAnalysisAttempt) -> bool:
@@ -430,7 +432,11 @@ def build_editorial_analysis_prompt(
 ) -> str:
     article_body = body[:6000]
     return (
-        "Analyze the following article and return strict JSON matching the required schema.\n\n"
+        "Analyze the following article and return one portable raw JSON object "
+        "for editorial analysis.\n"
+        "Use the preferred keys when possible, but if the article is straightforward "
+        "or the exact taxonomy feels forced, stay conservative and still return "
+        "valid JSON.\n\n"
         "ARTICLE_METADATA:\n"
         f"- source: {source}\n"
         f"- section: {section}\n"
@@ -498,104 +504,67 @@ def enrichment_json_schema() -> dict[str, Any]:
 
 
 def editorial_analysis_json_schema() -> dict[str, Any]:
-    def controlled_string(values: list[str]) -> dict[str, Any]:
-        return {"type": "string", "enum": list(values)}
+    def bounded_string(max_length: int = 1200) -> dict[str, Any]:
+        return {"type": "string", "maxLength": max_length}
 
     return {
         "type": "object",
-        "additionalProperties": False,
+        "additionalProperties": True,
         "properties": {
-            "article_type": controlled_string(
-                [
-                    "news_report",
-                    "analysis",
-                    "opinion",
-                    "editorial",
-                    "interview",
-                    "feature",
-                    "explainer",
-                    "live_blog",
-                    "other",
-                    "unclear",
-                ]
-            ),
+            "article_type": bounded_string(120),
             "article_type_confidence": {"type": "number", "minimum": 0.0, "maximum": 1.0},
-            "bias_label": controlled_string(
-                [
-                    "far_left",
-                    "left",
-                    "center_left",
-                    "center",
-                    "center_right",
-                    "right",
-                    "far_right",
-                    "unclear",
-                ]
-            ),
+            "bias_label": bounded_string(80),
+            "ideological_bias_framing": bounded_string(80),
             "bias_score": {"type": "number", "minimum": -1.0, "maximum": 1.0},
             "bias_confidence": {"type": "number", "minimum": 0.0, "maximum": 1.0},
-            "tone_emotional": controlled_string(["calm", "loaded", "inflammatory", "unclear"]),
-            "tone_target": controlled_string(
-                ["supportive", "neutral", "critical", "hostile", "mixed", "unclear"]
-            ),
-            "opinionatedness": controlled_string(
-                ["straight_reporting", "interpretive", "opinionated", "activist", "unclear"]
-            ),
-            "sensationalism": controlled_string(["low", "medium", "high", "unclear"]),
-            "rhetorical_certainty": controlled_string(
-                ["cautious", "assertive", "absolute", "unclear"]
-            ),
+            "confidence": {"type": "number", "minimum": 0.0, "maximum": 1.0},
+            "tone_emotional": bounded_string(80),
+            "tone_target": bounded_string(80),
+            "opinionatedness": bounded_string(80),
+            "sensationalism": bounded_string(80),
+            "rhetorical_certainty": bounded_string(80),
+            "tone_dimensions": {
+                "type": "object",
+                "additionalProperties": {"type": ["string", "number", "boolean", "null"]},
+                "properties": {
+                    "emotionality": bounded_string(80),
+                    "target": bounded_string(80),
+                    "polarity": bounded_string(80),
+                    "opinionatedness": bounded_string(80),
+                    "style": bounded_string(80),
+                    "sensationalism": bounded_string(80),
+                    "rhetorical_certainty": bounded_string(80),
+                    "certainty": bounded_string(80),
+                },
+            },
             "framing_devices": {
                 "type": "array",
-                "maxItems": 5,
-                "items": controlled_string(
-                    [
-                        "conflict",
-                        "economic_consequence",
-                        "moral_judgment",
-                        "public_order_security",
-                        "identity_culture",
-                        "governance_competence",
-                        "corruption_scandal",
-                        "humanitarian",
-                        "victimization",
-                        "progress_modernization",
-                        "institutional_stability",
-                        "strategic_geopolitics",
-                    ]
-                ),
-                "uniqueItems": True,
+                "maxItems": 8,
+                "items": {"type": "string", "maxLength": 120},
             },
             "evidence_spans": {
                 "type": "array",
-                "minItems": 1,
-                "maxItems": 3,
+                "maxItems": 6,
                 "items": {
-                    "type": "object",
-                    "additionalProperties": False,
-                    "properties": {
-                        "type": controlled_string(["headline", "summary", "body"]),
-                        "text": {"type": "string", "minLength": 3, "maxLength": 400},
-                        "note": {"type": "string", "minLength": 3, "maxLength": 240},
-                    },
-                    "required": ["type", "text", "note"],
+                    "anyOf": [
+                        bounded_string(400),
+                        {
+                            "type": "object",
+                            "additionalProperties": True,
+                            "properties": {
+                                "type": bounded_string(40),
+                                "location": bounded_string(40),
+                                "text": bounded_string(400),
+                                "note": bounded_string(240),
+                                "explanation": bounded_string(240),
+                            },
+                        },
+                    ]
                 },
             },
-            "rationale": {"type": "string", "minLength": 12, "maxLength": 1200},
+            "rationale": bounded_string(1200),
+            "notes": bounded_string(500),
+            "uncertainty_reason": bounded_string(500),
         },
-        "required": [
-            "article_type",
-            "article_type_confidence",
-            "bias_label",
-            "bias_score",
-            "bias_confidence",
-            "tone_emotional",
-            "tone_target",
-            "opinionatedness",
-            "sensationalism",
-            "rhetorical_certainty",
-            "framing_devices",
-            "evidence_spans",
-            "rationale",
-        ],
+        "required": ["article_type", "framing_devices", "evidence_spans", "rationale"],
     }

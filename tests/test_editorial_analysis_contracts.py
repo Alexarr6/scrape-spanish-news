@@ -63,7 +63,7 @@ def test_editorial_payload_rejects_unclear_label_with_confident_extreme_score() 
         ArticleEditorialAnalysisPayload.model_validate(payload)
 
 
-def test_editorial_prompt_and_schema_include_strict_contract_markers() -> None:
+def test_editorial_prompt_and_schema_expose_raw_generation_contract() -> None:
     prompt = build_editorial_analysis_prompt(
         source="elpais",
         section="politica",
@@ -77,6 +77,9 @@ def test_editorial_prompt_and_schema_include_strict_contract_markers() -> None:
 
     assert "ARTICLE_METADATA:" in prompt
     assert "TITLE: Título" in prompt
-    assert schema["additionalProperties"] is False
-    assert schema["properties"]["framing_devices"]["maxItems"] == 5
-    assert schema["properties"]["evidence_spans"]["minItems"] == 1
+    assert "portable raw JSON object" in prompt
+    assert schema["additionalProperties"] is True
+    assert "ideological_bias_framing" in schema["properties"]
+    assert "tone_dimensions" in schema["properties"]
+    assert schema["properties"]["framing_devices"]["maxItems"] == 8
+    assert schema["properties"]["evidence_spans"]["maxItems"] == 6

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from datetime import date, datetime
-from typing import Literal
+from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
@@ -133,6 +133,29 @@ class ArticleEditorialEvidenceSpan(BaseModel):
         if not cleaned:
             raise ValueError("must not be empty")
         return cleaned
+
+
+class ArticleEditorialAnalysisRawPayload(BaseModel):
+    model_config = ConfigDict(extra="allow")
+
+    article_type: str | None = None
+    article_type_confidence: float | None = Field(default=None, ge=0.0, le=1.0)
+    bias_label: str | None = None
+    ideological_bias_framing: str | None = None
+    bias_score: float | None = None
+    bias_confidence: float | None = Field(default=None, ge=0.0, le=1.0)
+    confidence: float | None = Field(default=None, ge=0.0, le=1.0)
+    tone_emotional: str | None = None
+    tone_target: str | None = None
+    opinionatedness: str | None = None
+    sensationalism: str | None = None
+    rhetorical_certainty: str | None = None
+    tone_dimensions: dict[str, Any] | None = None
+    framing_devices: list[Any] = Field(default_factory=list, max_length=8)
+    evidence_spans: list[Any] = Field(default_factory=list, max_length=6)
+    rationale: str | None = Field(default=None, max_length=1200)
+    notes: str | None = Field(default=None, max_length=500)
+    uncertainty_reason: str | None = Field(default=None, max_length=500)
 
 
 class ArticleEditorialAnalysisPayload(BaseModel):

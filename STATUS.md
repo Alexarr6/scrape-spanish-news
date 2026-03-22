@@ -1,6 +1,42 @@
 - State: DONE
-- Current phase: editorial-analysis reliability remediation implemented on `iter/004`, plus post-pass usage normalization hotfix
+- Current phase: editorial-analysis raw-schema normalization layer implemented on `iter/004`, preserving strict final persistence validation while salvaging portable provider output
 - Last update: 2026-03-22 UTC
+
+## Implementer completion — raw/model-facing editorial payload + deterministic normalization landed
+
+Completed in code:
+- added `ArticleEditorialAnalysisRawPayload` as the model-facing editorial contract
+- added deterministic normalization in `src/analysis/editorial_normalization.py`
+- changed the OpenRouter editorial flow to parse raw JSON, normalize it, then validate against the unchanged strict final `ArticleEditorialAnalysisPayload`
+- switched the provider-facing schema request to a bounded raw schema that tolerates alias fields, nested `tone_dimensions`, string evidence spans, freeform framing labels, and global `confidence`
+- preserved strict persistence semantics by writing only normalized final payloads
+- preserved/improved debug visibility by attaching normalization warnings to failure artifacts
+- added focused regression tests, including the captured minimax-style payload shape
+- manually verified normalization against `.artifacts/editorial-analysis/20260322T164233Z-article-2800.json`
+
+Result:
+- parseable off-ontology provider JSON no longer has to die just because it is not already DB-shaped
+- ambiguous fields still degrade conservatively to `unclear` or safe defaults
+- the final strict schema remains the persistence gatekeeper
+
+## Architect review follow-up — final-schema portability is the real blocker
+
+A repo-grounded architect review has now been added in `ARCH_REVIEW.md`.
+
+Key conclusion:
+- transport robustness work fixed honest request accounting and parse-path diagnosis
+- but repeated failures across `minimax/minimax-m2.7`, `gpt-5.4 nano` via OpenRouter, and `openai/gpt-4.1-mini` show the deeper issue is architectural
+- the pipeline currently asks routed LLMs to emit the final persistence contract directly
+- that direct-to-final-schema approach is brittle across providers/models even when JSON is parseable
+
+Recommended next implementation scope from the architect review:
+1. add a portable raw editorial payload contract
+2. add deterministic normalization/mapping into the existing strict final payload
+3. keep final strict validation as the persistence gate
+4. capture normalization warnings/raw payload in artifacts
+5. optionally keep a provider/model allowlist as an ops guardrail, not as the main fix
+
+This is the recommended prerequisite before any further editorial-analysis expansion or Phase 3 comparison work.
 
 ## Why this new planning pass exists
 
