@@ -3,9 +3,11 @@ from __future__ import annotations
 import json
 import os
 from dataclasses import dataclass
-from typing import Any
+from pathlib import Path
+from typing import Any, Literal
 
-from openai import OpenAI
+from openai import BadRequestError, OpenAI
+from pydantic import ValidationError
 
 from src.analysis.contracts import (
     ArticleEditorialAnalysisPayload,
@@ -14,8 +16,8 @@ from src.analysis.contracts import (
 )
 
 DEFAULT_BASE_URL = "https://openrouter.ai/api/v1"
-EDITORIAL_ANALYSIS_SYSTEM_PROMPT = (
-    """You are classifying a Spanish news article for editorial analysis.
+EDITORIAL_ANALYSIS_SYSTEM_PROMPT = """You are classifying a Spanish news article.
+Perform editorial analysis conservatively.
 
 Your task is to produce a conservative, evidence-backed JSON object that classifies:
 - article type
@@ -33,9 +35,20 @@ Rules:
 5. Distinguish between the article's own framing and quotations from sources.
 6. Evidence spans must quote real text from the provided article content.
 7. Keep rationale concise and specific."""
-)
 EDITORIAL_ANALYSIS_SCHEMA_VERSION = "editorial-analysis-v1"
 EDITORIAL_ANALYSIS_SOURCE_TEXT_VERSION = "title_summary_body_v1"
+
+FailureClass = Literal[
+    "provider_schema_rejected",
+    "provider_request_failed",
+    "empty_content",
+    "non_json_content",
+    "json_parse_failed",
+    "payload_validation_failed",
+    "refusal_or_blocked",
+    "unknown_response_shape",
+]
+SchemaMode = Literal["strict_json_schema", "fallback_json_text"]
 
 
 @dataclass(frozen=True)
@@ -61,6 +74,37 @@ class OpenRouterSettings:
             max_retries=int(os.getenv("OPENROUTER_MAX_RETRIES", "2")),
             prompt_version=os.getenv("OPENROUTER_PROMPT_VERSION", "v1"),
         )
+
+
+@dataclass(frozen=True)
+class EditorialAnalysisAttempt:
+    mode: SchemaMode
+    request_accepted: bool
+    payload: ArticleEditorialAnalysisPayload | None = None
+    usage: OpenRouterUsage | None = None
+    failure_class: FailureClass | None = None
+    failure_message: str = ""
+    raw_response: Any = None
+    raw_message: Any = None
+    raw_content: str | None = None
+    parsed_json: dict[str, Any] | list[Any] | None = None
+
+
+@dataclass(frozen=True)
+class EditorialAnalysisResult:
+    attempts: tuple[EditorialAnalysisAttempt, ...]
+
+    @property
+    def success(self) -> bool:
+        return any(attempt.payload is not None for attempt in self.attempts)
+
+    @property
+    def final_attempt(self) -> EditorialAnalysisAttempt:
+        return self.attempts[-1]
+
+    @property
+    def successful_attempt(self) -> EditorialAnalysisAttempt | None:
+        return next((attempt for attempt in self.attempts if attempt.payload is not None), None)
 
 
 class OpenRouterClient:
@@ -103,26 +147,235 @@ class OpenRouterClient:
 
     def analyze_editorial(
         self, *, article_prompt: str, schema: dict[str, Any]
-    ) -> tuple[ArticleEditorialAnalysisPayload, OpenRouterUsage]:
-        response = self._client.chat.completions.create(
-            model=self.settings.model,
-            messages=[
-                {"role": "system", "content": EDITORIAL_ANALYSIS_SYSTEM_PROMPT},
-                {"role": "user", "content": article_prompt},
-            ],
-            response_format={
+    ) -> EditorialAnalysisResult:
+        strict_attempt = self._run_editorial_attempt(
+            article_prompt=article_prompt,
+            schema=schema,
+            mode="strict_json_schema",
+        )
+        attempts = [strict_attempt]
+        if strict_attempt.payload is not None:
+            return EditorialAnalysisResult(attempts=tuple(attempts))
+        if self._should_retry_with_fallback(strict_attempt):
+            attempts.append(
+                self._run_editorial_attempt(
+                    article_prompt=article_prompt,
+                    schema=schema,
+                    mode="fallback_json_text",
+                )
+            )
+        return EditorialAnalysisResult(attempts=tuple(attempts))
+
+    def _run_editorial_attempt(
+        self,
+        *,
+        article_prompt: str,
+        schema: dict[str, Any],
+        mode: SchemaMode,
+    ) -> EditorialAnalysisAttempt:
+        messages = [
+            {"role": "system", "content": self._editorial_system_prompt(mode)},
+            {"role": "user", "content": article_prompt},
+        ]
+        request_kwargs: dict[str, Any] = {
+            "model": self.settings.model,
+            "messages": messages,
+        }
+        if mode == "strict_json_schema":
+            request_kwargs["response_format"] = {
                 "type": "json_schema",
                 "json_schema": {
                     "name": "article_editorial_analysis",
                     "strict": True,
                     "schema": schema,
                 },
-            },
-        )
-        content = response.choices[0].message.content or "{}"
-        payload = ArticleEditorialAnalysisPayload.model_validate(json.loads(content))
+            }
+        try:
+            response = self._client.chat.completions.create(**request_kwargs)
+        except BadRequestError as exc:
+            failure_class = (
+                "provider_schema_rejected"
+                if "invalid schema" in str(exc).lower() and "response_format" in str(exc).lower()
+                else "provider_request_failed"
+            )
+            return EditorialAnalysisAttempt(
+                mode=mode,
+                request_accepted=False,
+                failure_class=failure_class,
+                failure_message=str(exc),
+            )
+        except Exception as exc:
+            return EditorialAnalysisAttempt(
+                mode=mode,
+                request_accepted=False,
+                failure_class="provider_request_failed",
+                failure_message=str(exc),
+            )
+
         usage = OpenRouterUsage.model_validate(getattr(response, "usage", {}) or {})
-        return payload, usage
+        raw_response = self._safe_dump_model(response)
+        choice = response.choices[0] if getattr(response, "choices", None) else None
+        message = getattr(choice, "message", None)
+        raw_message = self._safe_dump_model(message)
+        refusal = getattr(message, "refusal", None) if message is not None else None
+        if refusal:
+            return EditorialAnalysisAttempt(
+                mode=mode,
+                request_accepted=True,
+                usage=usage,
+                failure_class="refusal_or_blocked",
+                failure_message=str(refusal),
+                raw_response=raw_response,
+                raw_message=raw_message,
+            )
+
+        extracted_content, content_error = self._extract_message_content(message)
+        if content_error is not None:
+            return EditorialAnalysisAttempt(
+                mode=mode,
+                request_accepted=True,
+                usage=usage,
+                failure_class=content_error,
+                failure_message="assistant content missing or unusable",
+                raw_response=raw_response,
+                raw_message=raw_message,
+            )
+
+        try:
+            parsed_json = json.loads(extracted_content)
+        except json.JSONDecodeError as exc:
+            cleaned = self._extract_json_block(extracted_content)
+            if cleaned is None:
+                return EditorialAnalysisAttempt(
+                    mode=mode,
+                    request_accepted=True,
+                    usage=usage,
+                    failure_class="non_json_content",
+                    failure_message=str(exc),
+                    raw_response=raw_response,
+                    raw_message=raw_message,
+                    raw_content=extracted_content,
+                )
+            try:
+                parsed_json = json.loads(cleaned)
+                extracted_content = cleaned
+            except json.JSONDecodeError as retry_exc:
+                return EditorialAnalysisAttempt(
+                    mode=mode,
+                    request_accepted=True,
+                    usage=usage,
+                    failure_class="json_parse_failed",
+                    failure_message=str(retry_exc),
+                    raw_response=raw_response,
+                    raw_message=raw_message,
+                    raw_content=extracted_content,
+                )
+
+        try:
+            payload = ArticleEditorialAnalysisPayload.model_validate(parsed_json)
+        except ValidationError as exc:
+            return EditorialAnalysisAttempt(
+                mode=mode,
+                request_accepted=True,
+                usage=usage,
+                failure_class="payload_validation_failed",
+                failure_message=str(exc),
+                raw_response=raw_response,
+                raw_message=raw_message,
+                raw_content=extracted_content,
+                parsed_json=parsed_json,
+            )
+
+        return EditorialAnalysisAttempt(
+            mode=mode,
+            request_accepted=True,
+            payload=payload,
+            usage=usage,
+            raw_response=raw_response,
+            raw_message=raw_message,
+            raw_content=extracted_content,
+            parsed_json=parsed_json,
+        )
+
+    def _should_retry_with_fallback(self, attempt: EditorialAnalysisAttempt) -> bool:
+        return attempt.mode == "strict_json_schema" and attempt.failure_class in {
+            "provider_schema_rejected",
+            "empty_content",
+            "non_json_content",
+            "json_parse_failed",
+            "unknown_response_shape",
+        }
+
+    def _editorial_system_prompt(self, mode: SchemaMode) -> str:
+        if mode == "strict_json_schema":
+            return EDITORIAL_ANALYSIS_SYSTEM_PROMPT
+        return (
+            EDITORIAL_ANALYSIS_SYSTEM_PROMPT
+            + "\n8. Do not use markdown fences or commentary. Return only one JSON object."
+        )
+
+    def _extract_message_content(self, message: Any) -> tuple[str | None, FailureClass | None]:
+        if message is None:
+            return None, "unknown_response_shape"
+        content = getattr(message, "content", None)
+        if isinstance(content, str):
+            cleaned = content.strip()
+            return (cleaned, None) if cleaned else (None, "empty_content")
+        if isinstance(content, list):
+            parts: list[str] = []
+            for item in content:
+                if isinstance(item, str):
+                    if item.strip():
+                        parts.append(item.strip())
+                    continue
+                if not isinstance(item, dict):
+                    continue
+                if item.get("type") in {"text", "output_text"} and isinstance(
+                    item.get("text"), str
+                ):
+                    if item["text"].strip():
+                        parts.append(item["text"].strip())
+                    continue
+                if item.get("type") == "json" and isinstance(item.get("json"), (dict, list)):
+                    return json.dumps(item["json"], ensure_ascii=False), None
+                if isinstance(item.get("content"), str) and item["content"].strip():
+                    parts.append(item["content"].strip())
+            joined = "\n".join(part for part in parts if part).strip()
+            return (joined, None) if joined else (None, "empty_content")
+        if isinstance(content, dict):
+            if isinstance(content.get("text"), str) and content["text"].strip():
+                return content["text"].strip(), None
+            if isinstance(content.get("json"), (dict, list)):
+                return json.dumps(content["json"], ensure_ascii=False), None
+        return None, "unknown_response_shape"
+
+    def _extract_json_block(self, content: str) -> str | None:
+        stripped = content.strip()
+        if stripped.startswith("```"):
+            lines = stripped.splitlines()
+            if len(lines) >= 3 and lines[-1].strip() == "```":
+                inner = "\n".join(lines[1:-1]).strip()
+                if inner.lower().startswith("json\n"):
+                    inner = inner[5:].strip()
+                return inner or None
+        start_positions = [idx for idx in (stripped.find("{"), stripped.find("[")) if idx >= 0]
+        if not start_positions:
+            return None
+        start = min(start_positions)
+        for end_char in ("}", "]"):
+            end = stripped.rfind(end_char)
+            if end > start:
+                candidate = stripped[start : end + 1].strip()
+                if candidate:
+                    return candidate
+        return None
+
+    def _safe_dump_model(self, value: Any) -> Any:
+        if value is None:
+            return None
+        if hasattr(value, "model_dump"):
+            return value.model_dump(mode="json")
+        return value
 
 
 def build_prompt(
@@ -173,6 +426,11 @@ def build_editorial_analysis_prompt(
         f"SUMMARY: {summary}\n"
         f"BODY: {article_body}"
     )
+
+
+def editorial_debug_artifact_dir() -> Path:
+    root = Path(__file__).resolve().parents[2]
+    return root / ".artifacts" / "editorial-analysis"
 
 
 def enrichment_json_schema() -> dict[str, Any]:

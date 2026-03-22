@@ -1,96 +1,65 @@
-- State: EDITORIAL_PHASE1_IMPLEMENTED
-- Current phase: article-level editorial analysis phase 1 implemented for `spain-news-bias-scraper`
-- Last update: 2026-03-21 UTC
+- State: DONE
+- Current phase: editorial-analysis reliability remediation implemented on `iter/004`
+- Last update: 2026-03-22 UTC
 
-## Editorial analysis phase 1 implementation
+## Why this new planning pass exists
 
-### What landed
-- New dedicated ORM table/model: `article_editorial_analysis`
-- New strict editorial Pydantic contracts with semantic validation guards
-- New dedicated editorial prompt builder + strict JSON schema generator
-- New dedicated OpenRouter client method: `analyze_editorial(...)`
-- New separate editorial pipeline/job: `EditorialAnalysisPipeline`
-- New CLI entrypoint: `scripts/analyze_editorial.py`
-- New Make target: `make analyze-editorial DATABASE_URL=...`
-- New minimal read API: `GET /api/v1/editorial-analysis/{article_id}`
-- Focused tests for contracts, persistence/pipeline behavior, and API read path
+Recent operator testing exposed that the editorial-analysis pipeline is not robust across OpenRouter model/provider combinations.
 
-### Hard constraints respected
-- Editorial analysis was **not** folded into the existing enrichment flow
-- Existing `article_analysis.article_type` usage was left in place for clustering
-- No cluster/story ideological aggregation was added
-- No unrelated cleanup/refactor was bundled into this slice
+Observed failures to carry forward into implementation:
+- `minimax/minimax-m2.7` via OpenRouter: billed requests, but pipeline ended with `failed_count=3`, `request_count=0`, `analyzed_count=0`; DB `failure_reason` was `Expecting value: line 1 column 1 (char 0)`
+- GPT-5.4 nano route via OpenRouter: provider returned `400 invalid schema for response_format article_editorial_analysis`, pointing at `properties.framing_devices`
+- `openai/gpt-4.1-mini` via OpenRouter: operator reports same parse-failure pattern as minimax
 
-### Validation run
-- `ruff check` on touched editorial files: passed
-- `pytest -q tests/test_editorial_analysis_contracts.py tests/test_editorial_analysis_pipeline.py tests/test_api_editorial.py tests/test_api_articles.py tests/test_openrouter_extraction_contract.py`: passed (`13 passed`)
+## Planning conclusion
 
-### Deferred by design
-- Cluster/story ideological rollups
-- Media-level comparison endpoints
-- Unifying editorial `article_type` with current `article_analysis.article_type`
-- Frontend/editorial UI polish
-- Broader migration framework changes
+The current code path is too brittle because it:
+- assumes `message.content` is directly parseable JSON text
+- increments `request_count` only after successful parse
+- collapses transport/schema/parse/validation failures into the same generic failed path
+- does not preserve raw failed-response artifacts for debugging
+- has no fallback mode when strict `response_format=json_schema` is rejected or returns unusable content
 
-## Scope completed in this planning pass
+## Approved next implementation scope
 
-Prepared an implementation-ready plan for adding **article-level editorial analysis** using OpenRouter, based on:
-- `docs/contracts/editorial-analysis-v1.md`
-- `docs/contracts/editorial-analysis-prompt-v1.md`
-- existing analysis / ORM / OpenRouter / API stack
+Implement the bounded remediation plan now captured in `PLAN.md`:
 
-## Planner recommendations
+1. response capture + normalized failure taxonomy
+2. robust response parsing + honest request accounting
+3. fallback mode when strict structured outputs are rejected or malformed
+4. focused regression tests + operator runbook notes
 
-### Recommended persistence shape
-- Add a new dedicated ORM table: `article_editorial_analysis`
-- Keep **one row per article** in v1
-- Do **not** overload existing `article_analysis`
-- Keep `framing_devices` and `evidence_spans` as bounded JSON fields in v1
+## Explicit handoff to implementer
 
-### Recommended OpenRouter integration
-- Add a separate editorial payload contract and JSON schema
-- Add a dedicated prompt builder and client method
-- Use strict OpenRouter `json_schema` response mode plus Pydantic validation
-- Treat the prompt/template as versioned infrastructure, not inline glue text
+Touch backend/integration files only for this pass. Do not drift back into unrelated frontend work.
 
-### Recommended pipeline shape
-- Add a **new dedicated editorial-analysis job/pipeline**
-- Do not fold it directly into current topical enrichment flow in v1
-- Use content-hash skip logic and explicit status/failure handling
-- Do not invent a heuristic fallback for bias/tone classification
+Priority order:
+1. `src/analysis/llm_client.py`
+2. `src/analysis/pipeline.py`
+3. `scripts/analyze_editorial.py`
+4. focused tests
+5. small contract/docs updates only as needed
 
-### Recommended API shape
-- Start with article-level read access:
-  - `GET /api/v1/articles/{article_id}/editorial-analysis`
-- Add optional list/filter endpoints later if needed
-- Defer cluster-level ideological aggregation; it is underspecified and easy to get wrong
+Key expected outcomes:
+- billed attempts reflected in metrics
+- failure class visible and truthful
+- raw failed-response artifacts available for diagnosis
+- schema rejection can fall back to JSON-text mode instead of hard failing immediately
 
-## Migration / schema call
+## Implementer progress update
 
-- The repo currently uses ORM registration + `Base.metadata.create_all()` via init scripts, not Alembic
-- Plan assumes additive schema evolution in that style
-- No full historical backfill should happen by default on first implementation
+Completed in code:
+- normalized failure classes + multi-attempt result envelope in `src/analysis/llm_client.py`
+- honest request accounting and failure bucket counters in `src/analysis/pipeline.py`
+- bounded fallback from strict schema mode to JSON-text mode
+- failed-response artifact writing under `.artifacts/editorial-analysis/`
+- focused regression coverage for parse failure, schema rejection fallback, validation failure, and unchanged-row skipping
 
-## Key open design calls resolved by planner
+Pending before closure:
+- final docs/results sync
+- commit(s)
 
-1. **Naming**: recommend `article_editorial_analysis` over alternatives because `article_analysis` already means enrichment/taxonomy work in this repo
-2. **Pipeline placement**: recommend a separate job, not silent expansion of existing enrichment payload
-3. **Evidence modeling**: keep as JSON in v1, normalize later only if there is a proven read/write need
-4. **Prompt handling**: prompt/template must be explicit, versioned, and test-covered
-5. **Cluster rollups**: defer; article-level output is the real v1 contract
+## Notes on previous Phase 2 status
 
-## Atomic implementation slices proposed
-
-1. editorial contract models + validators
-2. prompt/template infrastructure
-3. dedicated OpenRouter client method
-4. ORM model + schema init coverage
-5. editorial pipeline/CLI target
-6. article-level read API
-7. optional cluster detail integration
-8. later operator/backfill controls
-
-## Files updated in this pass
-- `PLAN.md`
-- `STATUS.md`
-- `RESULTS.md`
+The earlier Phase 2 usability/read-side work is still valid.
+This new pass does **not** replace that work; it fixes the backend reliability gap discovered during operator testing.

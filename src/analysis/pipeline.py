@@ -6,9 +6,9 @@ import hashlib
 import json
 from collections import Counter, defaultdict
 from dataclasses import dataclass
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, date, datetime, timedelta
 
-from sqlalchemy import delete, select
+from sqlalchemy import delete, or_, select
 from sqlalchemy.orm import Session
 
 from src.analysis.canonicalization import EntityCanonicalizer
@@ -32,6 +32,7 @@ from src.analysis.llm_client import (
     build_editorial_analysis_prompt,
     build_prompt,
     editorial_analysis_json_schema,
+    editorial_debug_artifact_dir,
     enrichment_json_schema,
 )
 from src.analysis.normalization import jaccard_similarity, normalize_lookup, slugify
@@ -315,6 +316,18 @@ class AnalysisPipeline:
         return hashlib.sha256(raw.encode("utf-8")).hexdigest()
 
 
+@dataclass
+class EditorialSelectionFilters:
+    days_back: int = 2
+    limit: int = 100
+    status: str = "pending"
+    article_ids: list[int] | None = None
+    source: str | None = None
+    published_from: date | None = None
+    published_to: date | None = None
+    batch_size: int | None = None
+
+
 class EditorialAnalysisPipeline:
     """Run bounded LLM-driven editorial analysis as a separate first-pass pipeline."""
 
@@ -323,25 +336,41 @@ class EditorialAnalysisPipeline:
         self.llm = OpenRouterClient(llm_settings) if llm_settings else None
 
     def analyze_articles(
-        self, *, days_back: int = 2, limit: int = 100, reprocess: bool = False
+        self,
+        *,
+        days_back: int = 2,
+        limit: int = 100,
+        reprocess: bool = False,
+        status: str = "pending",
+        article_ids: list[int] | None = None,
+        source: str | None = None,
+        published_from: date | None = None,
+        published_to: date | None = None,
+        dry_run: bool = False,
+        batch_size: int | None = None,
     ) -> EditorialAnalysisRunMetrics:
-        if self.llm is None:
+        if self.llm is None and not dry_run:
             raise RuntimeError("OpenRouter settings are required for editorial analysis")
 
         started_at = datetime.now(UTC)
         metrics = EditorialAnalysisRunMetrics(started_at=started_at)
-        cutoff = started_at - timedelta(days=days_back)
-        rows = (
-            self.session.execute(
-                select(ArticleORM)
-                .where(ArticleORM.published_at.is_not(None), ArticleORM.published_at >= cutoff)
-                .order_by(ArticleORM.published_at.desc())
-                .limit(limit)
-            )
-            .scalars()
-            .all()
+        filters = EditorialSelectionFilters(
+            days_back=days_back,
+            limit=limit,
+            status=status,
+            article_ids=article_ids,
+            source=source,
+            published_from=published_from,
+            published_to=published_to,
+            batch_size=batch_size,
         )
+        rows = self._select_candidate_articles(filters)
+        if batch_size:
+            rows = rows[:batch_size]
         metrics.article_count = len(rows)
+        if dry_run:
+            metrics.finished_at = datetime.now(UTC)
+            return metrics
         for row in rows:
             article = ArticleRead.model_validate(row)
             content_hash = AnalysisPipeline(self.session)._content_hash(article)
@@ -350,26 +379,13 @@ class EditorialAnalysisPipeline:
                     ArticleEditorialAnalysisORM.article_id == article.id
                 )
             ).scalar_one_or_none()
-            if (
-                analysis
-                and not reprocess
-                and analysis.content_hash == content_hash
-                and analysis.analysis_status == "completed"
-            ):
+            if self._should_skip_existing(analysis, content_hash=content_hash, reprocess=reprocess):
                 metrics.skipped_count += 1
                 continue
             analysis = analysis or ArticleEditorialAnalysisORM(article_id=article.id)
             if analysis.id is None:
                 self.session.add(analysis)
-            analysis.analysis_status = "pending"
-            analysis.failure_reason = ""
-            analysis.content_hash = content_hash
-            analysis.model_provider = "openrouter"
-            analysis.model_name = self.llm.settings.model
-            analysis.model_version = self.llm.settings.model
-            analysis.prompt_version = self.llm.settings.prompt_version
-            analysis.schema_version = EDITORIAL_ANALYSIS_SCHEMA_VERSION
-            analysis.source_text_version = EDITORIAL_ANALYSIS_SOURCE_TEXT_VERSION
+            self._prepare_pending_analysis(analysis=analysis, content_hash=content_hash)
             published_at = article.published_at.isoformat() if article.published_at else ""
             prompt = build_editorial_analysis_prompt(
                 source=article.source,
@@ -380,34 +396,132 @@ class EditorialAnalysisPipeline:
                 summary=article.summary,
                 body=article.article_text,
             )
-            try:
-                payload, _usage = self.llm.analyze_editorial(
-                    article_prompt=prompt,
-                    schema=editorial_analysis_json_schema(),
-                )
-                metrics.request_count += 1
+            result = self.llm.analyze_editorial(
+                article_prompt=prompt,
+                schema=editorial_analysis_json_schema(),
+            )
+            metrics.request_count += sum(
+                1 for attempt in result.attempts if attempt.request_accepted
+            )
+            metrics.provider_rejected_count += sum(
+                1
+                for attempt in result.attempts
+                if attempt.failure_class == "provider_schema_rejected"
+            )
+            metrics.parse_failed_count += sum(
+                1
+                for attempt in result.attempts
+                if attempt.failure_class
+                in {
+                    "empty_content",
+                    "non_json_content",
+                    "json_parse_failed",
+                    "unknown_response_shape",
+                }
+            )
+            metrics.validation_failed_count += sum(
+                1
+                for attempt in result.attempts
+                if attempt.failure_class == "payload_validation_failed"
+            )
+            success_attempt = result.successful_attempt
+            if success_attempt and success_attempt.payload is not None:
                 self._persist_editorial_analysis(
                     analysis=analysis,
-                    payload=payload,
+                    payload=success_attempt.payload,
                     content_hash=content_hash,
                 )
                 metrics.analyzed_count += 1
                 self.session.commit()
-            except Exception as exc:
-                analysis.article_type = analysis.article_type or "unclear"
-                analysis.bias_label = analysis.bias_label or "unclear"
-                analysis.tone_emotional = analysis.tone_emotional or "unclear"
-                analysis.tone_target = analysis.tone_target or "unclear"
-                analysis.opinionatedness = analysis.opinionatedness or "unclear"
-                analysis.sensationalism = analysis.sensationalism or "unclear"
-                analysis.rhetorical_certainty = analysis.rhetorical_certainty or "unclear"
-                analysis.analysis_status = "failed"
-                analysis.failure_reason = str(exc)[:255]
-                analysis.updated_at = datetime.now(UTC)
-                self.session.commit()
-                metrics.failed_count += 1
+                continue
+            final_attempt = result.final_attempt
+            artifact_path = self._write_failure_artifact(
+                article=article,
+                analysis=analysis,
+                prompt=prompt,
+                result=result,
+            )
+            self._persist_editorial_failure(
+                analysis=analysis,
+                failure_class=final_attempt.failure_class or "provider_request_failed",
+                failure_message=final_attempt.failure_message,
+                artifact_path=artifact_path,
+            )
+            self.session.commit()
+            metrics.failed_count += 1
         metrics.finished_at = datetime.now(UTC)
         return metrics
+
+    def _prepare_pending_analysis(
+        self, *, analysis: ArticleEditorialAnalysisORM, content_hash: str
+    ) -> None:
+        analysis.analysis_status = "pending"
+        analysis.failure_reason = ""
+        analysis.content_hash = content_hash
+        analysis.model_provider = "openrouter"
+        analysis.model_name = self.llm.settings.model
+        analysis.model_version = self.llm.settings.model
+        analysis.prompt_version = self.llm.settings.prompt_version
+        analysis.schema_version = EDITORIAL_ANALYSIS_SCHEMA_VERSION
+        analysis.source_text_version = EDITORIAL_ANALYSIS_SOURCE_TEXT_VERSION
+
+    def _select_candidate_articles(self, filters: EditorialSelectionFilters) -> list[ArticleORM]:
+        stmt = select(ArticleORM).outerjoin(
+            ArticleEditorialAnalysisORM, ArticleEditorialAnalysisORM.article_id == ArticleORM.id
+        )
+        if filters.article_ids:
+            stmt = stmt.where(ArticleORM.id.in_(filters.article_ids))
+        else:
+            cutoff = datetime.now(UTC) - timedelta(days=filters.days_back)
+            stmt = stmt.where(
+                ArticleORM.published_at.is_not(None), ArticleORM.published_at >= cutoff
+            )
+            if filters.source:
+                stmt = stmt.where(ArticleORM.source == filters.source)
+            if filters.published_from:
+                stmt = stmt.where(
+                    ArticleORM.published_at
+                    >= datetime.combine(filters.published_from, datetime.min.time())
+                )
+            if filters.published_to:
+                stmt = stmt.where(
+                    ArticleORM.published_at
+                    <= datetime.combine(filters.published_to, datetime.max.time())
+                )
+            if filters.status == "pending":
+                stmt = stmt.where(
+                    or_(
+                        ArticleEditorialAnalysisORM.id.is_(None),
+                        ArticleEditorialAnalysisORM.analysis_status == "pending",
+                    )
+                )
+            elif filters.status == "failed":
+                stmt = stmt.where(ArticleEditorialAnalysisORM.analysis_status == "failed")
+            elif filters.status == "completed":
+                stmt = stmt.where(ArticleEditorialAnalysisORM.analysis_status == "completed")
+            elif filters.status == "any":
+                pass
+            else:
+                raise ValueError(f"Unsupported editorial analysis status: {filters.status}")
+        return (
+            self.session.execute(stmt.order_by(ArticleORM.published_at.desc()).limit(filters.limit))
+            .scalars()
+            .all()
+        )
+
+    def _should_skip_existing(
+        self,
+        analysis: ArticleEditorialAnalysisORM | None,
+        *,
+        content_hash: str,
+        reprocess: bool,
+    ) -> bool:
+        return bool(
+            analysis
+            and not reprocess
+            and analysis.content_hash == content_hash
+            and analysis.analysis_status == "completed"
+        )
 
     def _persist_editorial_analysis(
         self,
@@ -437,6 +551,77 @@ class EditorialAnalysisPipeline:
         analysis.content_hash = content_hash
         analysis.analyzed_at = datetime.now(UTC)
         analysis.updated_at = datetime.now(UTC)
+
+    def _persist_editorial_failure(
+        self,
+        *,
+        analysis: ArticleEditorialAnalysisORM,
+        failure_class: str,
+        failure_message: str,
+        artifact_path: str,
+    ) -> None:
+        analysis.article_type = analysis.article_type or "unclear"
+        analysis.bias_label = analysis.bias_label or "unclear"
+        analysis.tone_emotional = analysis.tone_emotional or "unclear"
+        analysis.tone_target = analysis.tone_target or "unclear"
+        analysis.opinionatedness = analysis.opinionatedness or "unclear"
+        analysis.sensationalism = analysis.sensationalism or "unclear"
+        analysis.rhetorical_certainty = analysis.rhetorical_certainty or "unclear"
+        analysis.analysis_status = "failed"
+        summary = f"{failure_class}: {failure_message}".strip()
+        if artifact_path:
+            summary = f"{summary} [artifact={artifact_path}]"
+        analysis.failure_reason = summary[:255]
+        analysis.updated_at = datetime.now(UTC)
+
+    def _write_failure_artifact(
+        self,
+        *,
+        article: ArticleRead,
+        analysis: ArticleEditorialAnalysisORM,
+        prompt: str,
+        result,
+    ) -> str:
+        artifact_dir = editorial_debug_artifact_dir()
+        artifact_dir.mkdir(parents=True, exist_ok=True)
+        timestamp = datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")
+        artifact_path = artifact_dir / f"{timestamp}-article-{article.id}.json"
+        artifact = {
+            "article_id": article.id,
+            "model_provider": analysis.model_provider,
+            "model_name": analysis.model_name,
+            "prompt_version": analysis.prompt_version,
+            "schema_version": analysis.schema_version,
+            "source_text_version": analysis.source_text_version,
+            "attempts": [
+                {
+                    "mode": attempt.mode,
+                    "request_accepted": attempt.request_accepted,
+                    "failure_class": attempt.failure_class,
+                    "failure_message": attempt.failure_message,
+                    "usage": None
+                    if attempt.usage is None
+                    else attempt.usage.model_dump(mode="json"),
+                    "raw_message": attempt.raw_message,
+                    "raw_content": attempt.raw_content,
+                    "parsed_json": attempt.parsed_json,
+                    "raw_response": attempt.raw_response,
+                }
+                for attempt in result.attempts
+            ],
+            "prompt_excerpt": prompt[:1200],
+            "article_metadata": {
+                "source": article.source,
+                "section": article.section,
+                "published_at": article.published_at.isoformat() if article.published_at else None,
+                "url": str(article.url),
+                "title": article.title,
+            },
+        }
+        artifact_path.write_text(
+            json.dumps(artifact, ensure_ascii=False, indent=2), encoding="utf-8"
+        )
+        return str(artifact_path)
 
 
 class ClusterPipeline:

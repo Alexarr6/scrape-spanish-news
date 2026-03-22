@@ -1,5 +1,61 @@
 # RESULTS.md
 
+## 2026-03-22 — editorial analysis robustness remediation for `spain-news-bias-scraper`
+
+**Role:** implementer  
+**Outcome:** ✅ Complete  
+**Scope:** bounded backend hardening for editorial-analysis provider reliability
+
+### What I accomplished
+Implemented the approved robustness pass for the editorial-analysis pipeline:
+- added a structured attempt/result envelope around OpenRouter editorial calls
+- introduced normalized failure classes for provider rejection, parse failures, validation failures, refusals, and unknown response shapes
+- made `request_count` honest by counting API-accepted attempts before parse/validation
+- added additive failure counters for provider rejection, parse failure, and validation failure
+- added a bounded fallback from strict `response_format=json_schema` to prompt-only JSON text mode
+- persisted failed-response debug artifacts under `.artifacts/editorial-analysis/`
+- kept failure reasons operator-visible by prefixing them with the normalized failure class
+- added focused regression tests for the new failure paths and fallback behavior
+
+### Files changed
+- `src/analysis/llm_client.py`
+- `src/analysis/pipeline.py`
+- `src/analysis/contracts.py`
+- `tests/test_editorial_analysis_pipeline.py`
+- `docs/operator-guide/editorial-analysis-manual-test.md`
+- `STATUS.md`
+
+### Verification run
+Commands run:
+- `PYTHONPATH=.venv/lib/python3.11/site-packages .venv/bin/ruff check src/analysis/llm_client.py src/analysis/pipeline.py tests/test_editorial_analysis_pipeline.py`
+- `PYTHONPATH=.venv/lib/python3.11/site-packages python3 -m pytest -q tests/test_api_editorial.py tests/test_editorial_analysis_pipeline.py`
+
+Results:
+- `ruff check`: passed
+- `pytest`: `7 passed`
+
+### Operator-facing behavior changes
+- strict structured mode is still preferred first
+- if strict mode is schema-rejected or returns unusable content, the client now retries once in fallback JSON-text mode
+- failed rows now write a debug artifact in `.artifacts/editorial-analysis/`
+- `failure_reason` now starts with the normalized failure class and includes the artifact path when present
+- metrics now distinguish:
+  - `request_count`
+  - `provider_rejected_count`
+  - `parse_failed_count`
+  - `validation_failed_count`
+
+### Remaining risks / notes
+- the fallback path depends on provider willingness to return plain JSON text; it is bounded and safer, but not magic
+- artifact paths are stored in truncated `failure_reason`, so very long provider errors may lose some tail detail; the artifact is the real debug source
+- this pass did not add DB columns like `failure_class`; taxonomy remains visible through `failure_reason` plus artifact contents
+- manual verification against the three reported real-world models is still recommended before calling any provider “stable”
+
+### Git / rollback
+- Branch: `iter/004`
+- Commit(s): pending final atomic commit for this remediation pass
+- Rollback hint after commit: `git log --oneline -n 5`
+
 ## 2026-03-21 — editorial analysis phase 1 implementation for `spain-news-bias-scraper`
 
 **Role:** implementer  

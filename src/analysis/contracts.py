@@ -413,6 +413,9 @@ class EditorialAnalysisRunMetrics(BaseModel):
     skipped_count: int = 0
     failed_count: int = 0
     request_count: int = 0
+    provider_rejected_count: int = 0
+    parse_failed_count: int = 0
+    validation_failed_count: int = 0
     started_at: datetime | None = None
     finished_at: datetime | None = None
 
