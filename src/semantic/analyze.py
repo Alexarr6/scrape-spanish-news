@@ -66,7 +66,9 @@ def analyze_points(
         )
 
     ordered_ids = [point.article_id for point in points]
-    matrix = np.array([embeddings_by_id[article_id].embedding for article_id in ordered_ids], dtype=float)
+    matrix = np.array(
+        [embeddings_by_id[article_id].embedding for article_id in ordered_ids], dtype=float
+    )
     if matrix.ndim != 2:
         raise ValueError("semantic analysis requires a 2D embedding matrix")
     normalized = _normalize_rows(matrix)
@@ -111,7 +113,9 @@ def analyze_points(
     cluster_sizes = Counter(label for label in labels if label >= 0)
     cluster_ids = {label: index + 1 for index, label in enumerate(sorted(cluster_sizes))}
     metadata.thresholds = {
-        "density_baseline": round(float(np.median(local_density)) if local_density.size else 0.0, 6),
+        "density_baseline": round(
+            float(np.median(local_density)) if local_density.size else 0.0, 6
+        ),
         "min_cluster_size": float(config.min_cluster_size),
         "min_samples": float(config.min_samples),
     }
@@ -133,11 +137,19 @@ def analyze_points(
                 size=len(member_points),
                 article_ids=sorted(member_ids),
                 representative_article_ids=representative_ids,
-                top_sources=dict(sorted(member_sources.items(), key=lambda item: (-item[1], item[0]))),
+                top_sources=dict(
+                    sorted(member_sources.items(), key=lambda item: (-item[1], item[0]))
+                ),
                 source_count=len(member_sources),
                 source_dominance=max(member_sources.values()) / len(member_points),
-                date_min=min((point.published_date for point in member_points if point.published_date), default=""),
-                date_max=max((point.published_date for point in member_points if point.published_date), default=""),
+                date_min=min(
+                    (point.published_date for point in member_points if point.published_date),
+                    default="",
+                ),
+                date_max=max(
+                    (point.published_date for point in member_points if point.published_date),
+                    default="",
+                ),
                 centroid_x=sum(point.x for point in member_points) / len(member_points),
                 centroid_y=sum(point.y for point in member_points) / len(member_points),
                 centroid_z=sum(point.z for point in member_points) / len(member_points),
@@ -161,7 +173,11 @@ def analyze_points(
             )
         )
 
-    unclustered = sorted(article_id for article_id, raw_label in zip(ordered_ids, labels, strict=True) if raw_label < 0)
+    unclustered = sorted(
+        article_id
+        for article_id, raw_label in zip(ordered_ids, labels, strict=True)
+        if raw_label < 0
+    )
     return SemanticAnalysisArtifact(
         points=analysis_points,
         clusters=clusters,
@@ -205,7 +221,9 @@ def _nearest_neighbor_graph(
             (len(normalized_embeddings), 0),
             dtype=int,
         )
-    estimator = NearestNeighbors(n_neighbors=min(neighbor_k + 1, len(normalized_embeddings)), metric="euclidean")
+    estimator = NearestNeighbors(
+        n_neighbors=min(neighbor_k + 1, len(normalized_embeddings)), metric="euclidean"
+    )
     estimator.fit(normalized_embeddings)
     distances, indices = estimator.kneighbors(normalized_embeddings)
     return distances[:, 1:], indices[:, 1:]

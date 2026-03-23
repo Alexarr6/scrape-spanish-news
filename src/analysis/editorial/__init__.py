@@ -16,7 +16,9 @@ from src.analysis.editorial.core import (
     ArticleEditorialAnalysisRawPayload,
     ArticleEditorialEvidenceSpan,
     EditorialAnalysisDiagnostics,
+    EditorialCompletedPersistence,
     EditorialDimensionDiagnostic,
+    EditorialFailurePersistence,
 )
 from src.analysis.editorial.crud import EditorialAnalysisCRUD
 from src.analysis.editorial.orm import ArticleEditorialAnalysisORM
@@ -39,7 +41,9 @@ __all__ = [
     "ArticleEditorialAnalysisPayload",
     "ArticleEditorialAnalysisRawPayload",
     "ArticleEditorialEvidenceSpan",
+    "EditorialCompletedPersistence",
     "EditorialAnalysisCRUD",
     "EditorialAnalysisDiagnostics",
     "EditorialDimensionDiagnostic",
+    "EditorialFailurePersistence",
 ]

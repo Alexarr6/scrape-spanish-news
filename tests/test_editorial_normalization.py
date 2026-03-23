@@ -141,6 +141,35 @@ def test_normalize_editorial_payload_repairs_object_shapes_and_nested_tone() -> 
     assert any("repair_regularized_nested_tone" in warning for warning in result.repair_warnings)
 
 
+def test_normalize_editorial_payload_accepts_framing_device_maps_from_minimax() -> None:
+    result = normalize_editorial_payload(
+        {
+            "article_type": "news_report",
+            "ideological_bias_framing": "center-right",
+            "tone_dimensions": {
+                "government_assessment": "critical",
+                "emotional_charge": "moderate",
+                "informational_balance": "partial",
+            },
+            "framing_devices": {
+                "opposition_questions_as_headline_focus": True,
+                "temporal_framing_emphasizing_finality": True,
+            },
+            "evidence_spans": [
+                "¿Cuál ha sido su prioridad durante todos estos años al frente del ministerio?"
+            ],
+            "rationale": "The piece frames the parliamentary exchange around opposition criticism.",
+            "confidence": {"bias_assessment": "moderate"},
+        }
+    )
+
+    assert result.final_payload.bias_label == "center_right"
+    assert result.final_payload.tone_emotional == "loaded"
+    assert result.final_payload.tone_target == "critical"
+    assert result.final_payload.framing_devices == ["conflict", "institutional_stability"]
+    assert result.diagnostics.dimension_status["framing"].status == "resolved"
+
+
 def test_normalize_editorial_payload_truncates_overlong_evidence_lists_deterministically() -> None:
     result = normalize_editorial_payload(
         {
@@ -176,7 +205,9 @@ def test_normalize_editorial_payload_marks_provider_missing_vs_weak_signal_vs_ou
             "article_type": "explainer",
             "bias_label": "unclear",
             "evidence_spans": ["Claves para entender la reforma del mercado eléctrico"],
-            "rationale": "Useful explainer with limited ideological signal and descriptive framing.",
+            "rationale": (
+                "Useful explainer with limited ideological signal and descriptive framing."
+            ),
         }
     )
     provider_missing = normalize_editorial_payload(

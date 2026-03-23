@@ -23,7 +23,9 @@ from src.analysis.editorial.core import (
     ArticleEditorialAnalysisRawPayload,
     ArticleEditorialEvidenceSpan,
     EditorialAnalysisDiagnostics,
+    EditorialCompletedPersistence,
     EditorialDimensionDiagnostic,
+    EditorialFailurePersistence,
 )
 from src.analysis.taxonomy import validate_tag_codes
 
@@ -44,8 +46,10 @@ __all__ = [
     "ArticleEditorialAnalysisPayload",
     "ArticleEditorialAnalysisRawPayload",
     "ArticleEditorialEvidenceSpan",
+    "EditorialCompletedPersistence",
     "EditorialAnalysisDiagnostics",
     "EditorialDimensionDiagnostic",
+    "EditorialFailurePersistence",
 ]
 
 ARTICLE_TYPES = (
@@ -165,7 +169,17 @@ class ArticleEditorialAnalysisRead(BaseModel):
     rhetorical_certainty: str
     editorial_applicability: str = "full"
     editorial_applicability_reason: str = "general_editorial_content"
+    provider_failure_class: str = ""
     analysis_path: str = ""
+    unclear_reasons_json: str = "[]"
+    article_type_status: str = ""
+    bias_status: str = ""
+    tone_emotional_status: str = ""
+    tone_target_status: str = ""
+    opinionatedness_status: str = ""
+    sensationalism_status: str = ""
+    rhetorical_certainty_status: str = ""
+    framing_status: str = ""
     framing_devices_json: str = "[]"
     evidence_spans_json: str = "[]"
     diagnostics_json: str = "{}"

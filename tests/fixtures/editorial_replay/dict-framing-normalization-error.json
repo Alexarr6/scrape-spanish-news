@@ -2,7 +2,7 @@
   "fixture_id": "dict-framing-normalization-error",
   "family": "raw_shape_failure",
   "source_artifact": "20260322T180120Z-article-2929.json",
-  "notes": "Failure-mode fixture showing a raw shape the current replay path still rejects: framing_devices returned as an object instead of a list.",
+  "notes": "Captured Minimax sports payload with framing_devices as an object map. The local pipeline should now salvage it and classify it as out_of_domain instead of failing raw validation.",
   "article": {
     "source": "abc",
     "section": "espana",
@@ -58,7 +58,65 @@
   "final_payload": null,
   "diagnostics": null,
   "expectation": {
-    "mode": "normalization_error",
-    "error_contains": "raw payload validation failed: 1 validation error for ArticleEditorialAnalysisRawPayload"
+    "mode": "success",
+    "editorial_applicability": "out_of_domain",
+    "editorial_applicability_reason": "sports_recap",
+    "unclear_reasons": [
+      "out_of_domain",
+      "semantic_weak_signal"
+    ],
+    "final_payload": {
+      "article_type": "news_report",
+      "article_type_confidence": 0.55,
+      "bias_label": "unclear",
+      "bias_score": 0.0,
+      "bias_confidence": 0.6,
+      "tone_emotional": "unclear",
+      "tone_target": "critical",
+      "opinionatedness": "interpretive",
+      "sensationalism": "low",
+      "rhetorical_certainty": "unclear",
+      "framing_devices": [
+        "conflict"
+      ],
+      "evidence_spans": [
+        {
+          "type": "body",
+          "text": "El equipo blanquiverde no demostró tener el honor suficiente para superar la crisis de derrotas que atravesaba",
+          "note": "quoted evidence span from article body"
+        },
+        {
+          "type": "body",
+          "text": "pasividad defensiva y la inoperancia en ataque fueron un cócket explosivo",
+          "note": "quoted evidence span from article body"
+        },
+        {
+          "type": "body",
+          "text": "Tras este resultado, el Córdoba se mantiene [...] en la duodécima posición con 41 puntos",
+          "note": "quoted evidence span from article body"
+        }
+      ],
+      "rationale": "Standard sports match report focused on Córdoba CF's league position after a loss to Burgos. The article includes opinionated framing regarding the team's mental effort ('honor') and uses somewhat dramatic descriptors ('cócket explosivo', 'dura derrota'). No ideological or political content. Language is typical of Spanish sports journalism covering football results."
+    },
+    "dimension_status": {
+      "article_type": "out_of_domain",
+      "bias": "out_of_domain",
+      "tone_emotional": "out_of_domain",
+      "tone_target": "out_of_domain",
+      "opinionatedness": "out_of_domain",
+      "sensationalism": "out_of_domain",
+      "rhetorical_certainty": "out_of_domain",
+      "framing": "out_of_domain"
+    },
+    "preserved_signal_groups": {
+      "framing_candidates": [
+        "emotional_appeals",
+        "gap_analysis"
+      ],
+      "tone_hints": [
+        "formality=informal_sports",
+        "sentiment=negative"
+      ]
+    }
   }
 }

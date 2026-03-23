@@ -26,7 +26,7 @@ DEFAULT_BASE_URL = "https://openrouter.ai/api/v1"
 EDITORIAL_ANALYSIS_SYSTEM_PROMPT = """You are classifying a Spanish news article.
 Perform editorial analysis conservatively.
 
-Your task is to produce a conservative, evidence-backed JSON object that classifies:
+Your task is to produce one conservative, evidence-backed canonical JSON object that classifies:
 - article type
 - ideological bias framing
 - tone dimensions
@@ -36,12 +36,14 @@ Your task is to produce a conservative, evidence-backed JSON object that classif
 
 Rules:
 1. Return strict JSON only.
-2. Classify the article itself, not the outlet's reputation.
-3. Be conservative. If evidence is weak or mixed, use `unclear` and lower confidence.
-4. Do not infer ideology solely from topic. Use framing, wording, emphasis, and source treatment.
-5. Distinguish between the article's own framing and quotations from sources.
-6. Evidence spans must quote real text from the provided article content.
-7. Keep rationale concise and specific."""
+2. Use the canonical field names and canonical taxonomy values whenever possible.
+3. Classify the article itself, not the outlet's reputation.
+4. Be conservative. If evidence is weak or mixed, use `unclear` and lower confidence.
+5. Do not infer ideology solely from topic. Use framing, wording, emphasis, and source treatment.
+6. Distinguish between the article's own framing and quotations from sources.
+7. Evidence spans must quote real text from the provided article content.
+8. `framing_devices` must be an array of canonical string codes, not an object map.
+9. Keep rationale concise and specific."""
 EDITORIAL_ANALYSIS_SCHEMA_VERSION = "editorial-analysis-v1-normalized"
 EDITORIAL_ANALYSIS_SOURCE_TEXT_VERSION = "title_summary_body_v1"
 
@@ -461,11 +463,10 @@ def build_editorial_analysis_prompt(
 ) -> str:
     article_body = body[:6000]
     return (
-        "Analyze the following article and return one portable raw JSON object "
+        "Analyze the following article and return one canonical JSON object "
         "for editorial analysis.\n"
-        "Use the preferred keys when possible, but if the article is straightforward "
-        "or the exact taxonomy feels forced, stay conservative and still return "
-        "valid JSON.\n\n"
+        "Use the system taxonomy directly. Keep auxiliary notes brief and optional, "
+        "but the primary fields must stay canonical.\n\n"
         "ARTICLE_METADATA:\n"
         f"- source: {source}\n"
         f"- section: {section}\n"

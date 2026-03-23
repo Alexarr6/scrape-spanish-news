@@ -249,8 +249,7 @@
     "editorial_applicability": "full",
     "editorial_applicability_reason": "general_editorial_content",
     "unclear_reasons": [
-      "mapping_loss",
-      "provider_missing"
+      "mapping_loss"
     ],
     "final_payload": {
       "article_type": "news_report",
@@ -258,12 +257,15 @@
       "bias_label": "center_right",
       "bias_score": 0.35,
       "bias_confidence": 0.5,
-      "tone_emotional": "unclear",
-      "tone_target": "unclear",
+      "tone_emotional": "loaded",
+      "tone_target": "critical",
       "opinionatedness": "unclear",
       "sensationalism": "unclear",
       "rhetorical_certainty": "unclear",
-      "framing_devices": [],
+      "framing_devices": [
+        "conflict",
+        "institutional_stability"
+      ],
       "evidence_spans": [
         {
           "type": "body",
@@ -286,20 +288,14 @@
     "dimension_status": {
       "article_type": "resolved",
       "bias": "resolved",
-      "tone_emotional": "provider_missing",
-      "tone_target": "provider_missing",
-      "opinionatedness": "provider_missing",
-      "sensationalism": "provider_missing",
-      "rhetorical_certainty": "provider_missing",
-      "framing": "mapping_loss"
+      "tone_emotional": "resolved",
+      "tone_target": "resolved",
+      "opinionatedness": "mapping_loss",
+      "sensationalism": "mapping_loss",
+      "rhetorical_certainty": "mapping_loss",
+      "framing": "resolved"
     },
     "preserved_signal_groups": {
-      "framing_candidates": [
-        "opposition questions as headline focus",
-        "temporal framing emphasizing finality",
-        "direct quotation of critical questions",
-        "multiple party coverage for balance"
-      ],
       "tone_hints": [
         "government_assessment=critical",
         "informational_balance=partial",

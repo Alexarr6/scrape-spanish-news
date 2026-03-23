@@ -37,7 +37,17 @@ class ArticleEditorialAnalysisORM(Base):
     editorial_applicability_reason: Mapped[str] = mapped_column(
         String(80), default="general_editorial_content", nullable=False
     )
+    provider_failure_class: Mapped[str] = mapped_column(String(80), default="", nullable=False)
     analysis_path: Mapped[str] = mapped_column(String(80), default="", nullable=False)
+    unclear_reasons_json: Mapped[str] = mapped_column(Text, default="[]", nullable=False)
+    article_type_status: Mapped[str] = mapped_column(String(40), default="", nullable=False)
+    bias_status: Mapped[str] = mapped_column(String(40), default="", nullable=False)
+    tone_emotional_status: Mapped[str] = mapped_column(String(40), default="", nullable=False)
+    tone_target_status: Mapped[str] = mapped_column(String(40), default="", nullable=False)
+    opinionatedness_status: Mapped[str] = mapped_column(String(40), default="", nullable=False)
+    sensationalism_status: Mapped[str] = mapped_column(String(40), default="", nullable=False)
+    rhetorical_certainty_status: Mapped[str] = mapped_column(String(40), default="", nullable=False)
+    framing_status: Mapped[str] = mapped_column(String(40), default="", nullable=False)
     framing_devices_json: Mapped[str] = mapped_column(Text, default="[]", nullable=False)
     evidence_spans_json: Mapped[str] = mapped_column(Text, default="[]", nullable=False)
     diagnostics_json: Mapped[str] = mapped_column(Text, default="{}", nullable=False)

@@ -87,7 +87,17 @@ def _build_client() -> TestClient:
                 rhetorical_certainty="assertive",
                 editorial_applicability="full",
                 editorial_applicability_reason="general_editorial_content",
+                provider_failure_class="",
                 analysis_path="strict",
+                unclear_reasons_json="[]",
+                article_type_status="resolved",
+                bias_status="resolved",
+                tone_emotional_status="resolved",
+                tone_target_status="resolved",
+                opinionatedness_status="resolved",
+                sensationalism_status="resolved",
+                rhetorical_certainty_status="resolved",
+                framing_status="resolved",
                 framing_devices_json='["humanitarian"]',
                 evidence_spans_json=(
                     '[{"type":"headline","text":"Texto","note":"Apoya el encuadre"}]'
@@ -128,7 +138,17 @@ def _build_client() -> TestClient:
                 rhetorical_certainty="unclear",
                 editorial_applicability="out_of_domain",
                 editorial_applicability_reason="sports_recap",
+                provider_failure_class="payload_validation_failed",
                 analysis_path="strict_json_schema:payload_validation_failed",
+                unclear_reasons_json='["out_of_domain"]',
+                article_type_status="out_of_domain",
+                bias_status="out_of_domain",
+                tone_emotional_status="out_of_domain",
+                tone_target_status="out_of_domain",
+                opinionatedness_status="out_of_domain",
+                sensationalism_status="out_of_domain",
+                rhetorical_certainty_status="out_of_domain",
+                framing_status="out_of_domain",
                 framing_devices_json="[]",
                 evidence_spans_json="[]",
                 diagnostics_json="{}",
@@ -162,6 +182,7 @@ def test_editorial_api_returns_payload_and_404() -> None:
     assert ok.json()["framing_devices"] == ["humanitarian"]
     assert ok.json()["editorial_applicability"] == "full"
     assert ok.json()["diagnostics"]["dimension_status"]["bias"]["status"] == "resolved"
+    assert ok.json()["bias_status"] == "resolved"
     assert ok.json()["evidence_spans"][0]["type"] == "headline"
     assert ok.json()["review_flags"]["needs_review"] is False
     assert missing.status_code == 404
@@ -187,8 +208,11 @@ def test_editorial_list_api_filters_and_treats_missing_rows_as_pending() -> None
     assert failed.status_code == 200
     assert failed.json()["total"] == 1
     assert failed.json()["items"][0]["editorial_applicability"] == "out_of_domain"
+    assert failed.json()["items"][0]["provider_failure_class"] == "payload_validation_failed"
+    assert failed.json()["items"][0]["bias_status"] == "out_of_domain"
     assert failed.json()["items"][0]["failure_reason"] == "schema exploded"
     assert failed.json()["items"][0]["review_flags"]["failed_analysis"] is True
+    assert failed.json()["items"][0]["review_flags"]["out_of_domain"] is True
     assert failed.json()["items"][0]["review_flags"]["needs_review"] is True
 
     assert filtered.status_code == 200

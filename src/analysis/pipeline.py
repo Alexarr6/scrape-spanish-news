@@ -18,11 +18,16 @@ from src.analysis.contracts import (
     ArticleEditorialAnalysisPayload,
     ArticleEnrichmentPayload,
     ClusterRebuildMetrics,
+    EditorialAnalysisDiagnostics,
     EditorialAnalysisRunMetrics,
+    EditorialCompletedPersistence,
+    EditorialDimensionDiagnostic,
+    EditorialFailurePersistence,
     EnrichmentRunMetrics,
     PairScoreArtifact,
     StoryClusterMemberReason,
 )
+from src.analysis.editorial.crud import EditorialAnalysisCRUD
 from src.analysis.heuristics import heuristic_enrichment, title_similarity
 from src.analysis.llm_client import (
     EDITORIAL_ANALYSIS_SCHEMA_VERSION,
@@ -335,6 +340,7 @@ class EditorialAnalysisPipeline:
     def __init__(self, session: Session, *, llm_settings: OpenRouterSettings | None = None) -> None:
         self.session = session
         self.llm = OpenRouterClient(llm_settings) if llm_settings else None
+        self.repo = EditorialAnalysisCRUD(session)
 
     def effective_status(
         self, *, status: str, reprocess: bool, article_ids: list[int] | None
@@ -522,15 +528,16 @@ class EditorialAnalysisPipeline:
     def _prepare_pending_analysis(
         self, *, analysis: ArticleEditorialAnalysisORM, content_hash: str
     ) -> None:
-        analysis.analysis_status = "pending"
-        analysis.failure_reason = ""
-        analysis.content_hash = content_hash
-        analysis.model_provider = "openrouter"
-        analysis.model_name = self.llm.settings.model
-        analysis.model_version = self.llm.settings.model
-        analysis.prompt_version = self.llm.settings.prompt_version
-        analysis.schema_version = EDITORIAL_ANALYSIS_SCHEMA_VERSION
-        analysis.source_text_version = EDITORIAL_ANALYSIS_SOURCE_TEXT_VERSION
+        self.repo.mark_pending(
+            analysis=analysis,
+            content_hash=content_hash,
+            model_provider="openrouter",
+            model_name=self.llm.settings.model,
+            model_version=self.llm.settings.model,
+            prompt_version=self.llm.settings.prompt_version,
+            schema_version=EDITORIAL_ANALYSIS_SCHEMA_VERSION,
+            source_text_version=EDITORIAL_ANALYSIS_SOURCE_TEXT_VERSION,
+        )
 
     def selection_status_counts(
         self,
@@ -627,41 +634,73 @@ class EditorialAnalysisPipeline:
         diagnostics=None,
         analysis_path: str = "",
     ) -> None:
-        analysis.article_type = payload.article_type
-        analysis.article_type_confidence = payload.article_type_confidence
-        analysis.bias_label = payload.bias_label
-        analysis.bias_score = payload.bias_score
-        analysis.bias_confidence = payload.bias_confidence
-        analysis.tone_emotional = payload.tone_emotional
-        analysis.tone_target = payload.tone_target
-        analysis.opinionatedness = payload.opinionatedness
-        analysis.sensationalism = payload.sensationalism
-        analysis.rhetorical_certainty = payload.rhetorical_certainty
-        analysis.editorial_applicability = (
-            diagnostics.editorial_applicability if diagnostics is not None else "full"
+        diagnostics = diagnostics or self._default_diagnostics_for_payload(payload)
+        self.repo.upsert_completed_analysis(
+            analysis=analysis,
+            command=EditorialCompletedPersistence(
+                article_id=analysis.article_id,
+                content_hash=content_hash,
+                payload=payload,
+                diagnostics=diagnostics,
+                analysis_path=analysis_path,
+            ),
         )
-        analysis.editorial_applicability_reason = (
-            diagnostics.editorial_applicability_reason
-            if diagnostics is not None
-            else "general_editorial_content"
+
+    def _default_diagnostics_for_payload(
+        self, payload: ArticleEditorialAnalysisPayload
+    ) -> EditorialAnalysisDiagnostics:
+        return EditorialAnalysisDiagnostics(
+            provider_path="pipeline_default",
+            editorial_applicability="full",
+            editorial_applicability_reason="general_editorial_content",
+            dimension_status={
+                "article_type": EditorialDimensionDiagnostic(
+                    value=payload.article_type,
+                    status="resolved",
+                    reason="default_completed_payload",
+                ),
+                "bias": EditorialDimensionDiagnostic(
+                    value=payload.bias_label,
+                    status="resolved",
+                    reason="default_completed_payload",
+                ),
+                "tone_emotional": EditorialDimensionDiagnostic(
+                    value=payload.tone_emotional,
+                    status="resolved",
+                    reason="default_completed_payload",
+                ),
+                "tone_target": EditorialDimensionDiagnostic(
+                    value=payload.tone_target,
+                    status="resolved",
+                    reason="default_completed_payload",
+                ),
+                "opinionatedness": EditorialDimensionDiagnostic(
+                    value=payload.opinionatedness,
+                    status="resolved",
+                    reason="default_completed_payload",
+                ),
+                "sensationalism": EditorialDimensionDiagnostic(
+                    value=payload.sensationalism,
+                    status="resolved",
+                    reason="default_completed_payload",
+                ),
+                "rhetorical_certainty": EditorialDimensionDiagnostic(
+                    value=payload.rhetorical_certainty,
+                    status="resolved",
+                    reason="default_completed_payload",
+                ),
+                "framing": EditorialDimensionDiagnostic(
+                    value=(
+                        ",".join(payload.framing_devices)
+                        if payload.framing_devices
+                        else "unclear"
+                    ),
+                    status="resolved" if payload.framing_devices else "weak_signal_abstain",
+                    reason="default_completed_payload",
+                ),
+            },
+            unclear_reasons=[],
         )
-        analysis.analysis_path = analysis_path
-        analysis.framing_devices_json = json.dumps(payload.framing_devices, ensure_ascii=False)
-        analysis.evidence_spans_json = json.dumps(
-            [item.model_dump(mode="json") for item in payload.evidence_spans],
-            ensure_ascii=False,
-        )
-        analysis.rationale = payload.rationale
-        analysis.diagnostics_json = (
-            json.dumps(diagnostics.model_dump(mode="json"), ensure_ascii=False)
-            if diagnostics is not None
-            else "{}"
-        )
-        analysis.analysis_status = "completed"
-        analysis.failure_reason = ""
-        analysis.content_hash = content_hash
-        analysis.analyzed_at = datetime.now(UTC)
-        analysis.updated_at = datetime.now(UTC)
 
     def _persist_editorial_failure(
         self,
@@ -671,25 +710,17 @@ class EditorialAnalysisPipeline:
         failure_message: str,
         artifact_path: str,
     ) -> None:
-        analysis.article_type = analysis.article_type or "unclear"
-        analysis.bias_label = analysis.bias_label or "unclear"
-        analysis.tone_emotional = analysis.tone_emotional or "unclear"
-        analysis.tone_target = analysis.tone_target or "unclear"
-        analysis.opinionatedness = analysis.opinionatedness or "unclear"
-        analysis.sensationalism = analysis.sensationalism or "unclear"
-        analysis.rhetorical_certainty = analysis.rhetorical_certainty or "unclear"
-        analysis.editorial_applicability = analysis.editorial_applicability or "full"
-        analysis.editorial_applicability_reason = (
-            analysis.editorial_applicability_reason or "general_editorial_content"
+        self.repo.upsert_failed_analysis(
+            analysis=analysis,
+            command=EditorialFailurePersistence(
+                article_id=analysis.article_id,
+                content_hash=analysis.content_hash,
+                failure_class=failure_class,
+                failure_message=failure_message,
+                artifact_path=artifact_path,
+                analysis_path=failure_class,
+            ),
         )
-        analysis.analysis_path = analysis.analysis_path or failure_class
-        analysis.diagnostics_json = analysis.diagnostics_json or "{}"
-        analysis.analysis_status = "failed"
-        summary = f"{failure_class}: {failure_message}".strip()
-        if artifact_path:
-            summary = f"{summary} [artifact={artifact_path}]"
-        analysis.failure_reason = summary[:255]
-        analysis.updated_at = datetime.now(UTC)
 
     def _analysis_path_for_result(self, result: EditorialAnalysisResult) -> str:
         parts = []

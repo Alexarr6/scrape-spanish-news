@@ -60,11 +60,14 @@ def load_article_editorial_analysis(session: Session, article_id: int) -> dict |
         return None
     article, analysis = row
     evidence_spans = json.loads(analysis.evidence_spans_json or "[]")
+    unclear_reasons = _parse_json_scalar_list(analysis.unclear_reasons_json)
     review_flags = _build_review_flags(
         analysis_status=analysis.analysis_status,
         bias_label=analysis.bias_label,
         bias_confidence=float(analysis.bias_confidence),
         evidence_spans=evidence_spans,
+        unclear_reasons=unclear_reasons,
+        editorial_applicability=analysis.editorial_applicability,
     )
     return {
         "article_id": analysis.article_id,
@@ -87,7 +90,17 @@ def load_article_editorial_analysis(session: Session, article_id: int) -> dict |
         "rhetorical_certainty": analysis.rhetorical_certainty,
         "editorial_applicability": analysis.editorial_applicability,
         "editorial_applicability_reason": analysis.editorial_applicability_reason,
+        "provider_failure_class": analysis.provider_failure_class,
         "analysis_path": analysis.analysis_path,
+        "unclear_reasons": unclear_reasons,
+        "article_type_status": analysis.article_type_status,
+        "bias_status": analysis.bias_status,
+        "tone_emotional_status": analysis.tone_emotional_status,
+        "tone_target_status": analysis.tone_target_status,
+        "opinionatedness_status": analysis.opinionatedness_status,
+        "sensationalism_status": analysis.sensationalism_status,
+        "rhetorical_certainty_status": analysis.rhetorical_certainty_status,
+        "framing_status": analysis.framing_status,
         "framing_devices": json.loads(analysis.framing_devices_json or "[]"),
         "evidence_spans": evidence_spans,
         "diagnostics": _parse_json_object(analysis.diagnostics_json),
@@ -119,6 +132,7 @@ def load_article_editorial_analysis_list(
     items = []
     for article, analysis in rows:
         evidence_spans = _parse_json_list(analysis.evidence_spans_json if analysis else "[]")
+        unclear_reasons = _parse_json_scalar_list(analysis.unclear_reasons_json) if analysis else []
         analysis_status = analysis.analysis_status if analysis else "pending"
         bias_label = analysis.bias_label if analysis else "unclear"
         bias_confidence = float(analysis.bias_confidence) if analysis else 0.0
@@ -127,6 +141,8 @@ def load_article_editorial_analysis_list(
             bias_label=bias_label,
             bias_confidence=bias_confidence,
             evidence_spans=evidence_spans,
+            unclear_reasons=unclear_reasons,
+            editorial_applicability=analysis.editorial_applicability if analysis else "full",
         )
         items.append(
             {
@@ -142,7 +158,14 @@ def load_article_editorial_analysis_list(
                 if analysis
                 else 0.0,
                 "editorial_applicability": analysis.editorial_applicability if analysis else "full",
+                "provider_failure_class": analysis.provider_failure_class if analysis else "",
                 "analysis_path": analysis.analysis_path if analysis else "",
+                "unclear_reasons": unclear_reasons,
+                "article_type_status": analysis.article_type_status if analysis else "",
+                "bias_status": analysis.bias_status if analysis else "",
+                "tone_emotional_status": analysis.tone_emotional_status if analysis else "",
+                "opinionatedness_status": analysis.opinionatedness_status if analysis else "",
+                "framing_status": analysis.framing_status if analysis else "",
                 "bias_label": bias_label,
                 "bias_score": float(analysis.bias_score) if analysis else 0.0,
                 "bias_confidence": bias_confidence,
@@ -551,21 +574,42 @@ def _load_article_entities(session: Session, article_ids: list[int]) -> dict[int
 
 
 def _build_review_flags(
-    *, analysis_status: str, bias_label: str, bias_confidence: float, evidence_spans: list[dict]
+    *,
+    analysis_status: str,
+    bias_label: str,
+    bias_confidence: float,
+    evidence_spans: list[dict],
+    unclear_reasons: list[str],
+    editorial_applicability: str,
 ) -> dict[str, bool]:
     missing_evidence = analysis_status == "completed" and not evidence_spans
     low_confidence = analysis_status == "completed" and bias_confidence < 0.45
     failed_analysis = analysis_status == "failed"
     unclear_bias = bias_label == "unclear"
+    provider_missing = "provider_missing" in unclear_reasons
+    mapping_loss = "mapping_loss" in unclear_reasons or "repair_data_loss" in unclear_reasons
+    out_of_domain = editorial_applicability == "out_of_domain"
     pending_analysis = analysis_status == "pending"
     needs_review = any(
-        [missing_evidence, low_confidence, failed_analysis, unclear_bias, pending_analysis]
+        [
+            missing_evidence,
+            low_confidence,
+            failed_analysis,
+            unclear_bias,
+            provider_missing,
+            mapping_loss,
+            out_of_domain,
+            pending_analysis,
+        ]
     )
     return {
         "missing_evidence": missing_evidence,
         "low_confidence": low_confidence,
         "failed_analysis": failed_analysis,
         "unclear_bias": unclear_bias,
+        "provider_missing": provider_missing,
+        "mapping_loss": mapping_loss,
+        "out_of_domain": out_of_domain,
         "pending_analysis": pending_analysis,
         "needs_review": needs_review,
     }
@@ -589,6 +633,18 @@ def _parse_json_list(raw: str | None) -> list[dict]:
     except json.JSONDecodeError:
         return []
     return value if isinstance(value, list) else []
+
+
+def _parse_json_scalar_list(raw: str | None) -> list[str]:
+    if not raw:
+        return []
+    try:
+        value = json.loads(raw)
+    except json.JSONDecodeError:
+        return []
+    if not isinstance(value, list):
+        return []
+    return [str(item) for item in value if isinstance(item, str)]
 
 
 def _iso(value: datetime | None) -> str | None:

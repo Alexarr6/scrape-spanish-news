@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from datetime import UTC, datetime
 from typing import Annotated, Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
@@ -73,7 +74,6 @@ EDITORIAL_DIMENSION_STATUS_VALUES = (
 )
 
 
-
 BoundedString40 = Annotated[str, Field(max_length=40)]
 BoundedString80 = Annotated[str, Field(max_length=80)]
 BoundedString120 = Annotated[str, Field(max_length=120)]
@@ -82,6 +82,14 @@ BoundedString500 = Annotated[str, Field(max_length=500)]
 BoundedString1200 = Annotated[str, Field(max_length=1200)]
 Probability = Annotated[float, Field(ge=0.0, le=1.0)]
 SignedBiasScore = Annotated[float, Field(ge=-1.0, le=1.0)]
+DimensionStatus = Literal[
+    "resolved",
+    "weak_signal_abstain",
+    "mapping_loss",
+    "provider_missing",
+    "out_of_domain",
+    "conflicted_signal",
+]
 
 
 class ArticleEditorialEvidenceSpan(BaseModel):
@@ -113,9 +121,9 @@ class ArticleEditorialAnalysisRawPayload(BaseModel):
     opinionatedness: BoundedString80 | None = None
     sensationalism: BoundedString80 | None = None
     rhetorical_certainty: BoundedString80 | None = None
-    tone_dimensions: dict[str, Any] | None = None
-    framing_devices: list[Any] = Field(default_factory=list, max_length=20)
-    evidence_spans: list[Any] = Field(default_factory=list, max_length=20)
+    tone_dimensions: dict[str, Any] | list[Any] | None = None
+    framing_devices: list[Any] | dict[str, Any] | BoundedString500 | None = Field(default=None)
+    evidence_spans: list[Any] | dict[str, Any] | BoundedString500 | None = Field(default=None)
     rationale: BoundedString1200 | dict[str, Any] | None = Field(default=None)
     notes: BoundedString500 | dict[str, Any] | None = Field(default=None)
     uncertainty_reason: BoundedString500 | dict[str, Any] | None = Field(default=None)
@@ -123,14 +131,7 @@ class ArticleEditorialAnalysisRawPayload(BaseModel):
 
 class EditorialDimensionDiagnostic(BaseModel):
     value: str
-    status: Literal[
-        "resolved",
-        "weak_signal_abstain",
-        "mapping_loss",
-        "provider_missing",
-        "out_of_domain",
-        "conflicted_signal",
-    ]
+    status: DimensionStatus
     reason: str
     notes: list[str] = Field(default_factory=list, max_length=8)
     raw_hints: list[str] = Field(default_factory=list, max_length=12)
@@ -284,3 +285,22 @@ class ArticleEditorialAnalysisPayload(BaseModel):
                 "absolute rhetorical certainty with near-zero bias_confidence is inconsistent"
             )
         return self
+
+
+class EditorialCompletedPersistence(BaseModel):
+    article_id: int
+    content_hash: str
+    payload: ArticleEditorialAnalysisPayload
+    diagnostics: EditorialAnalysisDiagnostics
+    analysis_path: str = ""
+    analyzed_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+
+
+class EditorialFailurePersistence(BaseModel):
+    article_id: int
+    content_hash: str
+    failure_class: str
+    failure_message: str
+    artifact_path: str = ""
+    analysis_path: str = ""
+    analyzed_at: datetime = Field(default_factory=lambda: datetime.now(UTC))

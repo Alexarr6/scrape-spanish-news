@@ -34,6 +34,7 @@ DEFAULT_PROJECTION_VERSION = "v1"
 DEFAULT_NEIGHBOR_LIMIT = 5
 MIN_TEXT_LENGTH = 40
 
+
 @dataclass(frozen=True)
 class SemanticWindow:
     """Inclusive UTC date window used by semantic sync/project/build flows."""
@@ -76,7 +77,9 @@ def resolve_semantic_window(
     return SemanticWindow(date_from=date_from, date_to=date_to)
 
 
-def _apply_article_date_window(clauses: list[str], params: dict[str, Any], *, window: SemanticWindow | None) -> None:
+def _apply_article_date_window(
+    clauses: list[str], params: dict[str, Any], *, window: SemanticWindow | None
+) -> None:
     if window is None:
         return
     if window.date_from:
@@ -263,7 +266,9 @@ def init_pgvector_schema(
                 conn.execute(text(statement))
         else:
             if current_dim != required_dim:
-                row_count = conn.execute(text("SELECT COUNT(*) FROM article_embeddings")).scalar_one()
+                row_count = conn.execute(
+                    text("SELECT COUNT(*) FROM article_embeddings")
+                ).scalar_one()
                 if row_count:
                     raise RuntimeError(
                         "article_embeddings.embedding uses "
@@ -277,7 +282,9 @@ def init_pgvector_schema(
                         f"ALTER COLUMN embedding TYPE VECTOR({required_dim})"
                     )
                 )
-            for statement in _split_sql(render_additive_schema_sql(embedding_model=embedding_model)):
+            for statement in _split_sql(
+                render_additive_schema_sql(embedding_model=embedding_model)
+            ):
                 conn.execute(text(statement))
         if ensure_ann_index:
             conn.execute(text(HNSW_INDEX_SQL))
@@ -382,9 +389,13 @@ def select_embedding_candidates(
 
     query = session.query(ArticleORM)
     if window and window.date_from:
-        query = query.filter(text("date(published_at) >= date(:window_date_from)")).params(window_date_from=window.date_from)
+        query = query.filter(text("date(published_at) >= date(:window_date_from)")).params(
+            window_date_from=window.date_from
+        )
     if window and window.date_to:
-        query = query.filter(text("date(published_at) <= date(:window_date_to)")).params(window_date_to=window.date_to)
+        query = query.filter(text("date(published_at) <= date(:window_date_to)")).params(
+            window_date_to=window.date_to
+        )
     rows = (
         query.order_by(ArticleORM.published_at.desc().nullslast(), ArticleORM.id.desc())
         .limit(limit * 4)
@@ -564,9 +575,18 @@ def refresh_projection_set(
         dimensions=3 if projection_kind == "pca_3d" else 2,
     )
     now = _utc_now()
-    session.execute(text("DELETE FROM article_projections WHERE projection_set = :projection_set"), {"projection_set": projection_set})
-    session.execute(text("DELETE FROM semantic_point_analysis WHERE projection_set = :projection_set"), {"projection_set": projection_set})
-    session.execute(text("DELETE FROM semantic_clusters WHERE projection_set = :projection_set"), {"projection_set": projection_set})
+    session.execute(
+        text("DELETE FROM article_projections WHERE projection_set = :projection_set"),
+        {"projection_set": projection_set},
+    )
+    session.execute(
+        text("DELETE FROM semantic_point_analysis WHERE projection_set = :projection_set"),
+        {"projection_set": projection_set},
+    )
+    session.execute(
+        text("DELETE FROM semantic_clusters WHERE projection_set = :projection_set"),
+        {"projection_set": projection_set},
+    )
     for point in points:
         embedding_id = session.execute(
             text("SELECT id FROM article_embeddings WHERE article_id = :article_id"),
@@ -607,7 +627,9 @@ def refresh_projection_set(
                 "updated_at": now,
             },
         )
-    _persist_projection_analysis(session, projection_set=projection_set, points=points, embeddings=embeddings)
+    _persist_projection_analysis(
+        session, projection_set=projection_set, points=points, embeddings=embeddings
+    )
     session.commit()
     return len(points)
 
@@ -1204,7 +1226,6 @@ def _safe_neighbors(session: Session, *, article_id: int, limit: int) -> list[Ne
         return []
 
 
-
 def _persist_projection_analysis(
     session: Session,
     *,
@@ -1215,8 +1236,14 @@ def _persist_projection_analysis(
     analysis = analyze_points(points, embeddings)
     analysis_by_id = {point.article_id: point for point in analysis.points}
     now = _utc_now()
-    session.execute(text("DELETE FROM semantic_point_analysis WHERE projection_set = :projection_set"), {"projection_set": projection_set})
-    session.execute(text("DELETE FROM semantic_clusters WHERE projection_set = :projection_set"), {"projection_set": projection_set})
+    session.execute(
+        text("DELETE FROM semantic_point_analysis WHERE projection_set = :projection_set"),
+        {"projection_set": projection_set},
+    )
+    session.execute(
+        text("DELETE FROM semantic_clusters WHERE projection_set = :projection_set"),
+        {"projection_set": projection_set},
+    )
     for point in points:
         point.analysis = analysis_by_id.get(point.article_id, point.analysis)
         session.execute(
@@ -1278,17 +1305,24 @@ def _persist_projection_analysis(
 
 
 def _load_available_clusters(session: Session, *, projection_set: str) -> list[int]:
-    rows = session.execute(
-        text("SELECT cluster_id FROM semantic_clusters WHERE projection_set = :projection_set ORDER BY cluster_id ASC"),
-        {"projection_set": projection_set},
-    ).scalars().all()
+    rows = (
+        session.execute(
+            text(
+                "SELECT cluster_id FROM semantic_clusters WHERE projection_set = :projection_set ORDER BY cluster_id ASC"
+            ),
+            {"projection_set": projection_set},
+        )
+        .scalars()
+        .all()
+    )
     return [int(value) for value in rows if value is not None]
 
 
 def _load_cluster_summaries(session: Session, *, projection_set: str) -> list[dict[str, Any]]:
-    rows = session.execute(
-        text(
-            """
+    rows = (
+        session.execute(
+            text(
+                """
             SELECT cluster_id, size, top_sources_json, source_count, source_dominance,
                    date_min, date_max, centroid_x, centroid_y, centroid_z,
                    representative_article_ids_json
@@ -1296,9 +1330,12 @@ def _load_cluster_summaries(session: Session, *, projection_set: str) -> list[di
             WHERE projection_set = :projection_set
             ORDER BY size DESC, cluster_id ASC
             """
-        ),
-        {"projection_set": projection_set},
-    ).mappings().all()
+            ),
+            {"projection_set": projection_set},
+        )
+        .mappings()
+        .all()
+    )
     return [
         {
             "cluster_id": int(row["cluster_id"]),
@@ -1313,7 +1350,9 @@ def _load_cluster_summaries(session: Session, *, projection_set: str) -> list[di
                 "y": float(row["centroid_y"] or 0.0),
                 "z": float(row["centroid_z"] or 0.0),
             },
-            "representative_article_ids": json.loads(row["representative_article_ids_json"] or "[]"),
+            "representative_article_ids": json.loads(
+                row["representative_article_ids_json"] or "[]"
+            ),
         }
         for row in rows
     ]
@@ -1326,6 +1365,11 @@ def _analysis_for_row(row: Any, *, neighbors: list[NeighborArtifact]) -> PointAn
         cluster_size=int(row.get("cluster_size") or 0),
         is_outlier=bool(row.get("is_outlier")),
         local_density_distance=float(row.get("local_density_distance") or 0.0),
-        source_neighbor_diversity=int(row.get("source_neighbor_diversity") or len({neighbor.source for neighbor in neighbors})),
-        nearby_sources=sorted(set(json.loads(row.get("nearby_sources_json") or "[]") or []) | {neighbor.source for neighbor in neighbors}),
+        source_neighbor_diversity=int(
+            row.get("source_neighbor_diversity") or len({neighbor.source for neighbor in neighbors})
+        ),
+        nearby_sources=sorted(
+            set(json.loads(row.get("nearby_sources_json") or "[]") or [])
+            | {neighbor.source for neighbor in neighbors}
+        ),
     )

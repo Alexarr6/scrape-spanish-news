@@ -20,14 +20,19 @@ def _record(article_id: int, embedding: list[float]) -> EmbeddingArtifact:
 
 
 def test_project_embeddings_returns_finite_xyz_by_default() -> None:
-    points = project_embeddings([
-        _record(1, [1.0, 0.0, 0.0]),
-        _record(2, [0.0, 1.0, 0.0]),
-        _record(3, [0.0, 0.0, 1.0]),
-    ])
+    points = project_embeddings(
+        [
+            _record(1, [1.0, 0.0, 0.0]),
+            _record(2, [0.0, 1.0, 0.0]),
+            _record(3, [0.0, 0.0, 1.0]),
+        ]
+    )
 
     assert len(points) == 3
-    assert all(math.isfinite(point.x) and math.isfinite(point.y) and math.isfinite(point.z) for point in points)
+    assert all(
+        math.isfinite(point.x) and math.isfinite(point.y) and math.isfinite(point.z)
+        for point in points
+    )
     assert len({point.z for point in points}) > 1
 
 
@@ -39,10 +44,12 @@ def test_project_embeddings_handles_single_row_in_3d() -> None:
 
 
 def test_project_embeddings_handles_two_rows_without_non_finite_z() -> None:
-    points = project_embeddings([
-        _record(1, [0.4, 0.6, 0.8]),
-        _record(2, [0.1, 0.2, 0.3]),
-    ])
+    points = project_embeddings(
+        [
+            _record(1, [0.4, 0.6, 0.8]),
+            _record(2, [0.1, 0.2, 0.3]),
+        ]
+    )
 
     assert len(points) == 2
     assert all(math.isfinite(point.z) for point in points)

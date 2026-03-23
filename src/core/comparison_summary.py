@@ -36,7 +36,6 @@ def _status_for(snapshot: SourceSnapshot) -> str:
     return "ok"
 
 
-
 def _derived_warnings_for(snapshot: SourceSnapshot) -> list[str]:
     warnings: list[str] = []
     discovered = _metric_as_int(snapshot.metrics.get("discovered"))
@@ -64,6 +63,7 @@ def _metric_as_int(value: Any) -> int:
     if isinstance(value, bool) or not isinstance(value, int):
         return 0
     return value
+
 
 def build_comparison_summary(
     *,

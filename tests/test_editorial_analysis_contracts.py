@@ -117,12 +117,12 @@ def test_editorial_prompt_and_schema_expose_raw_generation_contract() -> None:
 
     assert "ARTICLE_METADATA:" in prompt
     assert "TITLE: Título" in prompt
-    assert "portable raw JSON object" in prompt
+    assert "canonical JSON object" in prompt
     assert schema["additionalProperties"] is True
     assert "ideological_bias_framing" in schema["properties"]
     assert "tone_dimensions" in schema["properties"]
-    assert schema["properties"]["framing_devices"]["maxItems"] == 20
-    assert schema["properties"]["evidence_spans"]["maxItems"] == 20
+    assert "anyOf" in schema["properties"]["framing_devices"]
+    assert "anyOf" in schema["properties"]["evidence_spans"]
     assert "anyOf" in schema["properties"]["confidence"]
 
 

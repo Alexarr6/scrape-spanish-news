@@ -148,6 +148,8 @@ def test_editorial_pipeline_persists_completed_analysis_and_skips_unchanged() ->
     assert stored.analysis_status == "completed"
     assert stored.bias_label == "center"
     assert stored.model_name == "openrouter/test-model"
+    assert stored.bias_status == "resolved"
+    assert stored.unclear_reasons_json == "[]"
     assert "institutional_stability" in stored.framing_devices_json
     assert metrics.strict_success_count == 1
 
@@ -189,6 +191,7 @@ def test_editorial_pipeline_counts_request_and_writes_artifact_on_parse_failure(
     assert metrics.failed_count == 1
     assert metrics.parse_failed_count == 1
     assert stored.analysis_status == "failed"
+    assert stored.provider_failure_class == "json_parse_failed"
     assert stored.failure_reason.startswith("json_parse_failed:")
     assert "artifact=" in stored.failure_reason
     assert len(artifacts) == 1
@@ -273,6 +276,8 @@ def test_editorial_pipeline_retries_schema_rejection_with_fallback_success() -> 
     assert metrics.bias_mapping_loss_count == 1
     assert stored.analysis_status == "completed"
     assert stored.editorial_applicability == "limited"
+    assert stored.bias_status == "mapping_loss"
+    assert json.loads(stored.unclear_reasons_json) == ["repair_data_loss", "mapping_loss"]
     assert "official_source_attribution" in stored.diagnostics_json
     assert stored.failure_reason == ""
 

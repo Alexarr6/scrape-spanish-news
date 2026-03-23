@@ -50,7 +50,9 @@ def list_story_clusters(
             search=search,
         ),
     )
-    return StoryClusterListResponse(items=items, meta=StoryClusterListMeta(total=total, limit=limit, offset=offset))
+    return StoryClusterListResponse(
+        items=items, meta=StoryClusterListMeta(total=total, limit=limit, offset=offset)
+    )
 
 
 @router.get("/filters", response_model=StoryClusterFiltersResponse)
@@ -71,7 +73,9 @@ def get_story_cluster_filters(
 
 
 @router.get("/{cluster_id}", response_model=StoryClusterDetail)
-def get_story_cluster(cluster_id: int, session: Session = Depends(get_session)) -> StoryClusterDetail:
+def get_story_cluster(
+    cluster_id: int, session: Session = Depends(get_session)
+) -> StoryClusterDetail:
     """Return one story cluster detail payload or a 404 when the id is unknown."""
 
     payload = load_story_cluster_detail(session, cluster_id)

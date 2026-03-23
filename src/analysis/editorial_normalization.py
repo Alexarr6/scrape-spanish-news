@@ -31,6 +31,9 @@ ARTICLE_TYPE_ALIASES = {
     "straight_reporting": "news_report",
     "news": "news_report",
     "report": "news_report",
+    "match_report": "news_report",
+    "election_results_report": "news_report",
+    "local_news_event_coverage": "news_report",
     "analysis_piece": "analysis",
     "op_ed": "opinion",
     "op-ed": "opinion",
@@ -55,6 +58,8 @@ BIAS_LABEL_ALIASES = {
     "no_bias": "unclear",
     "non_ideological": "unclear",
     "sin_sesgo_claro": "unclear",
+    "pro_real_madrid": "unclear",
+    "protester_sympathetic": "unclear",
 }
 TONE_EMOTIONAL_ALIASES = {
     "neutral": "calm",
@@ -68,6 +73,11 @@ TONE_EMOTIONAL_ALIASES = {
     "low": "calm",
     "baja": "calm",
     "bajo": "calm",
+    "false": "calm",
+    "moderate": "loaded",
+    "medium": "loaded",
+    "high": "loaded",
+    "very_high": "inflammatory",
     "emotional": "loaded",
     "charged": "loaded",
     "alarmist": "inflammatory",
@@ -82,6 +92,8 @@ TONE_TARGET_ALIASES = {
     "positive": "supportive",
     "objective": "neutral",
     "none": "neutral",
+    "partial": "mixed",
+    "false": "neutral",
 }
 OPINIONATEDNESS_ALIASES = {
     "objective_reporting": "straight_reporting",
@@ -91,6 +103,11 @@ OPINIONATEDNESS_ALIASES = {
     "commentary": "opinionated",
     "advocacy": "activist",
     "neutral": "straight_reporting",
+    "absent": "opinionated",
+    "high": "opinionated",
+    "moderate": "interpretive",
+    "low": "straight_reporting",
+    "false": "straight_reporting",
 }
 SENSATIONALISM_ALIASES = {
     "none": "low",
@@ -105,6 +122,8 @@ SENSATIONALISM_ALIASES = {
     "very_high": "high",
     "alta": "high",
     "alto": "high",
+    "false": "low",
+    "true": "medium",
 }
 RHETORICAL_CERTAINTY_ALIASES = {
     "measured": "cautious",
@@ -114,6 +133,9 @@ RHETORICAL_CERTAINTY_ALIASES = {
     "direct": "assertive",
     "categorical": "absolute",
     "dogmatic": "absolute",
+    "high": "assertive",
+    "moderate": "assertive",
+    "low": "cautious",
 }
 FRAMING_DEVICE_ALIASES = {
     "security": "public_order_security",
@@ -135,6 +157,23 @@ FRAMING_DEVICE_ALIASES = {
     "conflict_frame": "conflict",
     "moral_frame": "moral_judgment",
     "modernization": "progress_modernization",
+    "martial_warfare": "conflict",
+    "crisis_framing": "conflict",
+    "binary_framing": "conflict",
+    "headline_ambiguity": "conflict",
+    "religious_sacramental": "moral_judgment",
+    "heroic_narrative": "victimization",
+    "epic_heroic": "victimization",
+    "heroes_victims": "victimization",
+    "regional_pride": "identity_culture",
+    "movement_legitimacy_language": "identity_culture",
+    "impact_amplification": "economic_consequence",
+    "quantitative_acceleration": "economic_consequence",
+    "scope_expansion": "institutional_stability",
+    "direct_quotation_of_critical_questions": "conflict",
+    "opposition_questions_as_headline_focus": "conflict",
+    "multiple_party_coverage_for_balance": "institutional_stability",
+    "temporal_framing_emphasizing_finality": "institutional_stability",
 }
 CONFIDENCE_LABEL_ALIASES = {
     "low": 0.25,
@@ -302,12 +341,7 @@ def normalize_editorial_payload(raw_payload: dict[str, Any]) -> EditorialNormali
     )
 
     tone_dimensions = repaired.tone_dimensions or {}
-    tone_emotional_source = (
-        repaired.tone_emotional
-        or _extract_nested_choice(tone_dimensions, "emotionality")
-        or _extract_nested_choice(tone_dimensions, "emotional_valence")
-        or tone_dimensions.get("overall_tone")
-    )
+    tone_emotional_source = _resolve_tone_emotional_source(repaired, tone_dimensions)
     tone_emotional = _normalize_choice(
         tone_emotional_source,
         allowed=set(TONE_EMOTIONAL_VALUES),
@@ -316,9 +350,7 @@ def normalize_editorial_payload(raw_payload: dict[str, Any]) -> EditorialNormali
         warnings=normalization_warnings,
         label="tone_emotional",
     )
-    tone_target_source = (
-        repaired.tone_target or tone_dimensions.get("target") or tone_dimensions.get("polarity")
-    )
+    tone_target_source = _resolve_tone_target_source(repaired, tone_dimensions)
     tone_target = _normalize_choice(
         tone_target_source,
         allowed=set(TONE_TARGET_VALUES),
@@ -327,11 +359,7 @@ def normalize_editorial_payload(raw_payload: dict[str, Any]) -> EditorialNormali
         warnings=normalization_warnings,
         label="tone_target",
     )
-    opinionatedness_source = (
-        repaired.opinionatedness
-        or tone_dimensions.get("opinionatedness")
-        or tone_dimensions.get("style")
-    )
+    opinionatedness_source = _resolve_opinionatedness_source(repaired, tone_dimensions)
     opinionatedness = _normalize_choice(
         opinionatedness_source,
         allowed=set(OPINIONATEDNESS_VALUES),
@@ -340,11 +368,7 @@ def normalize_editorial_payload(raw_payload: dict[str, Any]) -> EditorialNormali
         warnings=normalization_warnings,
         label="opinionatedness",
     )
-    sensationalism_source = (
-        repaired.sensationalism
-        or _extract_nested_choice(tone_dimensions, "sensationalism")
-        or _extract_nested_choice(tone_dimensions, "alarmism")
-    )
+    sensationalism_source = _resolve_sensationalism_source(repaired, tone_dimensions)
     sensationalism = _normalize_choice(
         sensationalism_source,
         allowed=set(SENSATIONALISM_VALUES),
@@ -353,11 +377,7 @@ def normalize_editorial_payload(raw_payload: dict[str, Any]) -> EditorialNormali
         warnings=normalization_warnings,
         label="sensationalism",
     )
-    rhetorical_certainty_source = (
-        repaired.rhetorical_certainty
-        or tone_dimensions.get("rhetorical_certainty")
-        or tone_dimensions.get("certainty")
-    )
+    rhetorical_certainty_source = _resolve_rhetorical_certainty_source(repaired, tone_dimensions)
     rhetorical_certainty = _normalize_choice(
         rhetorical_certainty_source,
         allowed=set(RHETORICAL_CERTAINTY_VALUES),
@@ -579,6 +599,13 @@ def _diagnose_dimension(
             reason="canonical_value_resolved",
             raw_hints=raw_hints[:12],
         )
+    if raw_hints:
+        return EditorialDimensionDiagnostic(
+            value=final_value,
+            status="mapping_loss",
+            reason="non_canonical_signal_preserved_in_diagnostics",
+            raw_hints=raw_hints[:12],
+        )
     if raw_value is None and not repaired.dropped_fields:
         return EditorialDimensionDiagnostic(
             value=final_value,
@@ -593,13 +620,6 @@ def _diagnose_dimension(
             reason="repair_or_mapping_loss_visible",
             raw_hints=raw_hints[:12],
             notes=list(repaired.dropped_fields[:4]),
-        )
-    if raw_hints:
-        return EditorialDimensionDiagnostic(
-            value=final_value,
-            status="mapping_loss",
-            reason="non_canonical_signal_preserved_in_diagnostics",
-            raw_hints=raw_hints[:12],
         )
     if applicability == "limited":
         return EditorialDimensionDiagnostic(
@@ -742,7 +762,10 @@ def _extract_bias_hints(repaired: RepairedEditorialPayload) -> list[str]:
         hints.append(value.strip())
     elif isinstance(value, dict):
         for key in (
+            "position",
+            "orientation",
             "description",
+            "evidence",
             "justification",
             "framing_summary",
             "source_treatment",
@@ -789,7 +812,141 @@ def _collect_tone_hints(
     return hints[:12]
 
 
+def _resolve_tone_emotional_source(
+    repaired: RepairedEditorialPayload, tone_dimensions: dict[str, Any]
+) -> Any:
+    return (
+        repaired.tone_emotional
+        or _extract_nested_choice(tone_dimensions, "emotionality")
+        or _extract_nested_choice(tone_dimensions, "emotional_valence")
+        or _extract_nested_choice(tone_dimensions, "overall_tone")
+        or _extract_nested_choice(tone_dimensions, "overall")
+        or _extract_nested_choice(tone_dimensions, "emotional_tone")
+        or _extract_nested_choice(tone_dimensions, "emotional_charge")
+        or _extract_nested_choice(tone_dimensions, "dramatic")
+        or _extract_nested_choice(tone_dimensions, "sentiment")
+    )
+
+
+def _resolve_tone_target_source(
+    repaired: RepairedEditorialPayload, tone_dimensions: dict[str, Any]
+) -> Any:
+    return (
+        repaired.tone_target
+        or _extract_nested_choice(tone_dimensions, "target")
+        or _extract_nested_choice(tone_dimensions, "polarity")
+        or _extract_nested_choice(tone_dimensions, "government_assessment")
+        or _extract_nested_choice(tone_dimensions, "sentiment")
+    )
+
+
+def _resolve_opinionatedness_source(
+    repaired: RepairedEditorialPayload, tone_dimensions: dict[str, Any]
+) -> Any:
+    return (
+        repaired.opinionatedness
+        or _extract_nested_choice(tone_dimensions, "opinionatedness")
+        or _extract_nested_choice(tone_dimensions, "style")
+        or _extract_nested_choice(tone_dimensions, "neutral_reporting")
+        or _extract_nested_choice(tone_dimensions, "partisan")
+        or _extract_nested_choice(tone_dimensions, "subjectivity")
+        or _extract_nested_choice(tone_dimensions, "analytical")
+        or _extract_nested_choice(tone_dimensions, "informational_balance")
+    )
+
+
+def _resolve_sensationalism_source(
+    repaired: RepairedEditorialPayload, tone_dimensions: dict[str, Any]
+) -> Any:
+    return (
+        repaired.sensationalism
+        or _extract_nested_choice(tone_dimensions, "sensationalism")
+        or _extract_nested_choice(tone_dimensions, "alarmism")
+        or _extract_nested_choice(tone_dimensions, "loaded_language")
+    )
+
+
+def _resolve_rhetorical_certainty_source(
+    repaired: RepairedEditorialPayload, tone_dimensions: dict[str, Any]
+) -> Any:
+    return (
+        repaired.rhetorical_certainty
+        or _extract_nested_choice(tone_dimensions, "rhetorical_certainty")
+        or _extract_nested_choice(tone_dimensions, "certainty")
+        or _extract_nested_choice(tone_dimensions, "confidence")
+    )
+
+
 # Existing helpers follow mostly unchanged.
+
+
+def _coerce_collection(value: Any) -> list[Any]:
+    if value is None:
+        return []
+    if isinstance(value, list):
+        return list(value)
+    if isinstance(value, tuple):
+        return list(value)
+    if isinstance(value, dict):
+        items: list[Any] = []
+        for key, item in value.items():
+            if isinstance(item, bool):
+                if item and _usable_framing_key(key):
+                    items.append(key)
+                continue
+            if isinstance(item, (list, tuple)):
+                if _usable_framing_key(key):
+                    items.append(key)
+                items.extend(item)
+                continue
+            if isinstance(item, dict):
+                if _usable_framing_key(key):
+                    items.append(key)
+                items.append(item)
+                continue
+            if isinstance(item, str):
+                if _usable_framing_key(key):
+                    items.append(key)
+                items.append(item)
+                continue
+            if _usable_framing_key(key):
+                items.append(key)
+        return items
+    return [value]
+
+
+def _coerce_evidence_collection(value: Any) -> list[Any]:
+    if value is None:
+        return []
+    if isinstance(value, (list, tuple)):
+        return list(value)
+    if isinstance(value, dict):
+        if any(key in value for key in ("text", "span", "quote", "context")):
+            return [value]
+        return [item for item in value.values() if item is not None]
+    return [value]
+
+
+def _usable_framing_key(key: str) -> bool:
+    normalized = (key or "").strip().lower().replace(" ", "_")
+    return bool(normalized) and normalized not in {
+        "main_narrative",
+        "key_framing_elements",
+        "balance",
+        "sources_represented",
+        "device_1",
+        "device_2",
+        "device_3",
+    }
+
+
+def _coerce_bool_signal(key: str, value: bool) -> str:
+    normalized_key = key.strip().lower()
+    if normalized_key in {"sensationalism", "loaded_language", "emotional_tone", "alarmism"}:
+        return "true" if value else "false"
+    if normalized_key in {"neutral_reporting", "informational_balance"}:
+        return "false" if value else "absent"
+    return "true" if value else "false"
 
 
 def _repair_bias_score(
@@ -851,6 +1008,15 @@ def _repair_confidence(
                         f"repair_confidence_object_extracted: {field_name}.{key} -> {nested}"
                     )
                     return nested
+        for nested_key, nested_value in value.items():
+            nested = _repair_confidence(
+                nested_value, f"{field_name}.{nested_key}", repair_warnings, dropped_fields
+            )
+            if nested is not None:
+                repair_warnings.append(
+                    f"repair_confidence_object_extracted: {field_name}.{nested_key} -> {nested}"
+                )
+                return nested
         dropped_fields.append(field_name)
         repair_warnings.append(
             f"repair_dropped_field: {field_name} confidence object had no usable value"
@@ -889,6 +1055,14 @@ def _repair_text_like(
 
 
 def _repair_tone_dimensions(value: Any, repair_warnings: list[str]) -> dict[str, Any]:
+    if isinstance(value, list):
+        flattened: dict[str, Any] = {}
+        for idx, item in enumerate(value):
+            if isinstance(item, dict):
+                flattened[f"item_{idx}"] = item
+        if flattened:
+            repair_warnings.append("repair_regularized_tone_dimensions_list")
+        value = flattened
     if not isinstance(value, dict):
         return {}
     repaired: dict[str, Any] = {}
@@ -901,18 +1075,21 @@ def _repair_tone_dimensions(value: Any, repair_warnings: list[str]) -> dict[str,
             repaired[key] = nested or raw_value
             if nested:
                 repair_warnings.append(f"repair_regularized_nested_tone: {key}")
+        elif isinstance(raw_value, bool):
+            repaired[key] = _coerce_bool_signal(key, raw_value)
+            repair_warnings.append(f"repair_regularized_boolean_tone: {key}")
         else:
             repaired[key] = raw_value
     return repaired
 
 
 def _repair_framing_devices(
-    values: list[Any],
+    values: Any,
     repair_warnings: list[str],
     dropped_fields: list[str],
     truncated_fields: list[str],
 ) -> list[Any]:
-    repaired = list(values)
+    repaired = _coerce_collection(values)
     if len(repaired) > RAW_FRAMING_WORKING_CAP:
         truncated_fields.append("framing_devices")
         repair_warnings.append(
@@ -925,6 +1102,13 @@ def _repair_framing_devices(
             normalized.append(item)
             continue
         if isinstance(item, dict):
+            if len(item) == 1:
+                only_key = next(iter(item))
+                only_value = item[only_key]
+                if isinstance(only_value, (list, tuple)) and _usable_framing_key(only_key):
+                    repair_warnings.append("repair_framing_device_map_key_promoted")
+                    normalized.append(only_key)
+                    continue
             extracted = _extract_text_from_object(
                 item, keys=("device", "type", "description", "label", "name"), min_length=3
             )
@@ -938,12 +1122,12 @@ def _repair_framing_devices(
 
 
 def _repair_evidence_spans(
-    values: list[Any],
+    values: Any,
     repair_warnings: list[str],
     dropped_fields: list[str],
     truncated_fields: list[str],
 ) -> list[Any]:
-    repaired = list(values)
+    repaired = _coerce_evidence_collection(values)
     if len(repaired) > RAW_EVIDENCE_WORKING_CAP:
         truncated_fields.append("evidence_spans")
         repair_warnings.append(
@@ -981,7 +1165,7 @@ def _extract_bias_label(value: Any) -> Any:
         return value
     if not isinstance(value, dict):
         return None
-    for key in ("direction", "bias", "bias_type", "bias_direction"):
+    for key in ("direction", "bias", "bias_type", "bias_direction", "position", "orientation"):
         candidate = value.get(key)
         if isinstance(candidate, str) and candidate.strip():
             return candidate
@@ -992,11 +1176,15 @@ def _extract_nested_choice(container: dict[str, Any], key: str) -> Any:
     value = container.get(key)
     if isinstance(value, str):
         return value
+    if isinstance(value, bool):
+        return "true" if value else "false"
     if isinstance(value, dict):
         for nested_key in ("value", "valence", "level", "label", "description"):
             candidate = value.get(nested_key)
             if isinstance(candidate, str) and candidate.strip():
                 return candidate
+            if isinstance(candidate, bool):
+                return "true" if candidate else "false"
     return None
 
 

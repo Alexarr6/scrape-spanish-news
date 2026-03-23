@@ -1,16 +1,23 @@
 from __future__ import annotations
 
 import argparse
+import sys
 from pathlib import Path
 
-from src.analysis.editorial_replay import evaluate_replay_corpus, render_replay_report
+REPO_ROOT = Path(__file__).resolve().parents[1]
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
+
+from src.analysis.editorial_replay import (  # noqa: E402
+    evaluate_replay_corpus,
+    render_replay_report,
+)
 
 
 def main() -> int:
     parser = argparse.ArgumentParser(
         description=(
-            "Replay captured editorial-analysis fixtures through the "
-            "local normalization pipeline."
+            "Replay captured editorial-analysis fixtures through the local normalization pipeline."
         )
     )
     parser.add_argument(
