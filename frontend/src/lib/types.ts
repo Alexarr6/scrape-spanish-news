@@ -96,11 +96,53 @@ export type ExplorerArticleSummary = {
   article_text_excerpt: string
 }
 
+export type ExplorerEditorialEvidence = {
+  type: string
+  text: string
+  note: string
+}
+
+export type ExplorerEditorialReviewFlags = {
+  missing_evidence: boolean
+  low_confidence: boolean
+  failed_analysis: boolean
+  unclear_bias: boolean
+  provider_missing: boolean
+  mapping_loss: boolean
+  out_of_domain: boolean
+  pending_analysis: boolean
+  needs_review: boolean
+}
+
+export type ExplorerEditorialSummary = {
+  article_id: number
+  analysis_status: string
+  editorial_applicability: 'full' | 'limited' | 'out_of_domain'
+  editorial_applicability_reason: string
+  article_type: string
+  article_type_confidence: number
+  bias_label: string
+  bias_score: number
+  bias_confidence: number
+  tone_emotional: string
+  tone_target: string
+  opinionatedness: string
+  sensationalism: string
+  rhetorical_certainty: string
+  framing_devices: string[]
+  evidence_spans: ExplorerEditorialEvidence[]
+  rationale: string
+  unclear_reasons: string[]
+  review_flags: ExplorerEditorialReviewFlags
+  diagnostics_summary: { dimension_status: Record<string, string> } | null
+}
+
 export type ExplorerArticleDetail = {
   article: ExplorerArticleSummary
   projection_set: string
   point: ExplorerPoint | null
   semantic_summary: ExplorerSemanticSummary
+  editorial: ExplorerEditorialSummary | null
   neighbors: ExplorerNeighbor[]
 }
 
@@ -173,6 +215,107 @@ export type StoryClusterListItem = {
   top_entities: ClusterEntitySummary[]
 }
 
+export type StoryClusterMemberEditorialPreview = {
+  analysis_status: string
+  article_type: string
+  bias_label: string
+  bias_confidence: number
+  editorial_applicability: 'full' | 'limited' | 'out_of_domain'
+  review_flags: {
+    low_confidence: boolean
+    needs_review: boolean
+  }
+}
+
+export type StoryClusterEditorialSourceSummary = {
+  source: string
+  article_count: number
+  analyzed_article_count: number
+  applicability_breakdown: Record<string, number>
+  article_type_breakdown: Record<string, number>
+  bias_label_breakdown: Record<string, number>
+  opinionatedness_breakdown: Record<string, number>
+  tone_emotional_breakdown: Record<string, number>
+  top_framing_devices: Array<{
+    framing_device: string
+    count: number
+    example_article_ids: number[]
+  }>
+  review_flag_counts: {
+    low_confidence: number
+    needs_review: number
+    out_of_domain: number
+    limited: number
+  }
+}
+
+export type StoryClusterEditorialSignal = {
+  label: string
+  strength: 'strong' | 'moderate' | 'weak'
+  supporting_sources: string[]
+  example_article_ids: number[]
+  note: string
+}
+
+export type StoryClusterEditorialComparativeSource = {
+  source: string
+  usable_article_count: number
+  full_applicability_count: number
+  limited_applicability_count: number
+  low_confidence_count: number
+  comparison_eligibility: 'eligible' | 'limited' | 'insufficient_sample'
+  comparison_note: string
+}
+
+export type StoryClusterEditorialComparativeSourceMetric = {
+  source: string
+  usable_article_count: number
+  opinionatedness_index: number | null
+  emotional_tone_index: number | null
+  bias_direction_index: number | null
+  framing_concentration_index: number | null
+  confidence_band: 'high' | 'moderate' | 'low' | 'insufficient'
+  metric_notes: string[]
+}
+
+export type StoryClusterEditorialComparativeSignal = {
+  dimension: 'bias' | 'opinionatedness' | 'tone' | 'framing'
+  label: string
+  leading_source: string
+  trailing_source: string
+  delta: number
+  strength: 'strong' | 'moderate' | 'weak'
+  support: {
+    leading_usable_articles: number
+    trailing_usable_articles: number
+    compared_sources: string[]
+  }
+  note: string
+  example_article_ids: number[]
+}
+
+export type StoryClusterEditorialComparativeMetrics = {
+  eligible_source_count: number
+  minimum_articles_per_source: number
+  included_sources: StoryClusterEditorialComparativeSource[]
+  source_metrics: StoryClusterEditorialComparativeSourceMetric[]
+  divergence_signals: StoryClusterEditorialComparativeSignal[]
+  comparison_note: string
+}
+
+export type StoryClusterEditorialSummary = {
+  analyzed_article_count: number
+  pending_article_count: number
+  failed_article_count: number
+  applicability_breakdown: Record<string, number>
+  article_type_breakdown: Record<string, number>
+  source_summaries: StoryClusterEditorialSourceSummary[]
+  cluster_signals: StoryClusterEditorialSignal[]
+  comparative_metrics: StoryClusterEditorialComparativeMetrics | null
+  confidence_note: string
+  scope_note: string
+}
+
 export type StoryClusterMemberItem = {
   article_id: number
   source: string
@@ -184,11 +327,13 @@ export type StoryClusterMemberItem = {
   membership_score: number
   tags: ClusterTagSummary[]
   entities: ClusterEntitySummary[]
+  editorial_preview: StoryClusterMemberEditorialPreview | null
 }
 
 export type StoryClusterDetail = {
   cluster: StoryClusterListItem
   members: StoryClusterMemberItem[]
+  editorial_summary: StoryClusterEditorialSummary | null
 }
 
 export type StoryClusterListResponse = {

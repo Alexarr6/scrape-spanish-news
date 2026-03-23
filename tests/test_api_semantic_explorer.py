@@ -224,6 +224,33 @@ def _build_client() -> TestClient:
         """),
             {"projection_set": DEFAULT_PROJECTION_SET},
         )
+        conn.execute(
+            text("""
+            INSERT INTO article_editorial_analysis (
+                article_id, article_type, article_type_confidence, bias_label, bias_score, bias_confidence,
+                tone_emotional, tone_target, opinionatedness, sensationalism, rhetorical_certainty,
+                editorial_applicability, editorial_applicability_reason, provider_failure_class,
+                analysis_path, unclear_reasons_json, article_type_status, bias_status, tone_emotional_status, tone_target_status,
+                opinionatedness_status, sensationalism_status, rhetorical_certainty_status, framing_status,
+                framing_devices_json, evidence_spans_json, diagnostics_json, rationale, analysis_status,
+                failure_reason, model_provider, model_name, model_version, prompt_version, schema_version,
+                content_hash, source_text_version, analyzed_at
+            ) VALUES (
+                1, 'news', 0.91, 'center_left', -0.18, 0.62,
+                'measured', 'government', 'low', 'low', 'moderate',
+                'full', 'general_editorial_content', '',
+                'strict_success', '["weak_signal"]', 'resolved', 'resolved', 'resolved', 'resolved',
+                'resolved', 'resolved', 'resolved', 'resolved',
+                '["institutional_conflict","accountability_frame"]',
+                '[{"type":"quote","text":"Texto articulo uno","note":"Lead framing"}]',
+                '{"dimension_status":{"bias":"resolved","framing":"resolved"}}',
+                'Cobertura principalmente informativa con algo de encuadre institucional.', 'completed',
+                '', 'openrouter', 'gpt-test', '', 'v1', 'editorial-analysis-v1',
+                'hash-1', 'title_summary_body_v1', :analyzed_at
+            )
+        """),
+            {"analyzed_at": created},
+        )
 
     session_factory = sessionmaker(bind=engine, expire_on_commit=False)
     app = FastAPI()
@@ -285,6 +312,26 @@ def test_explorer_article_detail_returns_analysis_fields(monkeypatch) -> None:
     assert response.status_code == 200
     assert payload["semantic_summary"]["cluster_id"] == 1
     assert payload["semantic_summary"]["nearby_sources"] == ["elmundo", "elpais"]
+    assert payload["editorial"]["analysis_status"] == "completed"
+    assert payload["editorial"]["editorial_applicability"] == "full"
+    assert payload["editorial"]["review_flags"]["low_confidence"] is False
+    assert payload["editorial"]["evidence_spans"][0]["type"] == "quote"
+    assert payload["editorial"]["diagnostics_summary"]["dimension_status"]["bias"] == "resolved"
+
+
+def test_explorer_article_detail_treats_missing_editorial_row_as_pending(monkeypatch) -> None:
+    client = _build_client()
+    monkeypatch.setattr(
+        "src.semantic.dbstore.nearest_neighbors", lambda _session, article_id, limit: []
+    )
+
+    response = client.get("/api/v1/semantic/explorer/articles/2")
+    payload = response.json()
+
+    assert response.status_code == 200
+    assert payload["editorial"]["analysis_status"] == "pending"
+    assert payload["editorial"]["review_flags"]["pending_analysis"] is True
+    assert payload["editorial"]["editorial_applicability"] == "full"
 
 
 def test_explorer_article_detail_returns_404_for_missing_article() -> None:

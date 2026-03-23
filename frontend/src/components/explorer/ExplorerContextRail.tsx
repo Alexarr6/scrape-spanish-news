@@ -22,6 +22,7 @@ import type {
   ExplorerPoint,
   ExplorerViewMode,
 } from '../../lib/types'
+import { EditorialAnalysisCard } from '../editorial/EditorialAnalysisCard'
 import { SectionDivider } from '../layout/SectionDivider'
 import { LoadingState } from '../system/LoadingState'
 
@@ -181,9 +182,16 @@ export function ExplorerContextRail({
         </div>
       )}
 
-      {/* Cluster context section */}
       {detail && (
         <>
+          <SectionDivider label="Editorial read" />
+          <EditorialAnalysisCard
+            editorial={detail.editorial}
+            variant="compact"
+            clusterId={detail.semantic_summary.cluster_id}
+            storiesHref={storiesHref}
+          />
+
           <SectionDivider label="Cluster context" />
           <ClusterContextSection
             summary={detail.semantic_summary}

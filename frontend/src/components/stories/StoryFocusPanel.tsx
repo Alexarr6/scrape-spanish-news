@@ -1,10 +1,13 @@
 import { clampText, formatDate, formatSimilarity } from '../../lib/format'
 import { buildSemanticExplorerHref } from '../../lib/navigation'
 import type { ExplorerArticleDetail, StoryClusterDetail, StoryClusterMemberItem } from '../../lib/types'
+import { EditorialAnalysisCard } from '../editorial/EditorialAnalysisCard'
+import { EditorialStatusBadge } from '../editorial/EditorialStatusBadge'
 import { SectionDivider } from '../layout/SectionDivider'
 import { ErrorState } from '../system/ErrorState'
 import { LoadingState } from '../system/LoadingState'
 import { CoverageBar } from './CoverageBar'
+import { EditorialLensSection } from './EditorialLensSection'
 
 type Props = {
   detail: StoryClusterDetail | null
@@ -98,6 +101,12 @@ export function StoryFocusPanel({
         <CoverageBar members={detail.members} />
       </section>
 
+      <SectionDivider label="Editorial lens" />
+
+      <section className="focus-section">
+        <EditorialLensSection editorialSummary={detail.editorial_summary} onSelectArticle={(articleId) => onSelectArticle(articleId)} />
+      </section>
+
       <SectionDivider label="Articles by source" />
 
       {/* Section 3 or 4: Article list or article detail */}
@@ -161,6 +170,20 @@ function SourceGroupList({
                   <p className="member-card-summary">
                     {clampText(member.summary, '')}
                   </p>
+                )}
+                {member.editorial_preview && (
+                  <div className="member-card-badges">
+                    <span className="badge">{member.editorial_preview.article_type.replace(/_/g, ' ')}</span>
+                    {member.editorial_preview.editorial_applicability !== 'full' && (
+                      <EditorialStatusBadge kind={member.editorial_preview.editorial_applicability} compact />
+                    )}
+                    {member.editorial_preview.review_flags.low_confidence && (
+                      <EditorialStatusBadge kind="low_confidence" compact />
+                    )}
+                    {!member.editorial_preview.review_flags.low_confidence && member.editorial_preview.review_flags.needs_review && (
+                      <EditorialStatusBadge kind="needs_review" compact />
+                    )}
+                  </div>
                 )}
               </button>
             ))}
@@ -230,6 +253,14 @@ function ArticleDetailSection({
             >
               Open in Explorer →
             </a>
+          </div>
+
+          <div style={{ marginTop: 'var(--space-2)' }}>
+            <EditorialAnalysisCard
+              editorial={article.editorial}
+              variant="full"
+              clusterId={article.semantic_summary.cluster_id}
+            />
           </div>
 
           <div style={{ marginTop: 'var(--space-2)' }}>

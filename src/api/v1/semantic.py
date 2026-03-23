@@ -5,6 +5,7 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
+from src.analysis.readside import load_article_editorial_summary
 from src.api.contracts.semantic import (
     ExplorerArticleDetail,
     ExplorerFiltersResponse,
@@ -85,7 +86,8 @@ def get_explorer_article_detail(
     )
     if detail is None:
         raise HTTPException(status_code=404, detail="Semantic explorer article not found")
-    return _to_article_detail_response(detail)
+    editorial = load_article_editorial_summary(session, article_id=article_id)
+    return _to_article_detail_response(detail, editorial=editorial)
 
 
 def _to_points_response(page: ExplorerPointsPage) -> ExplorerPointsResponse:
@@ -110,7 +112,9 @@ def _to_points_response(page: ExplorerPointsPage) -> ExplorerPointsResponse:
     )
 
 
-def _to_article_detail_response(detail: ExplorerArticleDetailRecord) -> ExplorerArticleDetail:
+def _to_article_detail_response(
+    detail: ExplorerArticleDetailRecord, *, editorial: dict | None = None
+) -> ExplorerArticleDetail:
     point_model = (
         _to_point_model(detail.point, neighbor_count=len(detail.neighbors))
         if detail.point is not None
@@ -124,6 +128,7 @@ def _to_article_detail_response(detail: ExplorerArticleDetailRecord) -> Explorer
         projection_set=detail.projection_set,
         point=point_model,
         semantic_summary=semantic_summary,
+        editorial=editorial,
         neighbors=[ExplorerNeighbor(**neighbor.model_dump()) for neighbor in detail.neighbors],
     )
 

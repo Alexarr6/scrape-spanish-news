@@ -3,6 +3,51 @@ from __future__ import annotations
 from pydantic import BaseModel, Field
 
 
+class ExplorerEditorialEvidence(BaseModel):
+    type: str
+    text: str
+    note: str = ""
+
+
+class ExplorerEditorialReviewFlags(BaseModel):
+    missing_evidence: bool = False
+    low_confidence: bool = False
+    failed_analysis: bool = False
+    unclear_bias: bool = False
+    provider_missing: bool = False
+    mapping_loss: bool = False
+    out_of_domain: bool = False
+    pending_analysis: bool = False
+    needs_review: bool = False
+
+
+class ExplorerEditorialDiagnosticsSummary(BaseModel):
+    dimension_status: dict[str, str] = Field(default_factory=dict)
+
+
+class ExplorerEditorialSummary(BaseModel):
+    article_id: int
+    analysis_status: str = "pending"
+    editorial_applicability: str = "full"
+    editorial_applicability_reason: str = "general_editorial_content"
+    article_type: str = "unclear"
+    article_type_confidence: float = 0.0
+    bias_label: str = "unclear"
+    bias_score: float = 0.0
+    bias_confidence: float = 0.0
+    tone_emotional: str = "unclear"
+    tone_target: str = "unclear"
+    opinionatedness: str = "unclear"
+    sensationalism: str = "unclear"
+    rhetorical_certainty: str = "unclear"
+    framing_devices: list[str] = Field(default_factory=list)
+    evidence_spans: list[ExplorerEditorialEvidence] = Field(default_factory=list)
+    rationale: str = ""
+    unclear_reasons: list[str] = Field(default_factory=list)
+    review_flags: ExplorerEditorialReviewFlags = Field(default_factory=ExplorerEditorialReviewFlags)
+    diagnostics_summary: ExplorerEditorialDiagnosticsSummary | None = None
+
+
 class ExplorerSemanticSummary(BaseModel):
     cluster_id: int | None = None
     cluster_size: int | None = None
@@ -112,4 +157,5 @@ class ExplorerArticleDetail(BaseModel):
     projection_set: str
     point: ExplorerPoint | None = None
     semantic_summary: ExplorerSemanticSummary = Field(default_factory=ExplorerSemanticSummary)
+    editorial: ExplorerEditorialSummary | None = None
     neighbors: list[ExplorerNeighbor] = Field(default_factory=list)
