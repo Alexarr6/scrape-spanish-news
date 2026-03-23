@@ -20,6 +20,12 @@ class _Settings:
     provider_label = "openrouter"
 
 
+class _CustomSettings:
+    model = "custom/test-model"
+    prompt_version = "v1"
+    provider_label = "custom"
+
+
 VALID_PAYLOAD = {
     "article_type": "news_report",
     "article_type_confidence": 0.81,
@@ -47,10 +53,9 @@ VALID_PAYLOAD = {
 
 
 class _FakeLLM:
-    settings = _Settings()
-
-    def __init__(self, result: EditorialAnalysisResult) -> None:
+    def __init__(self, result: EditorialAnalysisResult, *, settings=None) -> None:
         self.result = result
+        self.settings = settings or _Settings()
 
     def analyze_editorial(self, *, article_prompt: str, schema: dict[str, object]):
         assert "ARTICLE_METADATA:" in article_prompt
@@ -215,11 +220,12 @@ def test_editorial_pipeline_marks_failed_rows_for_incompatible_provider() -> Non
                     request_accepted=False,
                     failure_class="provider_incompatible_schema",
                     failure_message=(
-                        "provider 'openrouter' does not support editorial strict schema"
+                        "provider 'custom' does not support editorial strict schema"
                     ),
                 ),
             )
-        )
+        ),
+        settings=_CustomSettings(),
     )
 
     metrics = pipeline.analyze_articles(days_back=10, limit=10)

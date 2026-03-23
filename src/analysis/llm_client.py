@@ -63,7 +63,11 @@ FailureClass = Literal[
     "unknown_response_shape",
 ]
 SchemaMode = Literal["strict_json_schema", "fallback_json_text"]
-EditorialAPIMode = Literal["chat_completions_parse", "unsupported"]
+EditorialAPIMode = Literal[
+    "chat_completions_parse",
+    "chat_completions_json_schema",
+    "unsupported",
+]
 
 
 @dataclass(frozen=True)
@@ -130,8 +134,8 @@ class LLMSettings:
         if "openrouter.ai" in self.base_url.lower():
             return LLMProviderProfile(
                 provider_id="openrouter",
-                supports_editorial_strict_schema=False,
-                editorial_api_mode="unsupported",
+                supports_editorial_strict_schema=True,
+                editorial_api_mode="chat_completions_json_schema",
             )
         return LLMProviderProfile(
             provider_id="custom",
@@ -235,8 +239,31 @@ class LLMClient:
                     ),
                 )
             )
+        if profile.editorial_api_mode == "chat_completions_parse":
+            return EditorialAnalysisResult(
+                attempts=(self._run_editorial_strict_attempt(article_prompt=article_prompt),)
+            )
+        if profile.editorial_api_mode == "chat_completions_json_schema":
+            return EditorialAnalysisResult(
+                attempts=(
+                    self._run_editorial_openrouter_attempt(
+                        article_prompt=article_prompt,
+                        schema=schema,
+                    ),
+                )
+            )
         return EditorialAnalysisResult(
-            attempts=(self._run_editorial_strict_attempt(article_prompt=article_prompt),)
+            attempts=(
+                EditorialAnalysisAttempt(
+                    mode="strict_json_schema",
+                    request_accepted=False,
+                    failure_class="provider_incompatible_schema",
+                    failure_message=(
+                        f"provider {profile.provider_id!r} does not support "
+                        "editorial strict schema"
+                    ),
+                ),
+            )
         )
 
     def _run_editorial_strict_attempt(self, *, article_prompt: str) -> EditorialAnalysisAttempt:
@@ -331,6 +358,139 @@ class LLMClient:
             raw_response=raw_response,
             raw_message=raw_message,
             raw_content=json.dumps(parsed_json, ensure_ascii=False),
+            parsed_json=parsed_json,
+            diagnostics=diagnostics,
+        )
+
+    def _run_editorial_openrouter_attempt(
+        self,
+        *,
+        article_prompt: str,
+        schema: dict[str, Any],
+    ) -> EditorialAnalysisAttempt:
+        messages = [
+            {"role": "system", "content": self._editorial_system_prompt("strict_json_schema")},
+            {"role": "user", "content": article_prompt},
+        ]
+        request_kwargs: dict[str, Any] = {
+            "model": self.settings.model,
+            "messages": messages,
+            "response_format": {
+                "type": "json_schema",
+                "json_schema": {
+                    "name": "article_editorial_analysis",
+                    "strict": True,
+                    "schema": schema,
+                },
+            },
+            "extra_body": {"provider": self._openrouter_provider_preferences()},
+        }
+        try:
+            response = self._client.chat.completions.create(**request_kwargs)
+        except BadRequestError as exc:
+            failure_class = (
+                "provider_schema_rejected"
+                if "schema" in str(exc).lower() or "response_format" in str(exc).lower()
+                else "provider_request_failed"
+            )
+            return EditorialAnalysisAttempt(
+                mode="strict_json_schema",
+                request_accepted=False,
+                failure_class=failure_class,
+                failure_message=str(exc),
+            )
+        except Exception as exc:
+            return EditorialAnalysisAttempt(
+                mode="strict_json_schema",
+                request_accepted=False,
+                failure_class="provider_request_failed",
+                failure_message=str(exc),
+            )
+
+        usage = self._normalize_usage(getattr(response, "usage", None))
+        raw_response = self._safe_dump_model(response)
+        choice = response.choices[0] if getattr(response, "choices", None) else None
+        message = getattr(choice, "message", None)
+        raw_message = self._safe_dump_model(message)
+        refusal = getattr(message, "refusal", None) if message is not None else None
+        if refusal:
+            return EditorialAnalysisAttempt(
+                mode="strict_json_schema",
+                request_accepted=True,
+                usage=usage,
+                failure_class="refusal_or_blocked",
+                failure_message=str(refusal),
+                raw_response=raw_response,
+                raw_message=raw_message,
+            )
+
+        extracted_content, content_error = self._extract_message_content(message)
+        if content_error is not None or extracted_content is None:
+            return EditorialAnalysisAttempt(
+                mode="strict_json_schema",
+                request_accepted=True,
+                usage=usage,
+                failure_class=content_error or "unknown_response_shape",
+                failure_message="assistant content missing or unusable",
+                raw_response=raw_response,
+                raw_message=raw_message,
+            )
+        try:
+            parsed_json = json.loads(extracted_content)
+        except json.JSONDecodeError as exc:
+            cleaned = self._extract_json_block(extracted_content)
+            if cleaned is None:
+                return EditorialAnalysisAttempt(
+                    mode="strict_json_schema",
+                    request_accepted=True,
+                    usage=usage,
+                    failure_class="non_json_content",
+                    failure_message=str(exc),
+                    raw_response=raw_response,
+                    raw_message=raw_message,
+                    raw_content=extracted_content,
+                )
+            try:
+                parsed_json = json.loads(cleaned)
+                extracted_content = cleaned
+            except json.JSONDecodeError as retry_exc:
+                return EditorialAnalysisAttempt(
+                    mode="strict_json_schema",
+                    request_accepted=True,
+                    usage=usage,
+                    failure_class="json_parse_failed",
+                    failure_message=str(retry_exc),
+                    raw_response=raw_response,
+                    raw_message=raw_message,
+                    raw_content=extracted_content,
+                )
+        try:
+            payload = ArticleEditorialAnalysisPayload.model_validate(parsed_json)
+        except ValidationError as exc:
+            return EditorialAnalysisAttempt(
+                mode="strict_json_schema",
+                request_accepted=True,
+                usage=usage,
+                failure_class="payload_validation_failed",
+                failure_message=str(exc),
+                raw_response=raw_response,
+                raw_message=raw_message,
+                raw_content=extracted_content,
+                parsed_json=parsed_json,
+            )
+
+        diagnostics = build_editorial_diagnostics_from_payload(
+            payload,
+            provider_path="strict_success",
+        )
+        return EditorialAnalysisAttempt(
+            mode="strict_json_schema",
+            request_accepted=True,
+            payload=payload,
+            usage=usage,
+            raw_response=raw_response,
+            raw_message=raw_message,
+            raw_content=extracted_content,
             parsed_json=parsed_json,
             diagnostics=diagnostics,
         )
@@ -578,6 +738,15 @@ class LLMClient:
         if hasattr(value, "model_dump"):
             return value.model_dump(mode="json")
         return value
+
+    def _openrouter_provider_preferences(self) -> dict[str, Any]:
+        preferences: dict[str, Any] = {
+            "require_parameters": True,
+            "allow_fallbacks": False,
+        }
+        if self.settings.model.startswith("openai/"):
+            preferences["only"] = ["openai"]
+        return preferences
 
 
 def build_prompt(

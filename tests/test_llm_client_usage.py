@@ -98,8 +98,8 @@ def test_llm_settings_accepts_custom_base_url_and_openrouter_fallback(monkeypatc
     assert settings.model == "minimax/minimax-m2.7"
     assert settings.base_url == "https://openrouter.ai/api/v1"
     assert settings.provider_label == "openrouter"
-    assert settings.provider_profile.supports_editorial_strict_schema is False
-    assert settings.provider_profile.editorial_api_mode == "unsupported"
+    assert settings.provider_profile.supports_editorial_strict_schema is True
+    assert settings.provider_profile.editorial_api_mode == "chat_completions_json_schema"
 
 
 def test_empty_generic_base_url_overrides_legacy_openrouter_base_url(monkeypatch) -> None:
