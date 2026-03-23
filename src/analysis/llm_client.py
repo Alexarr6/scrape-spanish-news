@@ -72,9 +72,7 @@ class LLMSettings:
     @classmethod
     def from_env(cls) -> "LLMSettings | None":
         model = _first_env("LLM_MODEL", "OPENAI_MODEL", "OPENROUTER_MODEL")
-        base_url = _normalized_base_url(
-            _first_env("LLM_BASE_URL", "OPENAI_BASE_URL", "OPENROUTER_BASE_URL")
-        )
+        base_url = _resolve_base_url()
         api_key = _resolve_api_key(base_url=base_url)
         if not api_key or not model:
             return None
@@ -535,6 +533,13 @@ def _normalized_base_url(value: str) -> str | None:
     if not cleaned or cleaned.lower() in {"none", "null", "default", "openai"}:
         return None
     return cleaned
+
+
+def _resolve_base_url() -> str | None:
+    for name in ("LLM_BASE_URL", "OPENAI_BASE_URL", "OPENROUTER_BASE_URL"):
+        if name in os.environ:
+            return _normalized_base_url(os.environ.get(name, ""))
+    return None
 
 
 def _parse_int_env(default: str, *names: str) -> int:

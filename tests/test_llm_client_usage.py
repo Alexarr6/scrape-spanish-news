@@ -96,3 +96,17 @@ def test_llm_settings_accepts_custom_base_url_and_openrouter_fallback(monkeypatc
     assert settings.model == "minimax/minimax-m2.7"
     assert settings.base_url == "https://openrouter.ai/api/v1"
     assert settings.provider_label == "openrouter"
+
+
+def test_empty_generic_base_url_overrides_legacy_openrouter_base_url(monkeypatch) -> None:
+    monkeypatch.setenv("OPENAI_API_KEY", "openai-key")
+    monkeypatch.setenv("LLM_MODEL", "gpt-5-mini")
+    monkeypatch.setenv("LLM_BASE_URL", "")
+    monkeypatch.setenv("OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1")
+
+    settings = LLMSettings.from_env()
+
+    assert settings is not None
+    assert settings.api_key == "openai-key"
+    assert settings.base_url is None
+    assert settings.provider_label == "openai"
