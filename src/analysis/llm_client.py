@@ -7,47 +7,52 @@ from pathlib import Path
 from typing import Any, Literal
 
 from openai import BadRequestError, OpenAI
+from pydantic import ValidationError
 
 from src.analysis.contracts import (
+    ArticleEditorialAnalysisPayload,
     ArticleEnrichmentPayload,
     EditorialAnalysisDiagnostics,
     OpenRouterUsage,
 )
 from src.analysis.editorial_normalization import (
     EditorialNormalizationError,
+    build_editorial_diagnostics_from_payload,
     normalize_editorial_payload,
 )
 from src.analysis.schemas import (
     editorial_analysis_json_schema as build_editorial_analysis_json_schema,
 )
-from src.analysis.schemas import enrichment_json_schema as build_enrichment_json_schema
+from src.analysis.schemas import (
+    editorial_analysis_raw_json_schema as build_editorial_analysis_raw_json_schema,
+)
+from src.analysis.schemas import (
+    enrichment_json_schema as build_enrichment_json_schema,
+)
 
 OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1"
 EDITORIAL_ANALYSIS_SYSTEM_PROMPT = """You are classifying a Spanish news article.
 Perform editorial analysis conservatively.
 
-Your task is to produce one conservative, evidence-backed canonical JSON object that classifies:
-- article type
-- ideological bias framing
-- tone dimensions
-- framing devices
-- rationale
-- evidence spans
+Your task is to produce one conservative, evidence-backed canonical JSON object using exactly
+the schema provided by the API response_format.
 
 Rules:
 1. Return strict JSON only.
-2. Use the canonical field names and canonical taxonomy values whenever possible.
+2. Use only the canonical field names and canonical taxonomy values from the schema.
 3. Classify the article itself, not the outlet's reputation.
 4. Be conservative. If evidence is weak or mixed, use `unclear` and lower confidence.
 5. Do not infer ideology solely from topic. Use framing, wording, emphasis, and source treatment.
 6. Distinguish between the article's own framing and quotations from sources.
 7. Evidence spans must quote real text from the provided article content.
-8. `framing_devices` must be an array of canonical string codes, not an object map.
-9. Keep rationale concise and specific."""
+8. Do not invent helper keys, alternate taxonomies, nested diagnostic objects, or free-form hints.
+9. `framing_devices` must be an array of canonical string codes.
+10. Keep rationale concise and specific."""
 EDITORIAL_ANALYSIS_SCHEMA_VERSION = "editorial-analysis-v1-normalized"
 EDITORIAL_ANALYSIS_SOURCE_TEXT_VERSION = "title_summary_body_v1"
 
 FailureClass = Literal[
+    "provider_incompatible_schema",
     "provider_schema_rejected",
     "provider_request_failed",
     "empty_content",
@@ -58,6 +63,14 @@ FailureClass = Literal[
     "unknown_response_shape",
 ]
 SchemaMode = Literal["strict_json_schema", "fallback_json_text"]
+EditorialAPIMode = Literal["chat_completions_parse", "unsupported"]
+
+
+@dataclass(frozen=True)
+class LLMProviderProfile:
+    provider_id: Literal["openai", "openrouter", "custom"]
+    supports_editorial_strict_schema: bool
+    editorial_api_mode: EditorialAPIMode
 
 
 @dataclass(frozen=True)
@@ -104,11 +117,27 @@ class LLMSettings:
 
     @property
     def provider_label(self) -> str:
+        return self.provider_profile.provider_id
+
+    @property
+    def provider_profile(self) -> LLMProviderProfile:
         if not self.base_url:
-            return "openai"
+            return LLMProviderProfile(
+                provider_id="openai",
+                supports_editorial_strict_schema=True,
+                editorial_api_mode="chat_completions_parse",
+            )
         if "openrouter.ai" in self.base_url.lower():
-            return "openrouter"
-        return "custom"
+            return LLMProviderProfile(
+                provider_id="openrouter",
+                supports_editorial_strict_schema=False,
+                editorial_api_mode="unsupported",
+            )
+        return LLMProviderProfile(
+            provider_id="custom",
+            supports_editorial_strict_schema=False,
+            editorial_api_mode="unsupported",
+        )
 
 
 @dataclass(frozen=True)
@@ -191,23 +220,120 @@ class LLMClient:
     def analyze_editorial(
         self, *, article_prompt: str, schema: dict[str, Any]
     ) -> EditorialAnalysisResult:
-        strict_attempt = self._run_editorial_attempt(
-            article_prompt=article_prompt,
-            schema=schema,
-            mode="strict_json_schema",
-        )
-        attempts = [strict_attempt]
-        if strict_attempt.payload is not None:
-            return EditorialAnalysisResult(attempts=tuple(attempts))
-        if self._should_retry_with_fallback(strict_attempt):
-            attempts.append(
-                self._run_editorial_attempt(
-                    article_prompt=article_prompt,
-                    schema=schema,
-                    mode="fallback_json_text",
+        profile = self.settings.provider_profile
+        if not profile.supports_editorial_strict_schema:
+            return EditorialAnalysisResult(
+                attempts=(
+                    EditorialAnalysisAttempt(
+                        mode="strict_json_schema",
+                        request_accepted=False,
+                        failure_class="provider_incompatible_schema",
+                        failure_message=(
+                            f"provider {profile.provider_id!r} does not support "
+                            "editorial strict schema"
+                        ),
+                    ),
                 )
             )
-        return EditorialAnalysisResult(attempts=tuple(attempts))
+        return EditorialAnalysisResult(
+            attempts=(self._run_editorial_strict_attempt(article_prompt=article_prompt),)
+        )
+
+    def _run_editorial_strict_attempt(self, *, article_prompt: str) -> EditorialAnalysisAttempt:
+        messages = [
+            {"role": "system", "content": self._editorial_system_prompt("strict_json_schema")},
+            {"role": "user", "content": article_prompt},
+        ]
+        try:
+            response = self._client.chat.completions.parse(
+                model=self.settings.model,
+                messages=messages,
+                response_format=ArticleEditorialAnalysisPayload,
+            )
+        except BadRequestError as exc:
+            failure_class = (
+                "provider_schema_rejected"
+                if "schema" in str(exc).lower() or "response_format" in str(exc).lower()
+                else "provider_request_failed"
+            )
+            return EditorialAnalysisAttempt(
+                mode="strict_json_schema",
+                request_accepted=False,
+                failure_class=failure_class,
+                failure_message=str(exc),
+            )
+        except Exception as exc:
+            return EditorialAnalysisAttempt(
+                mode="strict_json_schema",
+                request_accepted=False,
+                failure_class="provider_request_failed",
+                failure_message=str(exc),
+            )
+
+        usage = self._normalize_usage(getattr(response, "usage", None))
+        raw_response = self._safe_dump_model(response)
+        choice = response.choices[0] if getattr(response, "choices", None) else None
+        message = getattr(choice, "message", None)
+        raw_message = self._safe_dump_model(message)
+        refusal = getattr(message, "refusal", None) if message is not None else None
+        if refusal:
+            return EditorialAnalysisAttempt(
+                mode="strict_json_schema",
+                request_accepted=True,
+                usage=usage,
+                failure_class="refusal_or_blocked",
+                failure_message=str(refusal),
+                raw_response=raw_response,
+                raw_message=raw_message,
+            )
+
+        parsed = getattr(message, "parsed", None) if message is not None else None
+        if parsed is None:
+            extracted_content, content_error = self._extract_message_content(message)
+            return EditorialAnalysisAttempt(
+                mode="strict_json_schema",
+                request_accepted=True,
+                usage=usage,
+                failure_class=content_error or "unknown_response_shape",
+                failure_message="assistant parsed payload missing",
+                raw_response=raw_response,
+                raw_message=raw_message,
+                raw_content=extracted_content,
+            )
+
+        try:
+            payload = ArticleEditorialAnalysisPayload.model_validate(
+                parsed.model_dump(mode="json") if hasattr(parsed, "model_dump") else parsed
+            )
+        except ValidationError as exc:
+            extracted_content, _ = self._extract_message_content(message)
+            return EditorialAnalysisAttempt(
+                mode="strict_json_schema",
+                request_accepted=True,
+                usage=usage,
+                failure_class="payload_validation_failed",
+                failure_message=str(exc),
+                raw_response=raw_response,
+                raw_message=raw_message,
+                raw_content=extracted_content,
+            )
+
+        parsed_json = payload.model_dump(mode="json")
+        diagnostics = build_editorial_diagnostics_from_payload(
+            payload,
+            provider_path="strict_success",
+        )
+        return EditorialAnalysisAttempt(
+            mode="strict_json_schema",
+            request_accepted=True,
+            payload=payload,
+            usage=usage,
+            raw_response=raw_response,
+            raw_message=raw_message,
+            raw_content=json.dumps(parsed_json, ensure_ascii=False),
+            parsed_json=parsed_json,
+            diagnostics=diagnostics,
+        )
 
     def _run_editorial_attempt(
         self,
@@ -493,8 +619,8 @@ def build_editorial_analysis_prompt(
     return (
         "Analyze the following article and return one canonical JSON object "
         "for editorial analysis.\n"
-        "Use the system taxonomy directly. Keep auxiliary notes brief and optional, "
-        "but the primary fields must stay canonical.\n\n"
+        "Use only the canonical schema fields. Do not return helper fields such as "
+        "`ideological_bias_framing`, `tone_dimensions`, `notes`, or `uncertainty_reason`.\n\n"
         "ARTICLE_METADATA:\n"
         f"- source: {source}\n"
         f"- section: {section}\n"
@@ -518,6 +644,10 @@ def enrichment_json_schema() -> dict[str, Any]:
 
 def editorial_analysis_json_schema() -> dict[str, Any]:
     return build_editorial_analysis_json_schema()
+
+
+def editorial_analysis_raw_json_schema() -> dict[str, Any]:
+    return build_editorial_analysis_raw_json_schema()
 
 
 def _first_env(*names: str) -> str:

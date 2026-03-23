@@ -6,7 +6,10 @@ from typing import Any
 from pydantic import BaseModel
 
 from src.analysis.contracts import ArticleEnrichmentPayload
-from src.analysis.editorial.core import ArticleEditorialAnalysisRawPayload
+from src.analysis.editorial.core import (
+    ArticleEditorialAnalysisPayload,
+    ArticleEditorialAnalysisRawPayload,
+)
 
 _PROVIDER_NOISE_KEYS = {"default", "title", "examples"}
 
@@ -19,6 +22,13 @@ def enrichment_json_schema() -> dict[str, Any]:
 
 
 def editorial_analysis_json_schema() -> dict[str, Any]:
+    schema = _provider_schema(ArticleEditorialAnalysisPayload)
+    schema.setdefault("additionalProperties", False)
+    schema["required"] = list(ArticleEditorialAnalysisPayload.model_fields)
+    return schema
+
+
+def editorial_analysis_raw_json_schema() -> dict[str, Any]:
     schema = _provider_schema(ArticleEditorialAnalysisRawPayload)
     schema["required"] = ["article_type", "framing_devices", "evidence_spans", "rationale"]
     return schema

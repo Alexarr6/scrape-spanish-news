@@ -80,6 +80,8 @@ def test_llm_settings_prefers_generic_env_and_defaults_to_openai_when_no_base_ur
     assert settings.model == "gpt-5-mini"
     assert settings.base_url is None
     assert settings.provider_label == "openai"
+    assert settings.provider_profile.supports_editorial_strict_schema is True
+    assert settings.provider_profile.editorial_api_mode == "chat_completions_parse"
 
 
 def test_llm_settings_accepts_custom_base_url_and_openrouter_fallback(monkeypatch) -> None:
@@ -96,6 +98,8 @@ def test_llm_settings_accepts_custom_base_url_and_openrouter_fallback(monkeypatc
     assert settings.model == "minimax/minimax-m2.7"
     assert settings.base_url == "https://openrouter.ai/api/v1"
     assert settings.provider_label == "openrouter"
+    assert settings.provider_profile.supports_editorial_strict_schema is False
+    assert settings.provider_profile.editorial_api_mode == "unsupported"
 
 
 def test_empty_generic_base_url_overrides_legacy_openrouter_base_url(monkeypatch) -> None:
@@ -110,3 +114,15 @@ def test_empty_generic_base_url_overrides_legacy_openrouter_base_url(monkeypatch
     assert settings.api_key == "openai-key"
     assert settings.base_url is None
     assert settings.provider_label == "openai"
+
+
+def test_custom_base_url_is_not_editorial_strict_capable(monkeypatch) -> None:
+    monkeypatch.setenv("LLM_API_KEY", "generic-key")
+    monkeypatch.setenv("LLM_MODEL", "custom/model")
+    monkeypatch.setenv("LLM_BASE_URL", "https://example.com/v1")
+
+    settings = LLMSettings.from_env()
+
+    assert settings is not None
+    assert settings.provider_label == "custom"
+    assert settings.provider_profile.supports_editorial_strict_schema is False

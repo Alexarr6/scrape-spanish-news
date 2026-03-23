@@ -11,6 +11,7 @@ from src.analysis.contracts import (
 from src.analysis.llm_client import (
     build_editorial_analysis_prompt,
     editorial_analysis_json_schema,
+    editorial_analysis_raw_json_schema,
     enrichment_json_schema,
 )
 
@@ -103,7 +104,7 @@ def test_raw_editorial_payload_accepts_permissive_shape_variation() -> None:
     assert payload.rationale["summary"].startswith("Texto factual")
 
 
-def test_editorial_prompt_and_schema_expose_raw_generation_contract() -> None:
+def test_editorial_prompt_and_schema_expose_canonical_generation_contract() -> None:
     prompt = build_editorial_analysis_prompt(
         source="elpais",
         section="politica",
@@ -118,20 +119,30 @@ def test_editorial_prompt_and_schema_expose_raw_generation_contract() -> None:
     assert "ARTICLE_METADATA:" in prompt
     assert "TITLE: Título" in prompt
     assert "canonical JSON object" in prompt
-    assert schema["additionalProperties"] is True
-    assert "ideological_bias_framing" in schema["properties"]
-    assert "tone_dimensions" in schema["properties"]
-    assert "anyOf" in schema["properties"]["framing_devices"]
-    assert "anyOf" in schema["properties"]["evidence_spans"]
-    assert "anyOf" in schema["properties"]["confidence"]
+    assert "Do not return helper fields" in prompt
+    assert schema["additionalProperties"] is False
+    assert "bias_label" in schema["properties"]
+    assert "ideological_bias_framing" not in schema["properties"]
+    assert "tone_dimensions" not in schema["properties"]
+    assert "confidence" not in schema["properties"]
+    assert "evidence_spans" in schema["required"]
 
 
 def test_editorial_schema_is_model_driven_and_keeps_required_provider_fields() -> None:
     schema = editorial_analysis_json_schema()
 
-    assert schema["required"] == ["article_type", "framing_devices", "evidence_spans", "rationale"]
+    assert set(schema["required"]) == set(ArticleEditorialAnalysisPayload.model_fields)
     assert "title" not in schema
     assert "default" not in schema["properties"]["article_type"]
+
+
+def test_editorial_raw_schema_still_exposes_permissive_legacy_contract() -> None:
+    schema = editorial_analysis_raw_json_schema()
+
+    assert schema["additionalProperties"] is True
+    assert "ideological_bias_framing" in schema["properties"]
+    assert "tone_dimensions" in schema["properties"]
+    assert "anyOf" in schema["properties"]["framing_devices"]
 
 
 def test_enrichment_schema_matches_canonical_pydantic_contract() -> None:

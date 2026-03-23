@@ -21,13 +21,13 @@ from src.analysis.contracts import (
     EditorialAnalysisDiagnostics,
     EditorialAnalysisRunMetrics,
     EditorialCompletedPersistence,
-    EditorialDimensionDiagnostic,
     EditorialFailurePersistence,
     EnrichmentRunMetrics,
     PairScoreArtifact,
     StoryClusterMemberReason,
 )
 from src.analysis.editorial.crud import EditorialAnalysisCRUD
+from src.analysis.editorial_normalization import build_editorial_diagnostics_from_payload
 from src.analysis.heuristics import heuristic_enrichment, title_similarity
 from src.analysis.llm_client import (
     EDITORIAL_ANALYSIS_SCHEMA_VERSION,
@@ -649,57 +649,9 @@ class EditorialAnalysisPipeline:
     def _default_diagnostics_for_payload(
         self, payload: ArticleEditorialAnalysisPayload
     ) -> EditorialAnalysisDiagnostics:
-        return EditorialAnalysisDiagnostics(
+        return build_editorial_diagnostics_from_payload(
+            payload,
             provider_path="pipeline_default",
-            editorial_applicability="full",
-            editorial_applicability_reason="general_editorial_content",
-            dimension_status={
-                "article_type": EditorialDimensionDiagnostic(
-                    value=payload.article_type,
-                    status="resolved",
-                    reason="default_completed_payload",
-                ),
-                "bias": EditorialDimensionDiagnostic(
-                    value=payload.bias_label,
-                    status="resolved",
-                    reason="default_completed_payload",
-                ),
-                "tone_emotional": EditorialDimensionDiagnostic(
-                    value=payload.tone_emotional,
-                    status="resolved",
-                    reason="default_completed_payload",
-                ),
-                "tone_target": EditorialDimensionDiagnostic(
-                    value=payload.tone_target,
-                    status="resolved",
-                    reason="default_completed_payload",
-                ),
-                "opinionatedness": EditorialDimensionDiagnostic(
-                    value=payload.opinionatedness,
-                    status="resolved",
-                    reason="default_completed_payload",
-                ),
-                "sensationalism": EditorialDimensionDiagnostic(
-                    value=payload.sensationalism,
-                    status="resolved",
-                    reason="default_completed_payload",
-                ),
-                "rhetorical_certainty": EditorialDimensionDiagnostic(
-                    value=payload.rhetorical_certainty,
-                    status="resolved",
-                    reason="default_completed_payload",
-                ),
-                "framing": EditorialDimensionDiagnostic(
-                    value=(
-                        ",".join(payload.framing_devices)
-                        if payload.framing_devices
-                        else "unclear"
-                    ),
-                    status="resolved" if payload.framing_devices else "weak_signal_abstain",
-                    reason="default_completed_payload",
-                ),
-            },
-            unclear_reasons=[],
         )
 
     def _persist_editorial_failure(
