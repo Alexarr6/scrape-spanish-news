@@ -19,6 +19,7 @@ def run_layered_discovery(
     accept: Callable[[str, set[str]], bool],
     layers: list[DiscoveryLayer],
     reject_noise: Callable[[str], bool] | None = None,
+    order_candidates: Callable[[list[str]], list[str]] | None = None,
 ) -> tuple[list[str], list[dict]]:
     urls: list[str] = []
     seen: set[str] = set()
@@ -32,6 +33,8 @@ def run_layered_discovery(
             continue
 
         candidates, errors = layer.load_candidates()
+        if order_candidates is not None:
+            candidates = order_candidates(candidates)
         accepted = 0
         rejected_noise = 0
         stop_reason = "completed"

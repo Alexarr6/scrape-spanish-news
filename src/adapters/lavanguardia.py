@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from src.adapters.layered_discovery import DiscoveryLayer, run_layered_discovery
 from src.adapters.rss_adapter import GenericRSSAdapter
-from src.adapters.url_filters import is_probable_noise_url
+from src.adapters.url_filters import freshness_priority_key, is_probable_noise_url
 from src.core.adapter import RunConfig
 from src.core.strategies.metrics import build_strategy_metrics_envelope
 
@@ -31,11 +31,11 @@ class LaVanguardiaAdapter(GenericRSSAdapter):
         self._strategy_metrics: list[dict] = []
 
     def discover(self, target_date: str, cfg: RunConfig) -> list[str]:
-        del target_date
         urls, metrics = run_layered_discovery(
             cfg=cfg,
             accept=self._accept,
             reject_noise=self._reject_noise,
+            order_candidates=lambda candidates: self._order_candidates(candidates, target_date),
             layers=[
                 DiscoveryLayer(
                     strategy_name="rss_discovery",
@@ -84,3 +84,6 @@ class LaVanguardiaAdapter(GenericRSSAdapter):
 
     def _reject_noise(self, link: str) -> bool:
         return is_probable_noise_url(link)
+
+    def _order_candidates(self, candidates: list[str], target_date: str) -> list[str]:
+        return sorted(candidates, key=lambda link: freshness_priority_key(link, target_date))

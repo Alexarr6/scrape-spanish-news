@@ -1,6 +1,7 @@
 import unittest
 
 from src.adapters.abc import ABCAdapter
+from src.adapters.url_filters import is_probable_noise_url
 from src.core.adapter import RunConfig
 
 
@@ -16,6 +17,36 @@ class ABCTests(unittest.TestCase):
         seen = set()
         self.assertTrue(adapter._accept("https://www.abc.es/espana/x.html", seen))
         self.assertFalse(adapter._accept("https://www.abc.es/cultura/x.html", seen))
+
+    def test_rejects_static_asset_noise_url(self):
+        self.assertTrue(
+            is_probable_noise_url(
+                "https://www.abc.es/media/espana/2026/03/23/imagen.jpg"
+            )
+        )
+
+    def test_discover_prioritizes_fresh_urls_and_drops_assets(self):
+        adapter = ABCAdapter()
+        adapter._discover_links_from_feeds = lambda feeds: (
+            [
+                "https://www.abc.es/espana/2026/03/20/older.html",
+                "https://www.abc.es/espana/2026/03/23/fresh.html",
+                "https://www.abc.es/espana/2026/03/23/cover.jpg",
+            ],
+            0,
+        )
+        adapter._discover_links_from_sitemaps = lambda sitemaps: ([], 0)
+        adapter._discover_links_from_html_pages = lambda pages: ([], 0)
+
+        urls = adapter.discover("2026-03-23", RunConfig(max_discovery_urls=10))
+
+        self.assertEqual(
+            urls,
+            [
+                "https://www.abc.es/espana/2026/03/23/fresh.html",
+                "https://www.abc.es/espana/2026/03/20/older.html",
+            ],
+        )
 
     def test_run_emits_strategy_metrics_envelope(self):
         adapter = ABCAdapter()

@@ -1,3 +1,42 @@
+## 2026-03-23 — implementer pass for iter/007 Phase C freshness-first discovery hardening
+
+**Role:** implementer  
+**Outcome:** ✅ Complete  
+**Scope:** bounded scrape-quality fix for ABC + La Vanguardia candidate filtering/ordering per Phase C architect review
+
+### What I accomplished
+- stopped discarding `target_date` inside the ABC and La Vanguardia adapters, because throwing away the freshness signal was obviously sabotaging the whole exercise
+- added shared URL hardening in `src/adapters/url_filters.py` so obvious static asset URLs (`.jpg`, `.png`, `.webp`, etc.) get rejected as noise before they can waste extraction budget
+- added a modest shared URL-date heuristic for path shapes like `YYYY/MM/DD` and `YYYY-MM-DD`
+- extended `run_layered_discovery()` with an optional candidate-ordering hook so layered adapters can rank candidates before the extraction loop starts burning through its 120-slot budget
+- updated `ABCAdapter` and `LaVanguardiaAdapter` to sort candidates freshness-first against `target_date`, which pushes same-day / near-day URLs ahead of stale sitemap leftovers
+- kept the change intentionally bounded to the architect’s recommendation instead of turning it into a giant source-balancing rewrite cosplay
+
+### Files changed
+- `src/adapters/abc.py`
+- `src/adapters/lavanguardia.py`
+- `src/adapters/layered_discovery.py`
+- `src/adapters/url_filters.py`
+- `tests/test_abc_adapter.py`
+- `tests/test_lavanguardia_adapter.py`
+- `tests/test_layered_discovery.py`
+- `STATUS.md`
+- `RESULTS.md`
+
+### Verification
+Commands run:
+- `PYTHONPATH=.venv/lib/python3.11/site-packages python3 -m pytest tests/test_abc_adapter.py tests/test_lavanguardia_adapter.py tests/test_layered_discovery.py tests/test_rss_adapter_extraction.py`
+- `.venv/bin/ruff check src/adapters/abc.py src/adapters/lavanguardia.py src/adapters/url_filters.py src/adapters/layered_discovery.py tests/test_abc_adapter.py tests/test_lavanguardia_adapter.py tests/test_layered_discovery.py`
+
+Results:
+- targeted pytest slice: `13 passed`
+- targeted lint: passed
+
+### Relevant notes for the next pass
+- this is the right fix for the diagnosed upstream waste: better ordering and earlier junk rejection before downstream caps amplify the skew
+- it is still heuristic, deliberately so; I did not make URL-date parsing aggressive enough to start silently dropping undated legit article pages
+- if final review still sees structural source skew, the next bounded move should be downstream source-aware windowing or elDiario skip-threshold refinement, not pretending ABC/LV intake waste was fine
+
 ## 2026-03-23 — implementer anti-bridge clustering pass for iter/007 Phase B
 
 **Role:** implementer  
