@@ -93,6 +93,8 @@ DimensionStatus = Literal[
 
 
 class ArticleEditorialEvidenceSpan(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     type: Literal["headline", "summary", "body"]
     text: str = Field(min_length=3, max_length=400)
     note: str = Field(min_length=3, max_length=240)

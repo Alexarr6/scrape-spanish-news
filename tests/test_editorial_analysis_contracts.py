@@ -134,6 +134,7 @@ def test_editorial_schema_is_model_driven_and_keeps_required_provider_fields() -
     assert set(schema["required"]) == set(ArticleEditorialAnalysisPayload.model_fields)
     assert "title" not in schema
     assert "default" not in schema["properties"]["article_type"]
+    assert schema["$defs"]["ArticleEditorialEvidenceSpan"]["additionalProperties"] is False
 
 
 def test_editorial_raw_schema_still_exposes_permissive_legacy_contract() -> None:
