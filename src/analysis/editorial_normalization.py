@@ -170,6 +170,16 @@ FRAMING_DEVICE_ALIASES = {
     "impact_amplification": "economic_consequence",
     "quantitative_acceleration": "economic_consequence",
     "scope_expansion": "institutional_stability",
+    "growth_framing": "conflict",
+    "collective_action": "conflict",
+    "grassroots_legitimacy": "identity_culture",
+    "rural_urban_tension": "identity_culture",
+    "preventive_advocacy": "moral_judgment",
+    "accusatory_headline": "conflict",
+    "no_counterbalance": "conflict",
+    "procedural_focus": "institutional_stability",
+    "direct_quote": "institutional_stability",
+    "single_source": "institutional_stability",
     "direct_quotation_of_critical_questions": "conflict",
     "opposition_questions_as_headline_focus": "conflict",
     "multiple_party_coverage_for_balance": "institutional_stability",
@@ -188,7 +198,7 @@ CONFIDENCE_LABEL_ALIASES = {
     "alta": 0.75,
 }
 RAW_EVIDENCE_WORKING_CAP = 6
-RAW_FRAMING_WORKING_CAP = 8
+RAW_FRAMING_WORKING_CAP = 12
 
 
 @dataclass(frozen=True)
@@ -767,6 +777,7 @@ def _extract_bias_hints(repaired: RepairedEditorialPayload) -> list[str]:
             "description",
             "evidence",
             "justification",
+            "notes",
             "framing_summary",
             "source_treatment",
             "classification_notes",
@@ -825,6 +836,7 @@ def _resolve_tone_emotional_source(
         or _extract_nested_choice(tone_dimensions, "emotional_charge")
         or _extract_nested_choice(tone_dimensions, "dramatic")
         or _extract_nested_choice(tone_dimensions, "sentiment")
+        or _infer_tone_emotional_from_hints(tone_dimensions)
     )
 
 
@@ -837,6 +849,7 @@ def _resolve_tone_target_source(
         or _extract_nested_choice(tone_dimensions, "polarity")
         or _extract_nested_choice(tone_dimensions, "government_assessment")
         or _extract_nested_choice(tone_dimensions, "sentiment")
+        or _infer_tone_target_from_hints(tone_dimensions)
     )
 
 
@@ -852,6 +865,7 @@ def _resolve_opinionatedness_source(
         or _extract_nested_choice(tone_dimensions, "subjectivity")
         or _extract_nested_choice(tone_dimensions, "analytical")
         or _extract_nested_choice(tone_dimensions, "informational_balance")
+        or _infer_opinionatedness_from_hints(tone_dimensions)
     )
 
 
@@ -863,6 +877,7 @@ def _resolve_sensationalism_source(
         or _extract_nested_choice(tone_dimensions, "sensationalism")
         or _extract_nested_choice(tone_dimensions, "alarmism")
         or _extract_nested_choice(tone_dimensions, "loaded_language")
+        or _infer_sensationalism_from_hints(tone_dimensions)
     )
 
 
@@ -874,7 +889,116 @@ def _resolve_rhetorical_certainty_source(
         or _extract_nested_choice(tone_dimensions, "rhetorical_certainty")
         or _extract_nested_choice(tone_dimensions, "certainty")
         or _extract_nested_choice(tone_dimensions, "confidence")
+        or _infer_rhetorical_certainty_from_hints(tone_dimensions)
     )
+
+
+def _infer_tone_emotional_from_hints(tone_dimensions: dict[str, Any]) -> str | None:
+    accusatory = _hint_strength(tone_dimensions, "accusatory")
+    critical = _hint_strength(tone_dimensions, "critical")
+    partisanship = _hint_strength(tone_dimensions, "partisancy", "partisan")
+    procedural = _hint_strength(tone_dimensions, "procedural")
+    conflict = _hint_strength(tone_dimensions, "conflict_framing")
+
+    if max(accusatory, critical, partisanship, conflict) >= 3:
+        return "inflammatory"
+    if max(accusatory, critical, partisanship, conflict) >= 2:
+        return "loaded"
+    if procedural >= 2:
+        return "calm"
+    return None
+
+
+def _infer_tone_target_from_hints(tone_dimensions: dict[str, Any]) -> str | None:
+    accusatory = _hint_strength(tone_dimensions, "accusatory")
+    critical = _hint_strength(tone_dimensions, "critical")
+    accountability = _extract_hint_text(tone_dimensions, "accountability_attribution")
+    mobilization = _extract_hint_text(tone_dimensions, "mobilization_framing")
+    procedural = _hint_strength(tone_dimensions, "procedural")
+
+    if accusatory >= 3:
+        return "hostile"
+    if max(accusatory, critical) >= 2:
+        return "critical"
+    if accountability and accountability not in {"none", "neutral", "mixed"}:
+        return "critical"
+    if mobilization and "positive" in mobilization:
+        return "supportive"
+    if procedural >= 2:
+        return "neutral"
+    return None
+
+
+def _infer_opinionatedness_from_hints(tone_dimensions: dict[str, Any]) -> str | None:
+    partisanship = _hint_strength(tone_dimensions, "partisancy", "partisan")
+    accusatory = _hint_strength(tone_dimensions, "accusatory")
+    critical = _hint_strength(tone_dimensions, "critical")
+    mobilization = _extract_hint_text(tone_dimensions, "mobilization_framing")
+    procedural = _hint_strength(tone_dimensions, "procedural")
+
+    if mobilization and any(token in mobilization for token in ("legitimizing", "advocacy")):
+        return "activist"
+    if partisanship >= 2 or max(accusatory, critical) >= 3:
+        return "opinionated"
+    if max(accusatory, critical) >= 2:
+        return "interpretive"
+    if procedural >= 2:
+        return "straight_reporting"
+    return None
+
+
+def _infer_sensationalism_from_hints(tone_dimensions: dict[str, Any]) -> str | None:
+    accusatory = _hint_strength(tone_dimensions, "accusatory")
+    critical = _hint_strength(tone_dimensions, "critical")
+    conflict = _hint_strength(tone_dimensions, "conflict_framing")
+    procedural = _hint_strength(tone_dimensions, "procedural")
+
+    if max(accusatory, critical, conflict) >= 3:
+        return "high"
+    if max(accusatory, critical, conflict) >= 2:
+        return "medium"
+    if procedural >= 2:
+        return "low"
+    return None
+
+
+def _infer_rhetorical_certainty_from_hints(tone_dimensions: dict[str, Any]) -> str | None:
+    accusatory = _hint_strength(tone_dimensions, "accusatory")
+    critical = _hint_strength(tone_dimensions, "critical")
+    procedural = _hint_strength(tone_dimensions, "procedural")
+
+    if max(accusatory, critical) >= 3:
+        return "absolute"
+    if max(accusatory, critical) >= 2:
+        return "assertive"
+    if procedural >= 2:
+        return "cautious"
+    return None
+
+
+def _extract_hint_text(tone_dimensions: dict[str, Any], *keys: str) -> str | None:
+    for key in keys:
+        value = _extract_nested_choice(tone_dimensions, key)
+        if isinstance(value, str):
+            normalized = value.strip().lower().replace(" ", "_")
+            if normalized:
+                return normalized
+    return None
+
+
+def _hint_strength(tone_dimensions: dict[str, Any], *keys: str) -> int:
+    raw = _extract_hint_text(tone_dimensions, *keys)
+    if raw is None:
+        return 0
+    if raw in {"very_high", "extreme", "explicit", "hostile", "positive_legitimizing"}:
+        return 3
+    if raw in {"high", "strong", "critical", "accusatory", "implied"}:
+        return 3
+    if raw in {"medium", "moderate", "mixed", "present", "partial"}:
+        return 2
+    if raw in {"low", "mild", "subtle", "neutral", "none", "absent"}:
+        return 1
+    return 2
 
 
 # Existing helpers follow mostly unchanged.

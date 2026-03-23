@@ -22,7 +22,7 @@ from src.analysis.schemas import (
 )
 from src.analysis.schemas import enrichment_json_schema as build_enrichment_json_schema
 
-DEFAULT_BASE_URL = "https://openrouter.ai/api/v1"
+OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1"
 EDITORIAL_ANALYSIS_SYSTEM_PROMPT = """You are classifying a Spanish news article.
 Perform editorial analysis conservatively.
 
@@ -61,28 +61,56 @@ SchemaMode = Literal["strict_json_schema", "fallback_json_text"]
 
 
 @dataclass(frozen=True)
-class OpenRouterSettings:
+class LLMSettings:
     api_key: str
     model: str
-    base_url: str = DEFAULT_BASE_URL
+    base_url: str | None = None
     timeout_seconds: int = 60
     max_retries: int = 2
     prompt_version: str = "v1"
 
     @classmethod
-    def from_env(cls) -> "OpenRouterSettings | None":
-        api_key = os.getenv("OPENROUTER_API_KEY", "").strip()
-        model = os.getenv("OPENROUTER_MODEL", "").strip()
+    def from_env(cls) -> "LLMSettings | None":
+        model = _first_env("LLM_MODEL", "OPENAI_MODEL", "OPENROUTER_MODEL")
+        base_url = _normalized_base_url(
+            _first_env("LLM_BASE_URL", "OPENAI_BASE_URL", "OPENROUTER_BASE_URL")
+        )
+        api_key = _resolve_api_key(base_url=base_url)
         if not api_key or not model:
             return None
         return cls(
             api_key=api_key,
             model=model,
-            base_url=os.getenv("OPENROUTER_BASE_URL", DEFAULT_BASE_URL).strip() or DEFAULT_BASE_URL,
-            timeout_seconds=int(os.getenv("OPENROUTER_TIMEOUT_SECONDS", "60")),
-            max_retries=int(os.getenv("OPENROUTER_MAX_RETRIES", "2")),
-            prompt_version=os.getenv("OPENROUTER_PROMPT_VERSION", "v1"),
+            base_url=base_url,
+            timeout_seconds=_parse_int_env(
+                "60",
+                "LLM_TIMEOUT_SECONDS",
+                "OPENAI_TIMEOUT_SECONDS",
+                "OPENROUTER_TIMEOUT_SECONDS",
+            ),
+            max_retries=_parse_int_env(
+                "2",
+                "LLM_MAX_RETRIES",
+                "OPENAI_MAX_RETRIES",
+                "OPENROUTER_MAX_RETRIES",
+            ),
+            prompt_version=(
+                _first_env(
+                    "LLM_PROMPT_VERSION",
+                    "OPENAI_PROMPT_VERSION",
+                    "OPENROUTER_PROMPT_VERSION",
+                )
+                or "v1"
+            ),
         )
+
+    @property
+    def provider_label(self) -> str:
+        if not self.base_url:
+            return "openai"
+        if "openrouter.ai" in self.base_url.lower():
+            return "openrouter"
+        return "custom"
 
 
 @dataclass(frozen=True)
@@ -122,15 +150,17 @@ class EditorialAnalysisResult:
         return next((attempt for attempt in self.attempts if attempt.payload is not None), None)
 
 
-class OpenRouterClient:
-    def __init__(self, settings: OpenRouterSettings) -> None:
+class LLMClient:
+    def __init__(self, settings: LLMSettings) -> None:
         self.settings = settings
-        self._client = OpenAI(
-            base_url=settings.base_url,
-            api_key=settings.api_key,
-            timeout=settings.timeout_seconds,
-            max_retries=settings.max_retries,
-        )
+        client_kwargs: dict[str, Any] = {
+            "api_key": settings.api_key,
+            "timeout": settings.timeout_seconds,
+            "max_retries": settings.max_retries,
+        }
+        if settings.base_url:
+            client_kwargs["base_url"] = settings.base_url
+        self._client = OpenAI(**client_kwargs)
 
     def enrich_article(
         self, *, article_prompt: str, schema: dict[str, Any]
@@ -490,3 +520,41 @@ def enrichment_json_schema() -> dict[str, Any]:
 
 def editorial_analysis_json_schema() -> dict[str, Any]:
     return build_editorial_analysis_json_schema()
+
+
+def _first_env(*names: str) -> str:
+    for name in names:
+        value = os.getenv(name, "").strip()
+        if value:
+            return value
+    return ""
+
+
+def _normalized_base_url(value: str) -> str | None:
+    cleaned = value.strip()
+    if not cleaned or cleaned.lower() in {"none", "null", "default", "openai"}:
+        return None
+    return cleaned
+
+
+def _parse_int_env(default: str, *names: str) -> int:
+    raw = _first_env(*names)
+    if not raw:
+        return int(default)
+    try:
+        return int(raw)
+    except ValueError:
+        return int(default)
+
+
+def _resolve_api_key(*, base_url: str | None) -> str:
+    generic_key = _first_env("LLM_API_KEY")
+    if generic_key:
+        return generic_key
+    if base_url and "openrouter.ai" in base_url.lower():
+        return _first_env("OPENROUTER_API_KEY", "OPENAI_API_KEY")
+    return _first_env("OPENAI_API_KEY", "OPENROUTER_API_KEY")
+
+
+OpenRouterSettings = LLMSettings
+OpenRouterClient = LLMClient

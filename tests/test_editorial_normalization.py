@@ -170,13 +170,100 @@ def test_normalize_editorial_payload_accepts_framing_device_maps_from_minimax() 
     assert result.diagnostics.dimension_status["framing"].status == "resolved"
 
 
+def test_normalize_editorial_payload_infers_dimensions_from_noncanonical_tone_hints() -> None:
+    result = normalize_editorial_payload(
+        {
+            "article_type": "analysis",
+            "bias_label": "center-right",
+            "tone_dimensions": {
+                "critical": "medium",
+                "partisancy": "medium",
+                "accusatory": "medium",
+                "procedural": "high",
+            },
+            "framing_devices": {
+                "single_source": True,
+                "direct_quote": True,
+                "accusatory_headline": True,
+                "procedural_focus": True,
+                "no_counterbalance": True,
+            },
+            "evidence_spans": [
+                "La oposición acusa al ministro y cuestiona su prioridad al frente del ministerio."
+            ],
+            "rationale": (
+                "The piece preserves accusatory and procedural cues "
+                "that should resolve tone dimensions."
+            ),
+        }
+    )
+
+    assert result.final_payload.tone_emotional == "loaded"
+    assert result.final_payload.tone_target == "critical"
+    assert result.final_payload.opinionatedness == "opinionated"
+    assert result.final_payload.sensationalism == "medium"
+    assert result.final_payload.rhetorical_certainty == "assertive"
+    assert result.final_payload.framing_devices == ["institutional_stability", "conflict"]
+    assert result.diagnostics.dimension_status["tone_target"].status == "resolved"
+    assert result.diagnostics.dimension_status["opinionatedness"].status == "resolved"
+    assert "tone_hints" in result.diagnostics.preserved_signals
+
+
+def test_normalize_editorial_payload_uses_bias_notes_and_mobilization_hints() -> None:
+    result = normalize_editorial_payload(
+        {
+            "article_type": "local_news_event_coverage",
+            "ideological_bias_framing": {
+                "direction": "protester_sympathetic",
+                "evidence_confidence": "moderate",
+                "notes": (
+                    "Article amplifies the protest movement and gives no counter-voices from "
+                    "project proponents."
+                ),
+            },
+            "tone_dimensions": {
+                "conflict_framing": "explicit",
+                "accountability_attribution": "project_developers_implied",
+                "mobilization_framing": "positive_legitimizing",
+                "notes": "Mobilization metrics are framed as evidence of legitimacy.",
+            },
+            "framing_devices": {
+                "growth_framing": ["más de una treintena de asociaciones"],
+                "collective_action": ["casi 4.000 adhesiones"],
+                "grassroots_legitimacy": ["medio rural está organizado"],
+                "rural_urban_tension": ["impacto acumulativo en el territorio"],
+                "preventive_advocacy": ["ha dejado de ser un asunto local"],
+            },
+            "evidence_spans": [
+                "El rechazo a las plantas de biogás y biometano "
+                "sigue creciendo en la provincia de Cuenca."
+            ],
+            "rationale": "The article frames rural protest mobilization as legitimate and growing.",
+        }
+    )
+
+    assert result.final_payload.article_type == "news_report"
+    assert result.final_payload.tone_emotional == "inflammatory"
+    assert result.final_payload.tone_target == "critical"
+    assert result.final_payload.opinionatedness == "activist"
+    assert result.final_payload.framing_devices == [
+        "conflict",
+        "identity_culture",
+        "moral_judgment",
+    ]
+    assert result.diagnostics.dimension_status["bias"].status == "mapping_loss"
+    assert "position" not in "".join(result.diagnostics.dimension_status["bias"].raw_hints)
+    assert any("notes=" in hint for hint in result.diagnostics.dimension_status["bias"].raw_hints)
+    assert result.diagnostics.dimension_status["framing"].status == "conflicted_signal"
+
+
 def test_normalize_editorial_payload_truncates_overlong_evidence_lists_deterministically() -> None:
     result = normalize_editorial_payload(
         {
             "article_type": "analysis",
             "bias_label": "unclear",
             "evidence_spans": [f"evidence span {idx}" for idx in range(1, 10)],
-            "framing_devices": [{"description": "public_safety"} for _ in range(10)],
+            "framing_devices": [{"description": "public_safety"} for _ in range(14)],
             "rationale": {
                 "description": (
                     "The output is broadly usable but the provider returned too many "
@@ -194,6 +281,10 @@ def test_normalize_editorial_payload_truncates_overlong_evidence_lists_determini
     assert result.diagnostics.dimension_status["framing"].status == "resolved"
     assert any(
         "repair_truncated_evidence_spans: 9 -> 6" == warning for warning in result.repair_warnings
+    )
+    assert any(
+        "repair_truncated_framing_devices: 14 -> 12" == warning
+        for warning in result.repair_warnings
     )
 
 

@@ -33,8 +33,8 @@ from src.analysis.llm_client import (
     EDITORIAL_ANALYSIS_SCHEMA_VERSION,
     EDITORIAL_ANALYSIS_SOURCE_TEXT_VERSION,
     EditorialAnalysisResult,
-    OpenRouterClient,
-    OpenRouterSettings,
+    LLMClient,
+    LLMSettings,
     build_editorial_analysis_prompt,
     build_prompt,
     editorial_analysis_json_schema,
@@ -72,9 +72,9 @@ class EnrichedArticle:
 class AnalysisPipeline:
     """Enrich persisted articles with tags, entities, and analysis side tables."""
 
-    def __init__(self, session: Session, *, llm_settings: OpenRouterSettings | None = None) -> None:
+    def __init__(self, session: Session, *, llm_settings: LLMSettings | None = None) -> None:
         self.session = session
-        self.llm = OpenRouterClient(llm_settings) if llm_settings else None
+        self.llm = LLMClient(llm_settings) if llm_settings else None
         self.canonicalizer = EntityCanonicalizer()
 
     def seed_tags(self) -> None:
@@ -115,7 +115,7 @@ class AnalysisPipeline:
             started_at=started_at,
             window_date_from=(started_at - timedelta(days=days_back - 1)).date(),
             window_date_to=started_at.date(),
-            provider="openrouter" if settings else "heuristic",
+            provider=settings.provider_label if settings else "heuristic",
             model=settings.model if settings else "heuristic-only",
             prompt_version=settings.prompt_version if settings else "v0",
         )
@@ -337,9 +337,9 @@ class EditorialSelectionFilters:
 class EditorialAnalysisPipeline:
     """Run bounded LLM-driven editorial analysis as a separate first-pass pipeline."""
 
-    def __init__(self, session: Session, *, llm_settings: OpenRouterSettings | None = None) -> None:
+    def __init__(self, session: Session, *, llm_settings: LLMSettings | None = None) -> None:
         self.session = session
-        self.llm = OpenRouterClient(llm_settings) if llm_settings else None
+        self.llm = LLMClient(llm_settings) if llm_settings else None
         self.repo = EditorialAnalysisCRUD(session)
 
     def effective_status(
@@ -362,7 +362,7 @@ class EditorialAnalysisPipeline:
         batch_size: int | None = None,
     ) -> EditorialAnalysisRunMetrics:
         if self.llm is None and not dry_run:
-            raise RuntimeError("OpenRouter settings are required for editorial analysis")
+            raise RuntimeError("LLM settings are required for editorial analysis")
 
         started_at = datetime.now(UTC)
         metrics = EditorialAnalysisRunMetrics(started_at=started_at)
