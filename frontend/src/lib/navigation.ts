@@ -35,27 +35,19 @@ export function buildSemanticExplorerHref(options: {
   const cluster = options.detail?.cluster ?? options.cluster ?? null
   const article = options.article?.article ?? null
 
-  const seededSearch = article?.title?.trim() || cluster?.summary_headline?.trim() || ''
-  const seededSource = article?.source?.trim() || ''
-  const seededFrom = cluster?.first_article_published_at?.slice(0, 10) || ''
-  const seededTo = cluster?.last_article_published_at?.slice(0, 10) || ''
+  const seededStoryClusterId = cluster?.id ?? null
   const seededArticleId = options.articleId ?? article?.article_id ?? null
 
-  if (seededSearch) params.set('sem_search', seededSearch)
-  else params.delete('sem_search')
-
-  if (seededSource) params.set('sem_source', seededSource)
-  else params.delete('sem_source')
-
-  if (seededFrom) params.set('sem_from', seededFrom)
-  else params.delete('sem_from')
-
-  if (seededTo) params.set('sem_to', seededTo)
-  else params.delete('sem_to')
-
+  params.delete('sem_search')
+  params.delete('sem_source')
+  params.delete('sem_from')
+  params.delete('sem_to')
   params.delete('sem_cluster')
   params.delete('sem_section')
   params.delete('sem_outliers')
+
+  if (seededStoryClusterId != null) params.set('sem_story_cluster', String(seededStoryClusterId))
+  else params.delete('sem_story_cluster')
 
   if (seededArticleId != null) params.set('sem_article', String(seededArticleId))
   else params.delete('sem_article')

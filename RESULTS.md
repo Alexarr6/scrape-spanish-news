@@ -1,3 +1,61 @@
+## 2026-03-23 — implementer pass for real Stories → Explorer story-cluster handoff (iter/007 Phase A)
+
+**Role:** implementer  
+**Outcome:** ✅ Complete  
+**Scope:** bounded Phase A slice to replace seeded title-search handoff with explicit story-cluster-scoped Explorer context
+
+### What I accomplished
+- replaced the Stories → Explorer handoff hack that seeded Explorer with title/source/date search params
+- introduced a new explicit Explorer route/query contract key: `sem_story_cluster`
+- preserved `sem_article` when opening Explorer from a selected story article
+- added backend Explorer support for story-cluster-scoped filtering by same-story membership via `cluster_members`
+- kept semantic cluster filtering (`sem_cluster`) separate from story cluster scoping (`sem_story_cluster`)
+- updated Explorer seed-chip copy so the UI clearly distinguishes:
+  - `📰 Story cluster <id>`
+  - `📍 Semantic cluster <id>`
+- expanded regression coverage for:
+  - API-level story-cluster-scoped Explorer filtering
+  - SQL/read-side story-cluster membership filtering
+
+### Files changed
+- `frontend/src/lib/navigation.ts`
+- `frontend/src/lib/query.ts`
+- `frontend/src/lib/types.ts`
+- `frontend/src/hooks/useExplorerUrlState.ts`
+- `frontend/src/routes/ExplorerPage.tsx`
+- `frontend/src/components/explorer/ExplorerContextRail.tsx`
+- `src/api/v1/semantic.py`
+- `src/semantic/dbstore.py`
+- `tests/test_api_semantic_explorer.py`
+- `tests/test_semantic_dbstore.py`
+- `STATUS.md`
+- `RESULTS.md`
+
+### Verification
+Commands run:
+- `PYTHONPATH=.venv/lib/python3.11/site-packages /usr/bin/python3 -m pytest tests/test_api_semantic_explorer.py tests/test_semantic_dbstore.py`
+- `cd /home/node/.openclaw/workspace/repos/spain-news-bias-scraper/frontend && npm run build`
+
+Results:
+- pytest slice: `28 passed`
+- frontend build: passed
+- existing non-blocking Vite/loaders.gl browser warning plus chunk-size warning still remain; build output completes successfully
+
+### Relevant notes for architect review
+- this pass does **not** pretend story cluster ids and semantic cluster ids are interchangeable; they now travel on different keys and hit different filters
+- `sem_story_cluster` acts as a scope constraint over Explorer articles, while `sem_cluster` still means semantic cluster filtering inside the projection
+- handoff now prefers a clean contract over inference: Stories sends cluster identity directly instead of leaking intent through title search
+- selected-article focus is preserved through `sem_article`, so Explorer can open already focused on the clicked article when available
+- no extra UI filter was added for story clusters in the Explorer drawer; this stays intentionally scoped to handoff/context for Phase A
+
+### Git summary
+- branch: `iter/007`
+- recent commits before this pass:
+  - `a5e4f24 chore(iteration): scaffold iter/007 (WEBAPP_STACK.md)`
+  - `42063aa feat(editorial): add cluster comparative metrics and divergence signals`
+  - `94643a0 feat(editorial): integrate product-facing editorial analysis surfaces`
+- rollback hint: inspect/revert from `a5e4f24` baseline if this Phase A slice needs to be backed out cleanly
+
 ## 2026-03-23 — implementer pass for cluster-scoped comparative editorial metrics in Stories
 
 **Role:** implementer  

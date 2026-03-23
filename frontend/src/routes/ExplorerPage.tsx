@@ -48,10 +48,11 @@ export function ExplorerPage() {
 
   // Seeded context chip: visible when Explorer was opened from Stories with a pre-applied filter
   const seedContext = useMemo<SeedContext>(() => {
+    if (query.storyClusterId) return { type: 'story-cluster', clusterId: Number(query.storyClusterId) }
     if (query.clusterId) return { type: 'cluster', clusterId: Number(query.clusterId) }
     if (query.search.trim()) return { type: 'search', query: query.search.trim() }
     return null
-  }, [query.clusterId, query.search])
+  }, [query.storyClusterId, query.clusterId, query.search])
 
   return (
     <div className="explorer-layout">

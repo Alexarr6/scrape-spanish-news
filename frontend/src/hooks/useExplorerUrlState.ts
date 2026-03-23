@@ -32,6 +32,7 @@ function readInitialState() {
     source: params.get('sem_source') ?? DEFAULT_QUERY.source,
     section: params.get('sem_section') ?? DEFAULT_QUERY.section,
     clusterId: params.get('sem_cluster') ?? DEFAULT_QUERY.clusterId,
+    storyClusterId: params.get('sem_story_cluster') ?? DEFAULT_QUERY.storyClusterId,
     dateFrom: params.get('sem_from') ?? DEFAULT_QUERY.dateFrom,
     dateTo: params.get('sem_to') ?? DEFAULT_QUERY.dateTo,
     outlierOnly: params.get('sem_outliers') === 'true',
@@ -72,6 +73,7 @@ export function useExplorerUrlState() {
     if (state.query.source) count += 1
     if (state.query.section) count += 1
     if (state.query.clusterId) count += 1
+    if (state.query.storyClusterId) count += 1
     if (state.query.dateFrom) count += 1
     if (state.query.dateTo) count += 1
     if (state.query.outlierOnly) count += 1

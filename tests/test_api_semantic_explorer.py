@@ -9,6 +9,7 @@ from sqlalchemy import create_engine, text
 from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.pool import StaticPool
 
+from src.analysis.orm_models import ClusterMemberORM, StoryClusterORM
 from src.api.v1.articles import get_session
 from src.api.v1.semantic import router
 from src.persistence.orm import Base
@@ -253,6 +254,35 @@ def _build_client() -> TestClient:
         )
 
     session_factory = sessionmaker(bind=engine, expire_on_commit=False)
+    with session_factory() as seed_session:
+        seed_session.add_all(
+            [
+                StoryClusterORM(
+                    id=501,
+                    cluster_key="story-501",
+                    cluster_type="news_event",
+                    status="active",
+                    summary_headline="Gobierno y energia",
+                    summary_text="Cobertura agrupada del mismo evento.",
+                    article_count=1,
+                    source_count=1,
+                ),
+                StoryClusterORM(
+                    id=502,
+                    cluster_key="story-502",
+                    cluster_type="news_event",
+                    status="active",
+                    summary_headline="Mercados y energia",
+                    summary_text="Cobertura agrupada del mismo evento.",
+                    article_count=1,
+                    source_count=1,
+                ),
+                ClusterMemberORM(cluster_id=501, article_id=1, membership_score=0.98),
+                ClusterMemberORM(cluster_id=502, article_id=2, membership_score=0.97),
+            ]
+        )
+        seed_session.commit()
+
     app = FastAPI()
     app.include_router(router)
 
@@ -289,6 +319,15 @@ def test_explorer_points_supports_cluster_and_outlier_filters() -> None:
 
     assert [item["article_id"] for item in cluster_response.json()["items"]] == [1]
     assert [item["article_id"] for item in outlier_response.json()["items"]] == [2]
+
+
+def test_explorer_points_supports_story_cluster_scope_filter() -> None:
+    client = _build_client()
+
+    response = client.get("/api/v1/semantic/explorer/points", params={"sem_story_cluster": 502})
+
+    assert response.status_code == 200
+    assert [item["article_id"] for item in response.json()["items"]] == [2]
 
 
 def test_explorer_filters_returns_available_options() -> None:

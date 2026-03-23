@@ -848,6 +848,7 @@ class ExplorerFilters:
     source: str | None = None
     section: str | None = None
     cluster_id: int | None = None
+    story_cluster_id: int | None = None
     outlier_only: bool = False
     date_from: str | None = None
     date_to: str | None = None
@@ -1132,6 +1133,11 @@ def _build_explorer_where_clause(
     if filters.search:
         clauses.append("(lower(a.title) LIKE :search OR lower(a.summary) LIKE :search)")
         params["search"] = f"%{filters.search.strip().lower()}%"
+    if filters.story_cluster_id is not None:
+        clauses.append(
+            "EXISTS (SELECT 1 FROM cluster_members cm WHERE cm.article_id = p.article_id AND cm.cluster_id = :story_cluster_id)"
+        )
+        params["story_cluster_id"] = filters.story_cluster_id
     if filters.cluster_id is not None or filters.outlier_only:
         clauses.append("spa.projection_set = :analysis_projection_set")
         params["analysis_projection_set"] = filters.projection_set

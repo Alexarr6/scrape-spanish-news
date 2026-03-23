@@ -21,6 +21,7 @@ export function buildExplorerPointsQuery(query: ExplorerQuery): string {
     source: query.source,
     section: query.section,
     cluster_id: query.clusterId,
+    sem_story_cluster: query.storyClusterId,
     date_from: query.dateFrom,
     date_to: query.dateTo,
     outlier_only: query.outlierOnly,

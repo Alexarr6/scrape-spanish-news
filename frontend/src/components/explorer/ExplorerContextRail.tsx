@@ -28,6 +28,7 @@ import { LoadingState } from '../system/LoadingState'
 
 // ─── Seeded context type (derived in ExplorerPage from query) ─────────────────
 export type SeedContext =
+  | { type: 'story-cluster'; clusterId: number }
   | { type: 'cluster'; clusterId: number }
   | { type: 'search'; query: string }
   | null
@@ -76,9 +77,11 @@ export function ExplorerContextRail({
         {seedContext && (
           <div className="context-seed-chip">
             <span className="context-seed-chip-label">
-              {seedContext.type === 'cluster'
-                ? `📍 Cluster ${seedContext.clusterId}`
-                : `🔍 "${seedContext.query}"`}
+              {seedContext.type === 'story-cluster'
+                ? `📰 Story cluster ${seedContext.clusterId}`
+                : seedContext.type === 'cluster'
+                  ? `📍 Semantic cluster ${seedContext.clusterId}`
+                  : `🔍 "${seedContext.query}"`}
             </span>
             <button
               className="context-seed-chip-clear"

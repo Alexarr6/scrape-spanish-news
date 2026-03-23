@@ -390,6 +390,15 @@ def test_load_explorer_points_page_joins_semantic_analysis_when_filters_need_it(
     assert "spa.is_outlier = :outlier_only" in joined_sql
 
 
+def test_load_explorer_points_page_filters_by_story_cluster_membership() -> None:
+    session = _ExplorerSession()
+    load_explorer_points_page(session, filters=ExplorerFilters(story_cluster_id=17))
+    joined_sql = "\n".join(session.sql)
+    assert "FROM cluster_members cm" in joined_sql
+    assert "cm.article_id = p.article_id" in joined_sql
+    assert "cm.cluster_id = :story_cluster_id" in joined_sql
+
+
 def test_load_explorer_article_detail_formats_published_at_as_text_sql() -> None:
     session = _ExplorerSession()
     load_explorer_article_detail(session, article_id=1, projection_set="pca_2d_latest")

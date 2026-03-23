@@ -151,6 +151,7 @@ export type ExplorerQuery = {
   source: string
   section: string
   clusterId: string
+  storyClusterId: string
   dateFrom: string
   dateTo: string
   outlierOnly: boolean
@@ -165,6 +166,7 @@ export const DEFAULT_QUERY: ExplorerQuery = {
   source: '',
   section: '',
   clusterId: '',
+  storyClusterId: '',
   dateFrom: '',
   dateTo: '',
   outlierOnly: false,
