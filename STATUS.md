@@ -1,59 +1,184 @@
 - State: DONE
-- Current phase: implementer pass completed on `iter/004`; editorial-analysis now persists applicability + per-dimension diagnostics so `unclear` is explainable instead of a black box, and now has an offline replay corpus/harness for cheap calibration against captured real outputs
-- Last update: 2026-03-22 UTC
+- Current phase: frontend.react pass completed for iter/005 editorial-analysis product integration on `iter/005`
+- Last update: 2026-03-23 UTC
 
-## Implementer completion — editorial diagnostics, applicability, and explainable `unclear`
+## Frontend.react completion — editorial layer now visible in Stories + Explorer
 
-Completed the bounded implementation pass approved in the architect review.
+Completed the approved frontend slice using the shaped editorial payloads.
 
-### Landed
-- added first-class `editorial_applicability` and reason classification on persisted rows
-- added per-dimension diagnostic statuses for article type / bias / tone / framing surfaces
-- persisted diagnostics JSON on the editorial-analysis row so operators can inspect loss, abstention, provider omission, and preserved raw hints without opening raw failure artifacts first
-- preserved non-canonical framing/tone hints inside diagnostics instead of silently discarding them
-- extended run metrics / CLI JSON with aggregate unclear-reason and dimension-status counters
-- exposed diagnostics/applicability/path through read-side + API detail/list responses
-- added regression coverage for weak-signal abstention, mapping loss, provider-missing behavior, and out-of-domain article types
-- built an offline replay corpus from captured real artifacts plus a replay harness/report so future calibration can run locally without provider calls
+### What shipped
+- built shared editorial UI primitives for status, dimensions, evidence, and article-level rendering:
+  - `frontend/src/components/editorial/EditorialStatusBadge.tsx`
+  - `frontend/src/components/editorial/EditorialDimensionGrid.tsx`
+  - `frontend/src/components/editorial/EditorialEvidenceList.tsx`
+  - `frontend/src/components/editorial/EditorialAnalysisCard.tsx`
+  - `frontend/src/components/editorial/editorialFormat.ts`
+- added `frontend/src/components/stories/EditorialLensSection.tsx` for cluster-scoped comparison in Stories
+- wired `StoryFocusPanel` to show:
+  - new `Editorial lens` section between Coverage and Articles by source
+  - article-card preview badges from `member.editorial_preview`
+  - full article-level editorial card inside selected article detail
+- wired `ExplorerContextRail` to show a compact article-level editorial card before cluster context
+- added sober editorial styling in `frontend/src/styles.css` with muted status tones, comparison grids, evidence blocks, and restrained chips/callouts
 
-### Important constraint preserved
-- the strict final editorial payload remains authoritative for filtering/aggregation
-- diagnostics explain uncertainty/loss/applicability; they do not bypass validation
+### UX constraints preserved
+- confidence, applicability, review state, and evidence are visible in the main UI
+- cluster comparison is framed as story-scoped source behavior, not universal outlet ideology
+- no raw operator/debug diagnostics dump in the main product surfaces
+- no giant ideology toy nonsense
 
-## Architect completion — editorial `unclear` semantics and explainability re-review
+### Verification
+- `cd frontend && npm run build`
+  - result: passed
+  - note: existing Vite/loaders.gl warning remains about `spawn` browser external and chunk size, but production build succeeds
 
-Completed a deeper architecture pass focused on the operator complaint that too many final fields end up as `unclear`.
+### Files updated in this pass
+- `frontend/src/components/editorial/EditorialStatusBadge.tsx`
+- `frontend/src/components/editorial/EditorialDimensionGrid.tsx`
+- `frontend/src/components/editorial/EditorialEvidenceList.tsx`
+- `frontend/src/components/editorial/EditorialAnalysisCard.tsx`
+- `frontend/src/components/editorial/editorialFormat.ts`
+- `frontend/src/components/stories/EditorialLensSection.tsx`
+- `frontend/src/components/stories/StoryFocusPanel.tsx`
+- `frontend/src/components/explorer/ExplorerContextRail.tsx`
+- `frontend/src/styles.css`
+- `STATUS.md`
+- `RESULTS.md`
 
-### Main findings
-- the current pipeline shape is directionally right, but it still hides too much of the middle
-- `unclear` currently conflates at least four realities:
-  - honest weak-signal abstention
-  - mapping loss / dropped signal
-  - provider omission / malformed output
-  - out-of-domain or low-editorial-value article classes
-- the final schema is only partly too ambitious; the main problem is not the existence of the fields but the lack of tiering and diagnostics around them
-- `tone_target` and `framing_devices` are the shakiest first-pass dimensions and should be treated as compressed/derived summaries, not equally trustworthy peers of core fields
-- strict/native structured output helpers are not a real architectural fix on the current OpenRouter mixed-model route; they may help ergonomics on allowlisted providers, but they do not solve compatibility drift or semantic compression
+## Implementer completion — shaped editorial payloads now land in Stories + Explorer contracts
 
-### Revised recommendation
-Keep the current raw -> repair -> normalize -> strict flow, but add a second persistent product:
-- canonical final row for filtering/aggregation
-- diagnostics sidecar (or compact diagnostics JSON) preserving:
-  - raw/repaired excerpts
-  - dimension-level statuses
-  - unmapped signals
-  - dropped/truncated fields
-  - provider path / fallback path
-  - applicability / out-of-domain assessment
+Completed the bounded backend/read-model slice the frontend architect asked for.
 
-### Recommended next implementation scope
-1. add `editorial_applicability` / reason classification
-2. add per-dimension outcome statuses (`resolved`, `weak_signal_abstain`, `mapping_loss`, `provider_missing`, `out_of_domain`, `conflicted_signal`)
-3. persist diagnostics as first-class DB/API-visible data
-4. preserve unmapped framing/tone meaning instead of silently dropping it
-5. extend metrics/CLI summaries so operators can see why `unclear` happened
-6. add regression coverage for weak-signal vs mapping-loss vs provider-missing vs out-of-domain behavior
+### What changed
+- added shaped product-facing editorial data to `ExplorerArticleDetail.editorial`
+- added shaped cluster-scoped comparison data to `StoryClusterDetail.editorial_summary`
+- added lightweight `StoryClusterMemberItem.editorial_preview` for list/badge use
+- kept the raw operator/audit editorial API separate; product surfaces do **not** need to consume raw editorial rows
+- updated frontend TS types so the next `frontend.react` pass can wire shared editorial components without inventing contracts
 
-### Important explicit conclusion
-Do **not** bet the next pass on LangChain/OpenAI-style `with_structured_output(...)` or direct Pydantic parsing as the primary fix.
-On this provider route that would mostly move the same failures under a nicer helper API.
+### Payload design choices
+- uncertainty/applicability are first-class, not hidden:
+  - `analysis_status`
+  - `editorial_applicability`
+  - `editorial_applicability_reason`
+  - `review_flags`
+  - compact evidence spans
+  - cluster `confidence_note` + `scope_note`
+- no fake one-number bias abstraction; the shaped payload still carries article type, bias label/score/confidence, tone, opinionatedness, sensationalism, rhetorical certainty, framing devices, evidence, and review semantics
+- cluster-level shaping is conservative:
+  - source-by-source breakdowns
+  - applicability/article-type/bias/tone/opinionatedness counts
+  - top framing devices with example article ids
+  - cluster signals only when support clears a minimal threshold
+  - explicit mixed/contested signal note when bias labels diverge
+
+### Files updated in this implementer pass
+- `src/api/contracts/semantic.py`
+- `src/api/contracts/clusters.py`
+- `src/api/v1/semantic.py`
+- `src/analysis/readside.py`
+- `frontend/src/lib/types.ts`
+- `tests/test_api_semantic_explorer.py`
+- `tests/test_api_clusters.py`
+- `STATUS.md`
+- `RESULTS.md`
+
+### Verification
+- `PYTHONPATH=.venv/lib/python3.11/site-packages python3 -m pytest tests/test_api_semantic_explorer.py tests/test_api_clusters.py`
+  - result: `10 passed`
+- `PYTHONPATH=.venv/lib/python3.11/site-packages .venv/bin/ruff check --fix src/api/contracts/semantic.py src/api/contracts/clusters.py src/api/v1/semantic.py src/analysis/readside.py`
+  - result: passed for touched backend source files
+
+### Handoff readiness
+Repo is now ready for `frontend.react` to:
+1. build shared editorial display components
+2. wire **Stories first** against `StoryClusterDetail.editorial_summary` and member previews
+3. wire **Explorer** against `ExplorerArticleDetail.editorial`
+
+That’s the useful slice. Raw rows stay in the audit lane where they belong.
+
+
+## Frontend architect completion — editorial analysis as a first-class UI layer
+
+Completed the repo-specific frontend architecture pass for integrating persisted editorial analysis into the existing product surfaces.
+
+### What was inspected
+- planning docs:
+  - `PROJECT_BRIEF.md`
+  - `TASK_CONTRACT.md`
+  - `PLAN.md`
+  - prior `STATUS.md`
+- frontend surfaces:
+  - `frontend/src/components/stories/StoryFocusPanel.tsx`
+  - `frontend/src/components/explorer/ExplorerContextRail.tsx`
+  - `frontend/src/routes/ClusterBrowserPage.tsx`
+  - `frontend/src/routes/ExplorerPage.tsx`
+  - `frontend/src/lib/types.ts`
+  - `frontend/src/lib/api.ts`
+- backend/UI contracts:
+  - `src/api/contracts/semantic.py`
+  - `src/api/contracts/clusters.py`
+  - `src/api/contracts/editorial.py`
+  - `src/api/v1/semantic.py`
+  - `src/api/v1/clusters.py`
+  - `src/analysis/readside.py`
+
+### Main architecture decisions
+- **StoryFocusPanel is the highest-value editorial surface.**
+  - Add a first-class `Editorial lens` section between Coverage and Articles-by-source.
+  - Keep story cluster as the main comparison scope.
+- **Article-level editorial analysis should appear in both Stories and Explorer.**
+  - Stories article detail gets the full card.
+  - ExplorerContextRail gets a compact variant.
+- **User-facing analytical surfaces must stay separate from operator/debug surfaces.**
+  - Product surfaces get shaped summaries.
+  - Raw diagnostics stay in the existing editorial API / audit flows.
+- **Applicability, evidence, confidence, and uncertainty are non-optional UI fields.**
+  - No one-number bias toy.
+  - No fake certainty.
+
+### Files updated in this architect pass
+- `UI_SPEC.md`
+- `COMPONENT_MAP.md`
+- `STATUS.md`
+
+### Implementer handoff — required backend contracts
+The next implementation pass should provide:
+
+1. `ExplorerArticleDetail.editorial`
+   - compact article-level editorial summary for product use
+2. `StoryClusterDetail.editorial_summary`
+   - cluster-scoped comparison payload with source summaries, applicability coverage, cluster signals, and confidence/scope notes
+3. optional `StoryClusterMemberItem.editorial_preview`
+   - minimal badge-oriented preview for article list items
+
+These should be shaped read models, not raw diagnostics dumps.
+
+### Recommended frontend build sequence after contract work
+1. create shared editorial components:
+   - `EditorialStatusBadge`
+   - `EditorialDimensionGrid`
+   - `EditorialEvidenceList`
+   - `EditorialAnalysisCard`
+2. create `EditorialLensSection` for StoryFocusPanel
+3. wire StoryFocusPanel:
+   - editorial lens section
+   - article detail editorial card
+   - optional member preview badges
+4. wire ExplorerContextRail compact editorial card
+
+### Minimum acceptable shipped slice
+- StoryFocusPanel shows cluster-level editorial comparison
+- selected article in Stories shows evidence-backed editorial card
+- selected article in Explorer shows compact editorial card
+- pending / failed / limited / out_of_domain / low-confidence states are visible
+- no surface reduces the output to a single ideology score
+
+### Recommendation: what the implementer must build next
+**Build the backend/read-model contract slice first**:
+- extend semantic article detail payload with `editorial`
+- extend cluster detail payload with `editorial_summary`
+- preserve example article ids and uncertainty states in those payloads
+- then hand off to frontend.react for bounded UI construction
+
+That is the next real move. Anything else is lipstick on the database row.
