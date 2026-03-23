@@ -1,3 +1,86 @@
+## 2026-03-23 — implementer anti-bridge clustering pass for iter/007 Phase B
+
+**Role:** implementer  
+**Outcome:** ✅ Complete  
+**Scope:** bounded precision-first same-story clustering hardening per Phase B architect review
+
+### What I accomplished
+- tightened `ClusterPipeline.score_pair()` so risky acceptance now gets explicit penalties/diagnostics for:
+  - follow-up drift with weak lexical support
+  - secondary-form article pairs (`analysis`, `explainer`, `feature`, `interview`)
+  - entity-heavy / event-light bridge pairs
+- replaced raw connected-components merging with a guarded strongest-edge-first cluster growth pass
+- prevented low-grade bridge edges from cheaply fusing components while still allowing strong same-event matches to cluster
+- expanded persisted member diagnostics so cluster membership now stores:
+  - support edge count
+  - best / mean support score
+  - supporting article ids
+  - guarded-merge flag
+  - risky-bridge support flag
+  - accumulated penalties
+- surfaced those diagnostics in cluster detail API payloads as `membership_diagnostics`
+- added focused regression coverage for:
+  - bridge-article false merge prevention
+  - follow-up separation
+  - same-event / different-headline matching
+  - analysis/explainer bridge contamination
+
+### Files changed
+- `src/analysis/contracts.py`
+- `src/analysis/pipeline.py`
+- `src/analysis/readside.py`
+- `src/api/contracts/clusters.py`
+- `tests/test_story_clustering.py`
+- `tests/test_story_pair_scoring.py`
+- `tests/test_api_clusters.py`
+- `STATUS.md`
+- `RESULTS.md`
+
+### Verification
+Commands run:
+- `PYTHONPATH=.venv/lib/python3.11/site-packages python3 -m pytest tests/test_story_clustering.py tests/test_story_pair_scoring.py tests/test_api_clusters.py`
+- `.venv/bin/ruff check src/analysis/pipeline.py src/analysis/readside.py tests/test_story_clustering.py tests/test_story_pair_scoring.py tests/test_api_clusters.py`
+
+Results:
+- targeted pytest slice: `13 passed`
+- targeted backend lint: passed
+
+### Relevant notes for the next pass
+- this is intentionally a precision-first bounded fix, not an embeddings rewrite or a new clustering framework cosplay
+- same-event recall still depends on heuristic lexical/entity evidence; Phase B improved the worst false-merge behavior without pretending the whole problem is solved
+- cluster detail payloads now expose enough member-support evidence to debug weird merges/splits without digging straight into the database
+- repo is ready for Phase C architect review on scrape/source coverage imbalance
+
+## 2026-03-23 — implementer cleanup patch for iter/007 Phase A URL-state + reverse-link contract
+
+**Role:** implementer  
+**Outcome:** ✅ Complete  
+**Scope:** tiny follow-up cleanup after architect review; no clustering review started
+
+### What I accomplished
+- fixed the Explorer URL writeback contract so `sem_story_cluster` is included in the serialized/cleared parameter set inside `useExplorerUrlState()`
+- preserved the existing read path and active-filter counting so story-cluster scope now round-trips cleanly between URL and in-memory query state
+- removed the misleading Explorer → Stories reverse link in `ExplorerContextRail` instead of passing a semantic cluster id off as a Stories cluster id
+- left the compact editorial card fallback intact, so Explorer still shows semantic cluster context without pretending it knows the matching Stories cluster id
+- updated `STATUS.md` / `RESULTS.md` to record the cleanup and the remaining next step
+
+### Coverage / verification note
+- the frontend repo does **not** currently include a dedicated unit/integration test harness, so there was no existing suitable browser-side surface for a tiny regression test without adding new tooling
+- verified the cleanup with targeted frontend build/typecheck instead of expanding scope with a test-framework install
+
+### Verification
+Commands run:
+- `cd /home/node/.openclaw/workspace/repos/spain-news-bias-scraper/frontend && npm run build`
+
+Results:
+- frontend build: passed
+- existing non-blocking Vite/loaders.gl browser warning plus chunk-size warning still remain; build output completes successfully
+
+### Relevant notes for the next pass
+- `sem_story_cluster` is now a real URL-state participant, not a half-read ghost field
+- Explorer no longer claims it can open a Stories view from a semantic cluster id it cannot actually map
+- Phase B can proceed to the clustering-quality review without this navigation/state banana peel
+
 ## 2026-03-23 — implementer pass for real Stories → Explorer story-cluster handoff (iter/007 Phase A)
 
 **Role:** implementer  

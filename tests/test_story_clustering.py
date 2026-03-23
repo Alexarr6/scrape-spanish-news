@@ -104,6 +104,83 @@ def test_score_pair_penalizes_followup_story():
     assert reason.score < 0.68
 
 
+def test_guarded_components_prevent_bridge_article_false_merge():
+    pipeline = ClusterPipeline(session=None)  # type: ignore[arg-type]
+    accepted_edges = [
+        (
+            1,
+            2,
+            StoryClusterMemberReason(
+                score=0.83,
+                semantic_similarity=0.8,
+                title_similarity=0.72,
+                shared_entity_score=1.0,
+                tag_overlap_score=1.0,
+                keyphrase_overlap_score=0.7,
+                temporal_proximity_score=1.0,
+            ),
+        ),
+        (
+            2,
+            3,
+            StoryClusterMemberReason(
+                score=0.71,
+                semantic_similarity=0.69,
+                title_similarity=0.48,
+                shared_entity_score=0.66,
+                tag_overlap_score=0.5,
+                keyphrase_overlap_score=0.2,
+                temporal_proximity_score=0.95,
+                risky_bridge_pair=True,
+                penalties=["entity_glue_penalty"],
+            ),
+        ),
+    ]
+
+    components = pipeline._connected_components([1, 2, 3], accepted_edges)
+
+    assert components == [[1, 2], [3]]
+
+
+def test_guarded_components_keep_analysis_bridge_from_fusing_clusters():
+    pipeline = ClusterPipeline(session=None)  # type: ignore[arg-type]
+    accepted_edges = [
+        (
+            1,
+            2,
+            StoryClusterMemberReason(
+                score=0.84,
+                semantic_similarity=0.82,
+                title_similarity=0.71,
+                shared_entity_score=0.8,
+                tag_overlap_score=1.0,
+                keyphrase_overlap_score=0.75,
+                temporal_proximity_score=1.0,
+            ),
+        ),
+        (
+            2,
+            3,
+            StoryClusterMemberReason(
+                score=0.74,
+                semantic_similarity=0.71,
+                title_similarity=0.5,
+                shared_entity_score=0.66,
+                tag_overlap_score=0.5,
+                keyphrase_overlap_score=0.25,
+                temporal_proximity_score=1.0,
+                article_type_pair_class="secondary_form_pair",
+                risky_bridge_pair=True,
+                penalties=["secondary_form_penalty", "entity_glue_penalty"],
+            ),
+        ),
+    ]
+
+    components = pipeline._connected_components([1, 2, 3], accepted_edges)
+
+    assert components == [[1, 2], [3]]
+
+
 def test_build_clusters_rolls_back_failed_rebuild() -> None:
     class RecordingSession:
         def __init__(self) -> None:

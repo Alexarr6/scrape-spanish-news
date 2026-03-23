@@ -415,37 +415,37 @@ def _seed_cluster_data(session: Session) -> None:
                 cluster_id=cluster1.id,
                 article_id=article1.id,
                 membership_score=0.94,
-                membership_reason_json="{}",
+                membership_reason_json='{"support_edge_count":2,"best_support_score":0.94,"mean_support_score":0.9,"supporting_article_ids":[2,5],"accepted_via_guarded_merge":true,"risky_bridge_support":false,"penalties":[]}',
             ),
             ClusterMemberORM(
                 cluster_id=cluster1.id,
                 article_id=article2.id,
                 membership_score=0.88,
-                membership_reason_json="{}",
+                membership_reason_json='{"support_edge_count":2,"best_support_score":0.88,"mean_support_score":0.86,"supporting_article_ids":[1,6],"accepted_via_guarded_merge":true,"risky_bridge_support":false,"penalties":[]}',
             ),
             ClusterMemberORM(
                 cluster_id=cluster1.id,
                 article_id=article5.id,
                 membership_score=0.9,
-                membership_reason_json="{}",
+                membership_reason_json='{"support_edge_count":2,"best_support_score":0.9,"mean_support_score":0.89,"supporting_article_ids":[1,6],"accepted_via_guarded_merge":true,"risky_bridge_support":false,"penalties":[]}',
             ),
             ClusterMemberORM(
                 cluster_id=cluster1.id,
                 article_id=article6.id,
                 membership_score=0.87,
-                membership_reason_json="{}",
+                membership_reason_json='{"support_edge_count":2,"best_support_score":0.87,"mean_support_score":0.85,"supporting_article_ids":[2,5],"accepted_via_guarded_merge":true,"risky_bridge_support":false,"penalties":[]}',
             ),
             ClusterMemberORM(
                 cluster_id=cluster1.id,
                 article_id=article7.id,
                 membership_score=0.81,
-                membership_reason_json="{}",
+                membership_reason_json='{"support_edge_count":1,"best_support_score":0.81,"mean_support_score":0.81,"supporting_article_ids":[6],"accepted_via_guarded_merge":true,"risky_bridge_support":true,"penalties":["followup_penalty"]}',
             ),
             ClusterMemberORM(
                 cluster_id=cluster2.id,
                 article_id=article4.id,
                 membership_score=1.0,
-                membership_reason_json="{}",
+                membership_reason_json='{"support_edge_count":0,"best_support_score":1.0,"mean_support_score":1.0,"supporting_article_ids":[],"accepted_via_guarded_merge":false,"risky_bridge_support":false,"penalties":[]}',
             ),
         ]
     )
@@ -500,7 +500,10 @@ def _seed_cluster_data(session: Session) -> None:
                 rhetorical_certainty_status="resolved",
                 framing_status="resolved",
                 framing_devices_json='["institutional_conflict","accountability_frame"]',
-                evidence_spans_json='[{"type":"quote","text":"El Gobierno cierra apoyos clave.","note":"Lead framing"}]',
+                evidence_spans_json=(
+                    '[{"type":"quote","text":"El Gobierno cierra apoyos clave.",'
+                    '"note":"Lead framing"}]'
+                ),
                 diagnostics_json='{"dimension_status":{"bias":"resolved"}}',
                 rationale="Cobertura principalmente informativa.",
                 analysis_status="completed",
@@ -538,7 +541,10 @@ def _seed_cluster_data(session: Session) -> None:
                 rhetorical_certainty_status="resolved",
                 framing_status="resolved",
                 framing_devices_json='["accountability_frame","conflict_frame"]',
-                evidence_spans_json='[{"type":"quote","text":"La oposición critica el acuerdo.","note":"Summary framing"}]',
+                evidence_spans_json=(
+                    '[{"type":"quote","text":"La oposición critica el acuerdo.",'
+                    '"note":"Summary framing"}]'
+                ),
                 diagnostics_json='{"dimension_status":{"bias":"weak_signal"}}',
                 rationale="Texto con framing opositor y señal parcial.",
                 analysis_status="completed",
@@ -614,7 +620,10 @@ def _seed_cluster_data(session: Session) -> None:
                 rhetorical_certainty_status="resolved",
                 framing_status="resolved",
                 framing_devices_json='["institutional_conflict"]',
-                evidence_spans_json='[{"type":"quote","text":"Nueva pieza sobre los apoyos parlamentarios.","note":"Lead framing"}]',
+                evidence_spans_json=(
+                    '[{"type":"quote","text":"Nueva pieza sobre los apoyos parlamentarios.",'
+                    '"note":"Lead framing"}]'
+                ),
                 diagnostics_json='{"dimension_status":{"bias":"resolved"}}',
                 rationale="Cobertura de seguimiento todavía informativa.",
                 analysis_status="completed",
@@ -652,7 +661,10 @@ def _seed_cluster_data(session: Session) -> None:
                 rhetorical_certainty_status="resolved",
                 framing_status="resolved",
                 framing_devices_json='["conflict_frame","conflict_frame","accountability_frame"]',
-                evidence_spans_json='[{"type":"quote","text":"La crítica opositora endurece el tono.","note":"Lead framing"}]',
+                evidence_spans_json=(
+                    '[{"type":"quote","text":"La crítica opositora endurece el tono.",'
+                    '"note":"Lead framing"}]'
+                ),
                 diagnostics_json='{"dimension_status":{"bias":"resolved"}}',
                 rationale="Texto abiertamente adversarial contra el acuerdo.",
                 analysis_status="completed",
@@ -690,7 +702,10 @@ def _seed_cluster_data(session: Session) -> None:
                 rhetorical_certainty_status="weak_signal",
                 framing_status="weak_signal",
                 framing_devices_json="[]",
-                evidence_spans_json='[{"type":"quote","text":"Pieza breve de seguimiento con señal limitada.","note":"Thin support"}]',
+                evidence_spans_json=(
+                    '[{"type":"quote","text":"Pieza breve de seguimiento con señal limitada.",'
+                    '"note":"Thin support"}]'
+                ),
                 diagnostics_json='{"dimension_status":{"bias":"weak_signal"}}',
                 rationale="Señal editorial demasiado tenue para resolver dimensiones centrales.",
                 analysis_status="completed",
@@ -737,6 +752,8 @@ def test_cluster_list_detail_filters_and_404() -> None:
     assert len(detail.json()["members"]) == 5
     assert detail.json()["members"][0]["tags"][0]["tag_code"] == "politics_national"
     assert detail.json()["members"][0]["entities"]
+    assert detail.json()["members"][0]["membership_diagnostics"]["support_edge_count"] >= 1
+    assert detail.json()["members"][0]["membership_diagnostics"]["supporting_article_ids"]
     assert detail.json()["members"][0]["editorial_preview"]["analysis_status"] == "completed"
     assert (
         detail.json()["members"][0]["editorial_preview"]["review_flags"]["low_confidence"] is True
@@ -808,9 +825,7 @@ def test_cluster_detail_preserves_out_of_domain_and_scope_notes() -> None:
     assert "story cluster only" in payload["editorial_summary"]["scope_note"]
 
 
-def test_cluster_comparative_metrics_expose_meaningful_divergence_and_suppress_weak_dimensions() -> (
-    None
-):
+def test_cluster_comparative_metrics_show_real_divergence() -> None:
     client = _build_client()
     payload = client.get("/api/v1/clusters/1").json()["editorial_summary"]["comparative_metrics"]
 
@@ -872,14 +887,17 @@ def test_cluster_id_query_is_postgres_safe_and_keeps_stable_ordering() -> None:
     )
 
     assert "SELECT DISTINCT" not in compiled
-    assert (
-        "GROUP BY story_clusters.id, story_clusters.article_count, story_clusters.source_count, story_clusters.last_article_published_at"
-        in compiled
+    expected_group_by = (
+        "GROUP BY story_clusters.id, story_clusters.article_count, "
+        "story_clusters.source_count, story_clusters.last_article_published_at"
     )
-    assert (
-        "ORDER BY story_clusters.article_count DESC, story_clusters.source_count DESC, story_clusters.last_article_published_at DESC NULLS LAST, story_clusters.id DESC"
-        in compiled
+    expected_order = (
+        "ORDER BY story_clusters.article_count DESC, story_clusters.source_count DESC, "
+        "story_clusters.last_article_published_at DESC NULLS LAST, "
+        "story_clusters.id DESC"
     )
+    assert expected_group_by in compiled
+    assert expected_order in compiled
 
     client = _build_client()
     response = client.get("/api/v1/clusters", params={"limit": 20, "offset": 0})

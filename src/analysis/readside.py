@@ -238,6 +238,7 @@ def load_story_cluster_detail(session: Session, cluster_id: int) -> dict | None:
         select(
             ClusterMemberORM.article_id,
             ClusterMemberORM.membership_score,
+            ClusterMemberORM.membership_reason_json,
             ArticleORM.source,
             ArticleORM.title,
             ArticleORM.url,
@@ -267,6 +268,7 @@ def load_story_cluster_detail(session: Session, cluster_id: int) -> dict | None:
                 "section": row.section or "",
                 "summary": row.summary or "",
                 "membership_score": round(float(row.membership_score), 4),
+                "membership_diagnostics": _parse_json_object(row.membership_reason_json),
                 "tags": tags_by_article.get(row.article_id, []),
                 "entities": entities_by_article.get(row.article_id, []),
                 "editorial_preview": _shape_member_editorial_preview(

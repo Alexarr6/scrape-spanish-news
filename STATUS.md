@@ -1,6 +1,34 @@
 - State: DONE
-- Current phase: iter/007 Phase A implemented — Stories → Explorer now uses real story-cluster scope via `sem_story_cluster`
+- Current phase: iter/007 Phase B implementer anti-bridge pass completed; ready for Phase C scrape coverage architect review
 - Last update: 2026-03-23 UTC
+
+## iter/007 Phase B implementer status
+- shipped the bounded anti-bridge clustering pass recommended by `ARCH_REVIEW.md`
+- tightened risky pair handling in `ClusterPipeline.score_pair()` with explicit penalties/diagnostics for:
+  - follow-up drift
+  - secondary-form article pairs (`analysis`, `explainer`, `feature`, `interview`)
+  - entity-glue pairs that share actors but lack enough event-specific lexical support
+- replaced raw permissive connected components with a guarded incremental merge path that:
+  - grows from strongest edges first
+  - blocks risky bridge pairs from fusing components cheaply
+  - requires stronger multi-edge support before attaching articles to an existing cluster
+- expanded persisted/read-side member diagnostics via `membership_reason_json` and cluster detail payloads so support edge counts, best/mean support, supporting article ids, risky-bridge flags, and penalties are inspectable
+- added explicit regression coverage for:
+  - bridge-article false merges
+  - follow-up separation
+  - same-event/different-headline matching
+  - analysis/explainer bridge contamination
+- exact touched files and verification are now recorded in `RESULTS.md`
+
+## iter/007 Phase A architect review summary
+- verdict: mostly real fix, not just a relocated title-search hack
+- real improvement: Stories now hands Explorer a true story-cluster scope via `sem_story_cluster`, and backend filtering resolves membership through `cluster_members`
+- original review flaw is now fixed: `useExplorerUrlState()` now serializes and clears `sem_story_cluster`, so the Explorer URL/state contract round-trips cleanly again
+- object-boundary cleanup: the misleading Explorer → Stories reverse link that treated a semantic cluster id like a story cluster id has been removed rather than papered over
+- test read: backend tests are meaningful for membership filtering, but frontend state-contract coverage is missing exactly where the remaining bug lives
+- cleanup patch landed: `sem_story_cluster` now participates in Explorer URL serialization/reset, and the misleading Explorer → Stories reverse link that treated semantic cluster ids like story cluster ids was removed
+- frontend note: the repo still lacks a dedicated frontend unit-test harness, so this cleanup was verified with targeted build/typecheck rather than new browser-side regression tests
+- exact next move into Phase B: do the clustering deep review focused on connected-component bridge merges / false same-story merges
 
 ## iter/007 planner completion — phased route locked
 

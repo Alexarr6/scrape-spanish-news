@@ -259,6 +259,12 @@ class StoryClusterMemberReason(BaseModel):
     tag_overlap_score: float
     keyphrase_overlap_score: float
     temporal_proximity_score: float
+    days_delta: int = 0
+    shared_entity_count: int = 0
+    shared_keyphrase_count: int = 0
+    shared_tag_count: int = 0
+    article_type_pair_class: str = "primary_pair"
+    risky_bridge_pair: bool = False
     hard_block: str | None = None
     penalties: list[str] = Field(default_factory=list)
 

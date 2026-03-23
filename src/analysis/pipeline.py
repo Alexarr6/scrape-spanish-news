@@ -845,6 +845,8 @@ class ClusterPipeline:
     def score_pair(self, left: EnrichedArticle, right: EnrichedArticle) -> StoryClusterMemberReason:
         """Score whether two enriched articles should belong to the same story cluster."""
 
+        left_keyphrases = [normalize_lookup(value) for value in left.key_phrases]
+        right_keyphrases = [normalize_lookup(value) for value in right.key_phrases]
         semantic_similarity = (
             1.0
             if jaccard_similarity(left.key_phrases, right.key_phrases) > 0.8
@@ -855,27 +857,38 @@ class ClusterPipeline:
         title_sim = title_similarity(left.article.title, right.article.title)
         shared_entity_score = jaccard_similarity(left.entity_slugs, right.entity_slugs)
         tag_overlap_score = jaccard_similarity(left.tag_codes, right.tag_codes)
-        keyphrase_overlap_score = jaccard_similarity(
-            [normalize_lookup(v) for v in left.key_phrases],
-            [normalize_lookup(v) for v in right.key_phrases],
-        )
+        keyphrase_overlap_score = jaccard_similarity(left_keyphrases, right_keyphrases)
+        shared_entities = sorted(set(left.entity_slugs) & set(right.entity_slugs))
+        shared_keyphrases = sorted(set(left_keyphrases) & set(right_keyphrases))
+        shared_tags = sorted(set(left.tag_codes) & set(right.tag_codes))
         days_delta = abs((left.article.published_at - right.article.published_at).days)
         temporal_proximity_score = max(0.0, 1 - (days_delta / 7))
         penalties: list[str] = []
         hard_block = None
-        if {left.analysis.article_type, right.analysis.article_type} & {"opinion", "editorial"}:
-            if left.analysis.article_type != right.analysis.article_type or {
-                left.analysis.article_type,
-                right.analysis.article_type,
-            } != {"opinion"}:
+        secondary_types = {"analysis", "explainer", "feature", "interview"}
+        article_types = {left.analysis.article_type, right.analysis.article_type}
+        article_type_pair_class = (
+            "secondary_form_pair" if article_types & secondary_types else "primary_pair"
+        )
+        risky_bridge_pair = False
+        if article_types & {"opinion", "editorial"}:
+            if (
+                left.analysis.article_type != right.analysis.article_type
+                or article_types != {"opinion"}
+            ):
                 hard_block = "opinion_editorial_excluded_from_primary_clusters"
-        if (
-            "analysis" in {left.analysis.article_type, right.analysis.article_type}
-            and title_sim < 0.55
+        if article_types & secondary_types and (
+            title_sim < 0.58 or keyphrase_overlap_score < 0.34
         ):
-            penalties.append("analysis_pair_penalty")
-        if days_delta >= 3 and title_sim < 0.6:
+            penalties.append("secondary_form_penalty")
+        if days_delta >= 2 and title_sim < 0.58 and keyphrase_overlap_score < 0.45:
             penalties.append("followup_penalty")
+        if shared_entity_score >= 0.5 and title_sim < 0.52 and keyphrase_overlap_score < 0.34:
+            penalties.append("entity_glue_penalty")
+            risky_bridge_pair = True
+        if days_delta >= 3 and semantic_similarity < 0.78 and title_sim < 0.7:
+            penalties.append("late_story_drift_penalty")
+            risky_bridge_pair = True
         score = (
             semantic_similarity * 0.30
             + title_sim * 0.20
@@ -884,10 +897,14 @@ class ClusterPipeline:
             + keyphrase_overlap_score * 0.10
             + temporal_proximity_score * 0.05
         )
-        if "analysis_pair_penalty" in penalties:
-            score -= 0.15
+        if "secondary_form_penalty" in penalties:
+            score -= 0.14
         if "followup_penalty" in penalties:
+            score -= 0.14
+        if "entity_glue_penalty" in penalties:
             score -= 0.12
+        if "late_story_drift_penalty" in penalties:
+            score -= 0.10
         return StoryClusterMemberReason(
             score=max(0.0, round(score, 4)),
             semantic_similarity=round(semantic_similarity, 4),
@@ -896,6 +913,12 @@ class ClusterPipeline:
             tag_overlap_score=round(tag_overlap_score, 4),
             keyphrase_overlap_score=round(keyphrase_overlap_score, 4),
             temporal_proximity_score=round(temporal_proximity_score, 4),
+            days_delta=days_delta,
+            shared_entity_count=len(shared_entities),
+            shared_keyphrase_count=len(shared_keyphrases),
+            shared_tag_count=len(shared_tags),
+            article_type_pair_class=article_type_pair_class,
+            risky_bridge_pair=risky_bridge_pair,
             hard_block=hard_block,
             penalties=penalties,
         )
@@ -905,26 +928,59 @@ class ClusterPipeline:
         article_ids: list[int],
         accepted_edges: list[tuple[int, int, StoryClusterMemberReason]],
     ) -> list[list[int]]:
-        parent = {article_id: article_id for article_id in article_ids}
+        adjacency: dict[int, dict[int, StoryClusterMemberReason]] = defaultdict(dict)
+        for left, right, reason in sorted(
+            accepted_edges, key=lambda item: item[2].score, reverse=True
+        ):
+            if reason.risky_bridge_pair and reason.score < 0.78:
+                continue
+            adjacency[left][right] = reason
+            adjacency[right][left] = reason
 
-        def find(node: int) -> int:
-            while parent[node] != node:
-                parent[node] = parent[parent[node]]
-                node = parent[node]
-            return node
+        unassigned = set(article_ids)
+        components: list[list[int]] = []
+        while unassigned:
+            seed = max(
+                unassigned,
+                key=lambda article_id: max(
+                    (reason.score for reason in adjacency.get(article_id, {}).values()),
+                    default=0.0,
+                ),
+            )
+            cluster = {seed}
+            unassigned.remove(seed)
+            added = True
+            while added:
+                added = False
+                for candidate in sorted(unassigned):
+                    support = [
+                        adjacency[candidate][member]
+                        for member in cluster
+                        if member in adjacency.get(candidate, {})
+                    ]
+                    if self._should_attach_candidate(cluster, support):
+                        cluster.add(candidate)
+                        unassigned.remove(candidate)
+                        added = True
+            components.append(sorted(cluster))
+        return sorted(components, key=len, reverse=True)
 
-        def union(left: int, right: int) -> None:
-            root_left = find(left)
-            root_right = find(right)
-            if root_left != root_right:
-                parent[root_right] = root_left
-
-        for left, right, _ in accepted_edges:
-            union(left, right)
-        grouped: dict[int, list[int]] = defaultdict(list)
-        for article_id in article_ids:
-            grouped[find(article_id)].append(article_id)
-        return sorted((sorted(members) for members in grouped.values()), key=len, reverse=True)
+    def _should_attach_candidate(
+        self,
+        cluster: set[int],
+        support: list[StoryClusterMemberReason],
+    ) -> bool:
+        if not support:
+            return False
+        best_score = max(reason.score for reason in support)
+        support_count = len(support)
+        mean_score = sum(reason.score for reason in support) / support_count
+        risky_support = any(reason.risky_bridge_pair for reason in support)
+        if len(cluster) == 1:
+            return best_score >= 0.68 and not risky_support
+        if support_count >= 2 and mean_score >= 0.72 and best_score >= 0.74 and not risky_support:
+            return True
+        return best_score >= 0.82 and mean_score >= 0.76 and not risky_support
 
     def _persist_clusters(
         self,
@@ -984,13 +1040,41 @@ class ClusterPipeline:
             self.session.flush()
             entity_counts: dict[int, tuple[int, int, float]] = defaultdict(lambda: (0, 0, 0.0))
             for article_id in members:
-                pair_scores = [
-                    reason.score
+                supporting_edges = [
+                    (left_id, right_id, reason)
                     for (left_id, right_id), reason in edge_map.items()
-                    if article_id in {left_id, right_id}
+                    if (
+                        article_id in {left_id, right_id}
+                        and left_id in members
+                        and right_id in members
+                    )
                 ]
+                pair_scores = [reason.score for _, _, reason in supporting_edges]
                 membership_score = sum(pair_scores) / len(pair_scores) if pair_scores else 1.0
-                reason_payload = {"edge_scores": pair_scores}
+                supporting_article_ids = sorted(
+                    {
+                        right_id if left_id == article_id else left_id
+                        for left_id, right_id, _ in supporting_edges
+                    }
+                )
+                reason_payload = {
+                    "support_edge_count": len(pair_scores),
+                    "best_support_score": round(max(pair_scores), 4) if pair_scores else 1.0,
+                    "mean_support_score": round(membership_score, 4),
+                    "supporting_article_ids": supporting_article_ids,
+                    "accepted_via_guarded_merge": len(members) > 1,
+                    "risky_bridge_support": any(
+                        reason.risky_bridge_pair for _, _, reason in supporting_edges
+                    ),
+                    "penalties": sorted(
+                        {
+                            penalty
+                            for _, _, reason in supporting_edges
+                            for penalty in reason.penalties
+                        }
+                    ),
+                    "edge_scores": pair_scores,
+                }
                 self.session.add(
                     ClusterMemberORM(
                         cluster_id=cluster.id,

@@ -162,6 +162,16 @@ class StoryClusterListItem(BaseModel):
     top_entities: list[ClusterEntitySummary] = Field(default_factory=list)
 
 
+class StoryClusterMemberDiagnostics(BaseModel):
+    support_edge_count: int = 0
+    best_support_score: float = 0.0
+    mean_support_score: float = 0.0
+    supporting_article_ids: list[int] = Field(default_factory=list)
+    accepted_via_guarded_merge: bool = False
+    risky_bridge_support: bool = False
+    penalties: list[str] = Field(default_factory=list)
+
+
 class StoryClusterMemberItem(BaseModel):
     article_id: int
     source: str
@@ -171,6 +181,7 @@ class StoryClusterMemberItem(BaseModel):
     section: str = ""
     summary: str = ""
     membership_score: float
+    membership_diagnostics: StoryClusterMemberDiagnostics | None = None
     tags: list[ClusterTagSummary] = Field(default_factory=list)
     entities: list[ClusterEntitySummary] = Field(default_factory=list)
     editorial_preview: StoryClusterMemberEditorialPreview | None = None
