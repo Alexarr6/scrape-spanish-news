@@ -17,6 +17,7 @@ from src.persistence.orm import ArticleORM, Base
 class _Settings:
     model = "openrouter/test-model"
     prompt_version = "v1"
+    provider_label = "openrouter"
 
 
 VALID_PAYLOAD = {
@@ -147,6 +148,7 @@ def test_editorial_pipeline_persists_completed_analysis_and_skips_unchanged() ->
     assert stored.article_id == article.id
     assert stored.analysis_status == "completed"
     assert stored.bias_label == "center"
+    assert stored.model_provider == "openrouter"
     assert stored.model_name == "openrouter/test-model"
     assert stored.bias_status == "resolved"
     assert stored.unclear_reasons_json == "[]"

@@ -531,7 +531,7 @@ class EditorialAnalysisPipeline:
         self.repo.mark_pending(
             analysis=analysis,
             content_hash=content_hash,
-            model_provider="openrouter",
+            model_provider=self.llm.settings.provider_label,
             model_name=self.llm.settings.model,
             model_version=self.llm.settings.model,
             prompt_version=self.llm.settings.prompt_version,
