@@ -44,6 +44,8 @@ def get_explorer_points(
     date_from: str | None = None,
     date_to: str | None = None,
     search: str | None = None,
+    editorial_dimension: str | None = Query(default=None, alias="sem_editorial_dim"),
+    editorial_value: str | None = Query(default=None, alias="sem_editorial_value"),
 ) -> ExplorerPointsResponse:
     """Return explorer points plus the metadata needed to drive the UI shell."""
 
@@ -59,6 +61,8 @@ def get_explorer_points(
         date_from=date_from,
         date_to=date_to,
         search=search,
+        editorial_dimension=editorial_dimension,
+        editorial_value=editorial_value,
     )
     page = load_explorer_points_page(session, filters=filters)
     return _to_points_response(page)
@@ -113,6 +117,7 @@ def _to_points_response(page: ExplorerPointsPage) -> ExplorerPointsResponse:
             available_clusters=page.available_clusters,
             cluster_summaries=page.cluster_summaries,
             story_cluster_metadata_available=page.story_cluster_metadata_available,
+            editorial=page.editorial,
         ),
     )
 
@@ -141,5 +146,10 @@ def _to_article_detail_response(
 def _to_point_model(item, *, neighbor_count: int = 0) -> ExplorerPoint:
     payload = item.model_dump()
     analysis = payload.pop("analysis", {}) or {}
+    editorial_preview = payload.pop("editorial_preview", None)
     analysis.setdefault("neighbor_count", neighbor_count)
-    return ExplorerPoint(**payload, analysis=ExplorerSemanticSummary(**analysis))
+    return ExplorerPoint(
+        **payload,
+        analysis=ExplorerSemanticSummary(**analysis),
+        editorial_preview=editorial_preview,
+    )

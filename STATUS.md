@@ -1,4 +1,33 @@
 - State: DONE
+- Current phase: iter/008 explorer article-type editorial lens backend landed; ready for frontend integration/review
+- Last update: 2026-03-24 UTC
+
+## iter/008 bounded backend slice summary
+- added lightweight `editorial_preview` onto Explorer point payloads so the point cloud can read article-type/editorial state without dragging full article-detail editorial blobs
+- added `/api/v1/semantic/explorer/points` editorial lens query support for:
+  - `sem_editorial_dim=article_type`
+  - `sem_editorial_value=<label>`
+- preserved mode semantics:
+  - `sem_mode=filter` narrows the explorer dataset to matching article type
+  - `sem_mode=highlight` keeps the broader dataset and still returns preview payloads for all visible points
+- landed bounded Explorer editorial meta/filter support for article-type options plus simple coverage counts
+- kept the pass deliberately narrow: no bias/tone lensing, no endpoint architecture rewrite, no Phase 1 visual grammar churn
+
+## verification status
+- passed: `python3 -m py_compile src/api/contracts/semantic.py src/api/v1/semantic.py src/semantic/contracts.py src/semantic/dbstore.py tests/test_api_semantic_explorer.py`
+- passed: `/home/node/.local/bin/uv run --group dev python -m pytest tests/test_api_semantic_explorer.py`
+
+## files changed in this pass
+- `src/api/contracts/semantic.py`
+- `src/api/v1/semantic.py`
+- `src/semantic/contracts.py`
+- `src/semantic/dbstore.py`
+- `tests/test_api_semantic_explorer.py`
+- `frontend/src/lib/types.ts`
+- `STATUS.md`
+- `RESULTS.md`
+
+- State: DONE
 - Current phase: iter/007 final bounded implementer follow-up landed; repo ready for review
 - Last update: 2026-03-23 UTC
 

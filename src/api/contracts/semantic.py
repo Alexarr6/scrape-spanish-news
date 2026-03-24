@@ -48,6 +48,25 @@ class ExplorerEditorialSummary(BaseModel):
     diagnostics_summary: ExplorerEditorialDiagnosticsSummary | None = None
 
 
+
+
+class ExplorerPointEditorialPreview(BaseModel):
+    analysis_status: str = "pending"
+    editorial_applicability: str = "full"
+    article_type: str = "unclear"
+    article_type_confidence: float = 0.0
+    review_flags: ExplorerEditorialReviewFlags = Field(default_factory=ExplorerEditorialReviewFlags)
+
+
+class ExplorerEditorialOption(BaseModel):
+    value: str
+    count: int = 0
+
+
+class ExplorerEditorialMetadata(BaseModel):
+    article_type: list[ExplorerEditorialOption] = Field(default_factory=list)
+    coverage: dict[str, int] = Field(default_factory=dict)
+
 class ExplorerSemanticSummary(BaseModel):
     cluster_id: int | None = None
     cluster_size: int | None = None
@@ -73,6 +92,7 @@ class ExplorerPoint(BaseModel):
     y: float
     z: float
     analysis: ExplorerSemanticSummary = Field(default_factory=ExplorerSemanticSummary)
+    editorial_preview: ExplorerPointEditorialPreview | None = None
 
 
 class ExplorerProjectionBounds(BaseModel):
@@ -113,6 +133,7 @@ class ExplorerMeta(BaseModel):
     available_clusters: list[int] = Field(default_factory=list)
     cluster_summaries: list[ExplorerClusterSummary] = Field(default_factory=list)
     story_cluster_metadata_available: bool = False
+    editorial: ExplorerEditorialMetadata | None = None
 
 
 class ExplorerPointsResponse(BaseModel):
@@ -126,6 +147,7 @@ class ExplorerFiltersResponse(BaseModel):
     available_sections: list[str] = Field(default_factory=list)
     available_clusters: list[int] = Field(default_factory=list)
     cluster_summaries: list[ExplorerClusterSummary] = Field(default_factory=list)
+    editorial: ExplorerEditorialMetadata | None = None
 
 
 class ExplorerNeighbor(BaseModel):

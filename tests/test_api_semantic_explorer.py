@@ -307,6 +307,12 @@ def test_explorer_points_returns_cluster_metadata() -> None:
     assert payload["meta"]["cluster_summaries"][0]["cluster_id"] == 1
     assert payload["items"][0]["analysis"]["local_density_distance"] >= 0
     assert payload["items"][0]["analysis"]["nearby_sources"]
+    preview_by_article = {item["article_id"]: item["editorial_preview"] for item in payload["items"]}
+    assert preview_by_article[1]["article_type"] == "news"
+    assert preview_by_article[1]["analysis_status"] == "completed"
+    assert preview_by_article[2]["analysis_status"] == "pending"
+    assert payload["meta"]["editorial"]["coverage"]["pending"] == 1
+    assert any(option == {"value": "news", "count": 1} for option in payload["meta"]["editorial"]["article_type"])
     membership_by_article = {
         item["article_id"]: item["analysis"]["story_cluster_ids"] for item in payload["items"]
     }
@@ -384,13 +390,54 @@ def test_explorer_points_search_filter_mode_still_filters_dataset() -> None:
     assert [item["article_id"] for item in payload["items"]] == [1]
 
 
+def test_explorer_points_article_type_filter_mode_narrows_dataset() -> None:
+    client = _build_client()
+
+    response = client.get(
+        "/api/v1/semantic/explorer/points",
+        params={
+            "sem_editorial_dim": "article_type",
+            "sem_editorial_value": "news",
+            "sem_mode": "filter",
+        },
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert [item["article_id"] for item in payload["items"]] == [1]
+    assert payload["items"][0]["editorial_preview"]["article_type"] == "news"
+
+
+def test_explorer_points_article_type_highlight_mode_keeps_broad_dataset() -> None:
+    client = _build_client()
+
+    response = client.get(
+        "/api/v1/semantic/explorer/points",
+        params={
+            "sem_editorial_dim": "article_type",
+            "sem_editorial_value": "news",
+            "sem_mode": "highlight",
+        },
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert sorted(item["article_id"] for item in payload["items"]) == [1, 2]
+    preview_by_article = {item["article_id"]: item["editorial_preview"] for item in payload["items"]}
+    assert preview_by_article[1]["article_type"] == "news"
+    assert preview_by_article[2]["analysis_status"] == "pending"
+
+
 def test_explorer_filters_returns_available_options() -> None:
     client = _build_client()
     response = client.get("/api/v1/semantic/explorer/filters")
 
     assert response.status_code == 200
-    assert response.json()["available_clusters"] == [1]
-    assert response.json()["cluster_summaries"][0]["cluster_id"] == 1
+    payload = response.json()
+    assert payload["available_clusters"] == [1]
+    assert payload["cluster_summaries"][0]["cluster_id"] == 1
+    assert payload["editorial"]["coverage"]["pending"] == 1
+    assert any(option == {"value": "news", "count": 1} for option in payload["editorial"]["article_type"])
 
 
 def test_explorer_article_detail_returns_analysis_fields(monkeypatch) -> None:

@@ -706,13 +706,24 @@ def load_projected_points(
                    COALESCE(spa.is_outlier, false) AS is_outlier,
                    COALESCE(spa.local_density_distance, 0.0) AS local_density_distance,
                    COALESCE(spa.source_neighbor_diversity, 0) AS source_neighbor_diversity,
-                   COALESCE(spa.nearby_sources_json, '[]') AS nearby_sources_json
+                   COALESCE(spa.nearby_sources_json, '[]') AS nearby_sources_json,
+                   aea.analysis_status AS editorial_analysis_status,
+                   aea.editorial_applicability AS editorial_applicability,
+                   aea.article_type AS editorial_article_type,
+                   aea.article_type_confidence AS editorial_article_type_confidence,
+                   aea.bias_label AS editorial_bias_label,
+                   aea.bias_confidence AS editorial_bias_confidence,
+                   aea.tone_emotional AS editorial_tone_emotional,
+                   aea.unclear_reasons_json AS editorial_unclear_reasons_json,
+                   aea.evidence_spans_json AS editorial_evidence_spans_json
             FROM article_projections p
             JOIN article_embeddings e ON e.id = p.embedding_id
             JOIN articles a ON a.id = p.article_id
             LEFT JOIN semantic_point_analysis spa
               ON spa.article_id = p.article_id
              AND spa.projection_set = p.projection_set
+            LEFT JOIN article_editorial_analysis aea
+              ON aea.article_id = p.article_id
     """
     params = {"projection_set": projection_set, "projection_kind": projection_kind}
     clauses = [
@@ -739,6 +750,7 @@ def load_projected_points(
             x=float(row["x"]),
             y=float(row["y"]),
             z=float(row["z"]),
+            editorial_preview=_editorial_preview_for_row(row),
             analysis=_analysis_for_row(row, neighbors=[]),
         )
         for row in rows
@@ -886,6 +898,8 @@ class ExplorerFilters:
     cluster_id: int | None = None
     story_cluster_id: int | None = None
     visual_mode: str | None = None
+    editorial_dimension: str | None = None
+    editorial_value: str | None = None
     outlier_only: bool = False
     date_from: str | None = None
     date_to: str | None = None
@@ -904,6 +918,7 @@ class ExplorerPointsPage:
     available_clusters: list[int]
     cluster_summaries: list[dict[str, Any]]
     story_cluster_metadata_available: bool = False
+    editorial: dict[str, Any] | None = None
 
 
 @dataclass
@@ -1112,13 +1127,24 @@ def load_explorer_points_page(session: Session, *, filters: ExplorerFilters) -> 
                    COALESCE(spa.is_outlier, false) AS is_outlier,
                    COALESCE(spa.local_density_distance, 0.0) AS local_density_distance,
                    COALESCE(spa.source_neighbor_diversity, 0) AS source_neighbor_diversity,
-                   COALESCE(spa.nearby_sources_json, '[]') AS nearby_sources_json
+                   COALESCE(spa.nearby_sources_json, '[]') AS nearby_sources_json,
+                   aea.analysis_status AS editorial_analysis_status,
+                   aea.editorial_applicability AS editorial_applicability,
+                   aea.article_type AS editorial_article_type,
+                   aea.article_type_confidence AS editorial_article_type_confidence,
+                   aea.bias_label AS editorial_bias_label,
+                   aea.bias_confidence AS editorial_bias_confidence,
+                   aea.tone_emotional AS editorial_tone_emotional,
+                   aea.unclear_reasons_json AS editorial_unclear_reasons_json,
+                   aea.evidence_spans_json AS editorial_evidence_spans_json
             FROM article_projections p
             JOIN articles a ON a.id = p.article_id
             JOIN article_embeddings e ON e.id = p.embedding_id
             LEFT JOIN semantic_point_analysis spa
               ON spa.article_id = p.article_id
              AND spa.projection_set = p.projection_set
+            LEFT JOIN article_editorial_analysis aea
+              ON aea.article_id = p.article_id
             {where_sql}
             {order_by_sql}
             LIMIT :limit
@@ -1150,6 +1176,7 @@ def load_explorer_points_page(session: Session, *, filters: ExplorerFilters) -> 
                 x=float(row["x"]),
                 y=float(row["y"]),
                 z=float(row["z"]),
+                editorial_preview=_editorial_preview_for_row(row),
                 analysis=_analysis_for_row(
                     row,
                     neighbors=neighbors,
@@ -1167,6 +1194,8 @@ def load_explorer_points_page(session: Session, *, filters: ExplorerFilters) -> 
             LEFT JOIN semantic_point_analysis spa
               ON spa.article_id = p.article_id
              AND spa.projection_set = p.projection_set
+            LEFT JOIN article_editorial_analysis aea
+              ON aea.article_id = p.article_id
             {where_sql}
             """
         ),
@@ -1193,6 +1222,7 @@ def load_explorer_points_page(session: Session, *, filters: ExplorerFilters) -> 
         available_clusters=_load_available_clusters(session, projection_set=filters.projection_set),
         cluster_summaries=_load_cluster_summaries(session, projection_set=filters.projection_set),
         story_cluster_metadata_available=(filters.story_cluster_id is not None and visual_mode == "highlight"),
+        editorial=_load_explorer_editorial_metadata(session, filters=filters),
     )
 
 
@@ -1207,6 +1237,10 @@ def load_explorer_filter_options(session: Session, *, projection_set: str) -> di
         ),
         "available_clusters": _load_available_clusters(session, projection_set=projection_set),
         "cluster_summaries": _load_cluster_summaries(session, projection_set=projection_set),
+        "editorial": _load_explorer_editorial_metadata(
+            session,
+            filters=ExplorerFilters(projection_set=projection_set),
+        ),
     }
 
 
@@ -1239,7 +1273,16 @@ def load_explorer_article_detail(
                    COALESCE(spa.is_outlier, false) AS is_outlier,
                    COALESCE(spa.local_density_distance, 0.0) AS local_density_distance,
                    COALESCE(spa.source_neighbor_diversity, 0) AS source_neighbor_diversity,
-                   COALESCE(spa.nearby_sources_json, '[]') AS nearby_sources_json
+                   COALESCE(spa.nearby_sources_json, '[]') AS nearby_sources_json,
+                   aea.analysis_status AS editorial_analysis_status,
+                   aea.editorial_applicability AS editorial_applicability,
+                   aea.article_type AS editorial_article_type,
+                   aea.article_type_confidence AS editorial_article_type_confidence,
+                   aea.bias_label AS editorial_bias_label,
+                   aea.bias_confidence AS editorial_bias_confidence,
+                   aea.tone_emotional AS editorial_tone_emotional,
+                   aea.unclear_reasons_json AS editorial_unclear_reasons_json,
+                   aea.evidence_spans_json AS editorial_evidence_spans_json
             FROM articles a
             LEFT JOIN article_embeddings e ON e.article_id = a.id
             LEFT JOIN article_projections p
@@ -1249,6 +1292,8 @@ def load_explorer_article_detail(
             LEFT JOIN semantic_point_analysis spa
               ON spa.article_id = a.id
              AND spa.projection_set = :projection_set
+            LEFT JOIN article_editorial_analysis aea
+              ON aea.article_id = a.id
             WHERE a.id = :article_id
             """
             ),
@@ -1280,6 +1325,7 @@ def load_explorer_article_detail(
             x=float(row["x"]),
             y=float(row["y"]),
             z=float(row["z"]),
+            editorial_preview=_editorial_preview_for_row(row),
             analysis=_analysis_for_row(
                 row,
                 neighbors=neighbors,
@@ -1337,6 +1383,10 @@ def _build_explorer_where_clause(
             clauses.append(
                 "EXISTS (SELECT 1 FROM cluster_members cm WHERE cm.article_id = p.article_id AND cm.cluster_id = :story_cluster_id)"
             )
+    if filters.editorial_dimension and filters.editorial_value:
+        if filters.editorial_dimension == "article_type" and visual_mode == "filter":
+            clauses.append("aea.article_type = :editorial_value")
+            params["editorial_value"] = filters.editorial_value
     if filters.cluster_id is not None or filters.outlier_only:
         clauses.append("spa.projection_set = :analysis_projection_set")
         params["analysis_projection_set"] = filters.projection_set
@@ -1348,6 +1398,101 @@ def _build_explorer_where_clause(
         params["outlier_only"] = True
     return "WHERE " + " AND ".join(clauses), params
 
+
+
+
+def _editorial_preview_for_row(row: Any) -> dict[str, Any]:
+    analysis_status = str(row.get("editorial_analysis_status") or "pending")
+    editorial_applicability = str(row.get("editorial_applicability") or "full")
+    article_type = str(row.get("editorial_article_type") or "unclear")
+    article_type_confidence = float(row.get("editorial_article_type_confidence") or 0.0)
+    bias_label = str(row.get("editorial_bias_label") or "unclear")
+    bias_confidence = float(row.get("editorial_bias_confidence") or 0.0)
+    tone_emotional = str(row.get("editorial_tone_emotional") or "unclear")
+    unclear_reasons = _parse_json_scalar_list(row.get("editorial_unclear_reasons_json"))
+    evidence_spans = _parse_json_list(row.get("editorial_evidence_spans_json"))
+    return {
+        "analysis_status": analysis_status,
+        "editorial_applicability": editorial_applicability,
+        "article_type": article_type,
+        "article_type_confidence": article_type_confidence,
+        "bias_label": bias_label,
+        "bias_confidence": bias_confidence,
+        "tone_emotional": tone_emotional,
+        "review_flags": _build_editorial_review_flags(
+            analysis_status=analysis_status,
+            bias_label=bias_label,
+            bias_confidence=bias_confidence,
+            evidence_spans=evidence_spans,
+            unclear_reasons=unclear_reasons,
+            editorial_applicability=editorial_applicability,
+        ),
+    }
+
+
+def _load_explorer_editorial_metadata(session: Session, *, filters: ExplorerFilters) -> dict[str, Any]:
+    projection_kind = projection_kind_for_set(filters.projection_set)
+    where_sql, params = _build_explorer_where_clause(filters, projection_kind=projection_kind)
+    rows = (
+        session.execute(
+            text(
+                f"""
+                SELECT COALESCE(aea.article_type, 'unclear') AS value, COUNT(*) AS count
+                FROM article_projections p
+                JOIN articles a ON a.id = p.article_id
+                JOIN article_embeddings e ON e.id = p.embedding_id
+                LEFT JOIN semantic_point_analysis spa
+                  ON spa.article_id = p.article_id
+                 AND spa.projection_set = p.projection_set
+                LEFT JOIN article_editorial_analysis aea
+                  ON aea.article_id = p.article_id
+                {where_sql}
+                GROUP BY COALESCE(aea.article_type, 'unclear')
+                ORDER BY count DESC, value ASC
+                """
+            ),
+            params,
+        )
+        .mappings()
+        .all()
+    )
+    coverage_row = (
+        session.execute(
+            text(
+                f"""
+                SELECT
+                  COUNT(*) AS total,
+                  SUM(CASE WHEN aea.article_id IS NULL OR COALESCE(aea.analysis_status, 'pending') = 'pending' THEN 1 ELSE 0 END) AS pending,
+                  SUM(CASE WHEN COALESCE(aea.analysis_status, '') = 'failed' THEN 1 ELSE 0 END) AS failed,
+                  SUM(CASE WHEN COALESCE(aea.article_type, 'unclear') = 'unclear' THEN 1 ELSE 0 END) AS unknown,
+                  SUM(CASE WHEN COALESCE(aea.editorial_applicability, 'full') = 'limited' THEN 1 ELSE 0 END) AS limited,
+                  SUM(CASE WHEN COALESCE(aea.editorial_applicability, 'full') = 'out_of_domain' THEN 1 ELSE 0 END) AS out_of_domain
+                FROM article_projections p
+                JOIN articles a ON a.id = p.article_id
+                JOIN article_embeddings e ON e.id = p.embedding_id
+                LEFT JOIN semantic_point_analysis spa
+                  ON spa.article_id = p.article_id
+                 AND spa.projection_set = p.projection_set
+                LEFT JOIN article_editorial_analysis aea
+                  ON aea.article_id = p.article_id
+                {where_sql}
+                """
+            ),
+            params,
+        )
+        .mappings()
+        .first()
+    )
+    coverage = coverage_row or {}
+    return {
+        "article_type": [
+            {"value": str(row["value"]), "count": int(row["count"] or 0)} for row in rows if row["value"]
+        ],
+        "coverage": {
+            key: int(coverage.get(key) or 0)
+            for key in ["total", "pending", "failed", "unknown", "limited", "out_of_domain"]
+        },
+    }
 
 def _load_projection_bounds(session: Session, *, projection_set: str) -> dict[str, float] | None:
     projection_kind = projection_kind_for_set(projection_set)
@@ -1408,6 +1553,8 @@ def _load_filtered_distinct_values(
             LEFT JOIN semantic_point_analysis spa
               ON spa.article_id = p.article_id
              AND spa.projection_set = p.projection_set
+            LEFT JOIN article_editorial_analysis aea
+              ON aea.article_id = p.article_id
             {where_sql}
               AND {column} <> ''
             ORDER BY value ASC
@@ -1612,3 +1759,67 @@ def _analysis_for_row(
         ),
         story_cluster_ids=sorted(set(story_cluster_ids or [])),
     )
+
+
+def _build_editorial_review_flags(
+    *,
+    analysis_status: str,
+    bias_label: str,
+    bias_confidence: float,
+    evidence_spans: list[dict],
+    unclear_reasons: list[str],
+    editorial_applicability: str,
+) -> dict[str, bool]:
+    missing_evidence = analysis_status == "completed" and not evidence_spans
+    low_confidence = analysis_status == "completed" and bias_confidence < 0.45
+    failed_analysis = analysis_status == "failed"
+    unclear_bias = bias_label == "unclear"
+    provider_missing = "provider_missing" in unclear_reasons
+    mapping_loss = "mapping_loss" in unclear_reasons or "repair_data_loss" in unclear_reasons
+    out_of_domain = editorial_applicability == "out_of_domain"
+    pending_analysis = analysis_status == "pending"
+    needs_review = any(
+        [
+            missing_evidence,
+            low_confidence,
+            failed_analysis,
+            unclear_bias,
+            provider_missing,
+            mapping_loss,
+            out_of_domain,
+            pending_analysis,
+        ]
+    )
+    return {
+        "missing_evidence": missing_evidence,
+        "low_confidence": low_confidence,
+        "failed_analysis": failed_analysis,
+        "unclear_bias": unclear_bias,
+        "provider_missing": provider_missing,
+        "mapping_loss": mapping_loss,
+        "out_of_domain": out_of_domain,
+        "pending_analysis": pending_analysis,
+        "needs_review": needs_review,
+    }
+
+
+def _parse_json_list(raw: str | None) -> list[dict]:
+    if not raw:
+        return []
+    try:
+        value = json.loads(raw)
+    except json.JSONDecodeError:
+        return []
+    return value if isinstance(value, list) else []
+
+
+def _parse_json_scalar_list(raw: str | None) -> list[str]:
+    if not raw:
+        return []
+    try:
+        value = json.loads(raw)
+    except json.JSONDecodeError:
+        return []
+    if not isinstance(value, list):
+        return []
+    return [str(item) for item in value if isinstance(item, str)]

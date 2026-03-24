@@ -9,6 +9,14 @@ export type ExplorerSemanticSummary = {
   neighbor_count: number
 }
 
+export type ExplorerPointEditorialPreview = {
+  analysis_status: string
+  editorial_applicability: 'full' | 'limited' | 'out_of_domain'
+  article_type: string
+  article_type_confidence: number
+  review_flags: ExplorerEditorialReviewFlags
+}
+
 export type ExplorerPoint = {
   article_id: number
   source: string
@@ -23,6 +31,7 @@ export type ExplorerPoint = {
   y: number
   z: number
   analysis: ExplorerSemanticSummary
+  editorial_preview: ExplorerPointEditorialPreview | null
 }
 
 export type ExplorerProjectionBounds = {
@@ -46,6 +55,16 @@ export type ExplorerClusterSummary = {
   representative_article_ids: number[]
 }
 
+export type ExplorerEditorialOption = {
+  value: string
+  count: number
+}
+
+export type ExplorerEditorialMetadata = {
+  article_type: ExplorerEditorialOption[]
+  coverage: Record<string, number>
+}
+
 export type ExplorerMeta = {
   total: number
   returned: number
@@ -57,6 +76,7 @@ export type ExplorerMeta = {
   available_clusters: number[]
   cluster_summaries: ExplorerClusterSummary[]
   story_cluster_metadata_available: boolean
+  editorial: ExplorerEditorialMetadata | null
 }
 
 export type ExplorerPointsResponse = {
@@ -70,6 +90,7 @@ export type ExplorerFiltersResponse = {
   available_sections: string[]
   available_clusters: number[]
   cluster_summaries: ExplorerClusterSummary[]
+  editorial: ExplorerEditorialMetadata | null
 }
 
 export type ExplorerNeighbor = {
