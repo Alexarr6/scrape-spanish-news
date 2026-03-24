@@ -1,10 +1,19 @@
 import { useMemo } from 'react'
 import { CLUSTER_PALETTE, SOURCE_COLORS_HEX } from '../../lib/explorerColors'
+import {
+  ARTICLE_TYPE_COLOR_HEX,
+  EDITORIAL_DIAGNOSTIC_COLOR_HEX,
+  buildArticleTypeOptions,
+  getCoverageCount,
+  humanizeArticleType,
+} from '../../lib/explorerEditorial'
 import { clampText, formatDate, formatSimilarity } from '../../lib/format'
 import type {
   ExplorerArticleDetail,
   ExplorerClusterSummary,
   ExplorerColorMode,
+  ExplorerEditorialMetadata,
+  ExplorerEditorialTarget,
   ExplorerPoint,
   ExplorerViewMode,
   ExplorerVisualMode,
@@ -20,6 +29,7 @@ export type SeedContext =
   | null
 
 export type ActiveMatchTarget =
+  | { type: 'editorial'; dimension: 'article_type'; value: string }
   | { type: 'story-cluster'; id: number; available: boolean }
   | { type: 'semantic-cluster'; id: number }
   | { type: 'search'; query: string }
@@ -36,6 +46,8 @@ type Props = {
   visualMode: ExplorerVisualMode
   colorMode: ExplorerColorMode
   activeMatchTarget: ActiveMatchTarget
+  editorialTarget: ExplorerEditorialTarget
+  editorialMetadata: ExplorerEditorialMetadata | null
   onClearSelection: () => void
   onSelectArticle: (articleId: number) => void
   seedContext: SeedContext
@@ -44,6 +56,7 @@ type Props = {
 
 function describeActiveMatchTarget(target: ActiveMatchTarget) {
   if (!target) return 'No active match target.'
+  if (target.type === 'editorial') return `Highlighting article type ${humanizeArticleType(target.value)}.`
   if (target.type === 'story-cluster') {
     return target.available
       ? `Highlighting articles in story cluster ${target.id}.`
@@ -64,6 +77,8 @@ export function ExplorerContextRail({
   visualMode,
   colorMode,
   activeMatchTarget,
+  editorialTarget,
+  editorialMetadata,
   onClearSelection,
   onSelectArticle,
   seedContext,
@@ -74,6 +89,12 @@ export function ExplorerContextRail({
     if (clusterId == null) return null
     return clusterSummaries.find((c) => c.cluster_id === clusterId) ?? null
   }, [clusterSummaries, detail?.semantic_summary.cluster_id, selectedPoint?.analysis.cluster_id])
+
+  const editorialSummary = editorialTarget
+    ? visualMode === 'highlight'
+      ? `${humanizeArticleType(editorialTarget.value)} stays emphasized while the rest of the cloud remains visible as context.`
+      : `Explorer is narrowed to the ${humanizeArticleType(editorialTarget.value)} subset returned by the backend.`
+    : null
 
   if (!selectedPoint) {
     return (
@@ -103,13 +124,19 @@ export function ExplorerContextRail({
               : 'only the active match set is shown, hiding everything else.'}
           </p>
           <p className="context-guide-explainer-text">{describeActiveMatchTarget(activeMatchTarget)}</p>
+          {editorialSummary && <p className="context-guide-explainer-text">{editorialSummary}</p>}
         </div>
 
         <SectionDivider label="Legend" />
-        <ColorLegend colorMode={colorMode} activeMatchTarget={activeMatchTarget} clusterSummaries={clusterSummaries} />
+        <ColorLegend
+          colorMode={colorMode}
+          activeMatchTarget={activeMatchTarget}
+          clusterSummaries={clusterSummaries}
+          editorialMetadata={editorialMetadata}
+        />
 
         <SectionDivider label="Dataset" />
-        <DatasetSummary clusterSummaries={clusterSummaries} viewMode={viewMode} />
+        <DatasetSummary clusterSummaries={clusterSummaries} viewMode={viewMode} editorialMetadata={editorialMetadata} />
       </div>
     )
   }
@@ -128,6 +155,7 @@ export function ExplorerContextRail({
             : 'Filter mode narrows to the active match set only.'}
         </p>
         <p className="context-guide-explainer-text">{describeActiveMatchTarget(activeMatchTarget)}</p>
+        {editorialSummary && <p className="context-guide-explainer-text">{editorialSummary}</p>}
       </div>
 
       {loading && !detail ? (
@@ -202,11 +230,15 @@ function ColorLegend({
   colorMode,
   activeMatchTarget,
   clusterSummaries,
+  editorialMetadata,
 }: {
   colorMode: ExplorerColorMode
   activeMatchTarget: ActiveMatchTarget
   clusterSummaries: ExplorerClusterSummary[]
+  editorialMetadata: ExplorerEditorialMetadata | null
 }) {
+  const articleTypeOptions = buildArticleTypeOptions(editorialMetadata)
+
   return (
     <ul className="legend-list">
       <li className="legend-item"><span className="legend-dot" style={{ background: '#0ea5e9' }} /><span>Selected article</span></li>
@@ -252,11 +284,36 @@ function ColorLegend({
           })}
         </>
       )}
+
+      {colorMode === 'article-type' && (
+        <>
+          <li className="legend-item legend-item-header">Color by article type</li>
+          {articleTypeOptions.map((option) => (
+            <li key={option.value} className="legend-item legend-item-indent">
+              <span className="legend-dot" style={{ background: ARTICLE_TYPE_COLOR_HEX[option.value] ?? ARTICLE_TYPE_COLOR_HEX.unclear }} />
+              <span>{option.label} · {option.count}</span>
+            </li>
+          ))}
+          <li className="legend-item legend-item-indent"><span className="legend-dot" style={{ background: EDITORIAL_DIAGNOSTIC_COLOR_HEX.unknown }} /><span>Unknown · {getCoverageCount(editorialMetadata, 'unknown')}</span></li>
+          <li className="legend-item legend-item-indent"><span className="legend-dot" style={{ background: EDITORIAL_DIAGNOSTIC_COLOR_HEX.pending }} /><span>Pending · {getCoverageCount(editorialMetadata, 'pending')}</span></li>
+          <li className="legend-item legend-item-indent"><span className="legend-dot" style={{ background: EDITORIAL_DIAGNOSTIC_COLOR_HEX.failed }} /><span>Failed · {getCoverageCount(editorialMetadata, 'failed')}</span></li>
+          <li className="legend-item legend-item-indent"><span className="legend-dot" style={{ background: EDITORIAL_DIAGNOSTIC_COLOR_HEX.limited }} /><span>Limited scope · {getCoverageCount(editorialMetadata, 'limited')}</span></li>
+          <li className="legend-item legend-item-indent"><span className="legend-dot" style={{ background: EDITORIAL_DIAGNOSTIC_COLOR_HEX.out_of_domain }} /><span>Out of domain · {getCoverageCount(editorialMetadata, 'out_of_domain')}</span></li>
+        </>
+      )}
     </ul>
   )
 }
 
-function DatasetSummary({ clusterSummaries, viewMode }: { clusterSummaries: ExplorerClusterSummary[]; viewMode: ExplorerViewMode }) {
+function DatasetSummary({
+  clusterSummaries,
+  viewMode,
+  editorialMetadata,
+}: {
+  clusterSummaries: ExplorerClusterSummary[]
+  viewMode: ExplorerViewMode
+  editorialMetadata: ExplorerEditorialMetadata | null
+}) {
   const totalArticles = clusterSummaries.reduce((sum, c) => sum + c.size, 0)
   const allSources = new Set(clusterSummaries.flatMap((c) => Object.keys(c.top_sources)))
 
@@ -264,6 +321,13 @@ function DatasetSummary({ clusterSummaries, viewMode }: { clusterSummaries: Expl
     <div className="context-dataset">
       <div className="context-dataset-row"><strong>{clusterSummaries.length}</strong> clusters · <strong>{allSources.size}</strong> sources</div>
       {totalArticles > 0 && <div className="context-dataset-row"><strong>{totalArticles}</strong> clustered articles</div>}
+      {editorialMetadata && (
+        <div className="context-dataset-row">
+          Editorial coverage · <strong>{getCoverageCount(editorialMetadata, 'total')}</strong> analyzed / visible points,{' '}
+          <strong>{getCoverageCount(editorialMetadata, 'pending')}</strong> pending,{' '}
+          <strong>{getCoverageCount(editorialMetadata, 'failed')}</strong> failed.
+        </div>
+      )}
       <div className="context-dataset-row" style={{ color: 'var(--color-text-muted)' }}>
         {viewMode === '3d' ? '3D: inspect depth / overlap.' : '2D: compare layout.'}
       </div>

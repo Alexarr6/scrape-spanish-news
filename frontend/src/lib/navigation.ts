@@ -45,6 +45,8 @@ export function buildSemanticExplorerHref(options: {
   params.delete('sem_cluster')
   params.delete('sem_section')
   params.delete('sem_outliers')
+  params.delete('sem_editorial_dim')
+  params.delete('sem_editorial_value')
   params.set('sem_mode', 'highlight')
   params.set('sem_color', 'active-match')
 

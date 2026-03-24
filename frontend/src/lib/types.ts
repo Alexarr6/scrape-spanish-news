@@ -169,6 +169,13 @@ export type ExplorerArticleDetail = {
   neighbors: ExplorerNeighbor[]
 }
 
+export type ExplorerEditorialDimension = 'article_type'
+
+export type ExplorerEditorialTarget = {
+  dimension: ExplorerEditorialDimension
+  value: string
+} | null
+
 export type ExplorerQuery = {
   search: string
   source: string
@@ -179,11 +186,13 @@ export type ExplorerQuery = {
   dateTo: string
   outlierOnly: boolean
   limit: number
+  editorialDimension: ExplorerEditorialDimension | ''
+  editorialValue: string
 }
 
 export type ExplorerViewMode = '2d' | '3d'
 export type ExplorerVisualMode = 'highlight' | 'filter'
-export type ExplorerColorMode = 'neutral' | 'source' | 'cluster' | 'active-match'
+export type ExplorerColorMode = 'neutral' | 'source' | 'cluster' | 'active-match' | 'article-type'
 
 export const DEFAULT_QUERY: ExplorerQuery = {
   search: '',
@@ -195,6 +204,8 @@ export const DEFAULT_QUERY: ExplorerQuery = {
   dateTo: '',
   outlierOnly: false,
   limit: 250,
+  editorialDimension: '',
+  editorialValue: '',
 }
 
 export type ClusterFilterOption = {

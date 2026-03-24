@@ -1,6 +1,12 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { DEFAULT_QUERY } from '../lib/types'
-import type { ExplorerColorMode, ExplorerQuery, ExplorerVisualMode } from '../lib/types'
+import type {
+  ExplorerColorMode,
+  ExplorerEditorialDimension,
+  ExplorerEditorialTarget,
+  ExplorerQuery,
+  ExplorerVisualMode,
+} from '../lib/types'
 
 const EXPLORER_PARAM_KEYS = [
   'view',
@@ -16,6 +22,8 @@ const EXPLORER_PARAM_KEYS = [
   'sem_article',
   'sem_mode',
   'sem_color',
+  'sem_editorial_dim',
+  'sem_editorial_value',
 ] as const
 
 function parseStrictPositiveInteger(value: string | null, fallback: number): number {
@@ -33,11 +41,20 @@ function parseVisualMode(value: string | null): ExplorerVisualMode {
 }
 
 function parseColorMode(value: string | null): ExplorerColorMode {
-  return value === 'source' || value === 'cluster' || value === 'active-match' ? value : 'neutral'
+  return value === 'source' || value === 'cluster' || value === 'active-match' || value === 'article-type'
+    ? value
+    : 'neutral'
+}
+
+function parseEditorialDimension(value: string | null): ExplorerEditorialDimension | '' {
+  return value === 'article_type' ? value : ''
 }
 
 function readInitialState() {
   const params = new URLSearchParams(window.location.search)
+  const editorialDimension = parseEditorialDimension(params.get('sem_editorial_dim'))
+  const editorialValue = editorialDimension ? params.get('sem_editorial_value') ?? DEFAULT_QUERY.editorialValue : ''
+
   const query: ExplorerQuery = {
     search: params.get('sem_search') ?? DEFAULT_QUERY.search,
     source: params.get('sem_source') ?? DEFAULT_QUERY.source,
@@ -48,6 +65,8 @@ function readInitialState() {
     dateTo: params.get('sem_to') ?? DEFAULT_QUERY.dateTo,
     outlierOnly: params.get('sem_outliers') === 'true',
     limit: parseStrictPositiveInteger(params.get('sem_limit'), DEFAULT_QUERY.limit),
+    editorialDimension,
+    editorialValue,
   }
 
   return {
@@ -78,6 +97,10 @@ export function useExplorerUrlState() {
     if (state.selectedArticleId != null) params.set('sem_article', String(state.selectedArticleId))
     if (state.visualMode !== 'highlight') params.set('sem_mode', state.visualMode)
     if (state.colorMode !== 'neutral') params.set('sem_color', state.colorMode)
+    if (state.query.editorialDimension && state.query.editorialValue) {
+      params.set('sem_editorial_dim', state.query.editorialDimension)
+      params.set('sem_editorial_value', state.query.editorialValue)
+    }
 
     const nextUrl = `${window.location.pathname}?${params.toString()}${window.location.hash}`
     window.history.replaceState(null, '', nextUrl)
@@ -94,6 +117,7 @@ export function useExplorerUrlState() {
     if (state.query.dateTo) count += 1
     if (state.query.outlierOnly) count += 1
     if (state.query.limit !== DEFAULT_QUERY.limit) count += 1
+    if (state.query.editorialDimension && state.query.editorialValue) count += 1
     return count
   }, [state.query])
 
@@ -117,6 +141,17 @@ export function useExplorerUrlState() {
     setState((current) => ({ ...current, colorMode }))
   }, [])
 
+  const setEditorialTarget = useCallback((target: ExplorerEditorialTarget) => {
+    setState((current) => ({
+      ...current,
+      query: {
+        ...current.query,
+        editorialDimension: target?.dimension ?? '',
+        editorialValue: target?.value ?? '',
+      },
+    }))
+  }, [])
+
   return {
     query: state.query,
     selectedArticleId: state.selectedArticleId,
@@ -128,5 +163,9 @@ export function useExplorerUrlState() {
     setSelectedArticleId,
     setVisualMode,
     setColorMode,
+    setEditorialTarget,
+    editorialTarget: state.query.editorialDimension && state.query.editorialValue
+      ? { dimension: state.query.editorialDimension, value: state.query.editorialValue }
+      : null,
   }
 }

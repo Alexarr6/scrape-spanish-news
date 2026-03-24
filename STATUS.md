@@ -1,21 +1,22 @@
 - State: DONE
-- Current phase: iter/008 explorer article-type editorial lens backend landed; ready for frontend integration/review
+- Current phase: iter/008 explorer article-type editorial lens frontend landed; ready for review
 - Last update: 2026-03-24 UTC
 
-## iter/008 bounded backend slice summary
-- added lightweight `editorial_preview` onto Explorer point payloads so the point cloud can read article-type/editorial state without dragging full article-detail editorial blobs
-- added `/api/v1/semantic/explorer/points` editorial lens query support for:
-  - `sem_editorial_dim=article_type`
-  - `sem_editorial_value=<label>`
-- preserved mode semantics:
-  - `sem_mode=filter` narrows the explorer dataset to matching article type
-  - `sem_mode=highlight` keeps the broader dataset and still returns preview payloads for all visible points
-- landed bounded Explorer editorial meta/filter support for article-type options plus simple coverage counts
-- kept the pass deliberately narrow: no bias/tone lensing, no endpoint architecture rewrite, no Phase 1 visual grammar churn
+## iter/008 bounded slice summary
+- backend/data slice landed lightweight `editorial_preview`, article-type query support, and bounded editorial meta/counts for Explorer
+- frontend slice now wires that contract into Explorer URL/query state, map matching logic, legend copy, and control-bar UX
+- added the first bounded `Editorial lens` control for **Article type** only
+- added `sem_color=article-type` categorical coloring for visible points
+- preserved approved mode semantics:
+  - `sem_mode=highlight` keeps the full cloud visible and emphasizes matching article types
+  - `sem_mode=filter` shows the backend-narrowed article-type subset clearly as a narrowed view
+- added legend/context handling for `unknown`, `pending`, `failed`, `limited`, and `out_of_domain`
+- kept the slice deliberately narrow: no bias/tone lensing, no multi-dimension builder, no Phase 1 visual grammar churn
 
 ## verification status
 - passed: `python3 -m py_compile src/api/contracts/semantic.py src/api/v1/semantic.py src/semantic/contracts.py src/semantic/dbstore.py tests/test_api_semantic_explorer.py`
 - passed: `/home/node/.local/bin/uv run --group dev python -m pytest tests/test_api_semantic_explorer.py`
+- passed: `cd frontend && npm run build`
 
 ## files changed in this pass
 - `src/api/contracts/semantic.py`
@@ -24,6 +25,15 @@
 - `src/semantic/dbstore.py`
 - `tests/test_api_semantic_explorer.py`
 - `frontend/src/lib/types.ts`
+- `frontend/src/lib/query.ts`
+- `frontend/src/lib/navigation.ts`
+- `frontend/src/lib/explorerEditorial.ts`
+- `frontend/src/hooks/useExplorerUrlState.ts`
+- `frontend/src/components/explorer/ExplorerControlBar.tsx`
+- `frontend/src/components/explorer/ExplorerContextRail.tsx`
+- `frontend/src/components/explorer/MapPanel.tsx`
+- `frontend/src/routes/ExplorerPage.tsx`
+- `frontend/src/styles.css`
 - `STATUS.md`
 - `RESULTS.md`
 

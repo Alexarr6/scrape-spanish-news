@@ -20,6 +20,11 @@ import DeckGL from '@deck.gl/react'
 import { forwardRef, useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react'
 import { formatDate } from '../../lib/format'
 import {
+  articleTypeColorRgb,
+  describeEditorialPreview,
+  isEditorialValueMatch,
+} from '../../lib/explorerEditorial'
+import {
   AXIS_COLOR_2D,
   AXIS_GRID_COLOR_3D,
   AXIS_X_COLOR_3D,
@@ -64,6 +69,7 @@ import {
 } from '../../lib/explorerColors'
 import type {
   ExplorerColorMode,
+  ExplorerEditorialTarget,
   ExplorerPoint,
   ExplorerPointsResponse,
   ExplorerProjectionBounds,
@@ -86,7 +92,14 @@ type Props = {
   viewMode: ExplorerViewMode
   visualMode: ExplorerVisualMode
   colorMode: ExplorerColorMode
-  activeMatchTarget: { type: 'story-cluster'; id: number; available: boolean } | { type: 'semantic-cluster'; id: number } | { type: 'search'; query: string } | { type: 'source'; source: string } | null
+  activeMatchTarget:
+    | { type: 'editorial'; dimension: 'article_type'; value: string }
+    | { type: 'story-cluster'; id: number; available: boolean }
+    | { type: 'semantic-cluster'; id: number }
+    | { type: 'search'; query: string }
+    | { type: 'source'; source: string }
+    | null
+  editorialTarget: ExplorerEditorialTarget
   onHoverArticle: (articleId: number | null) => void
   onSelectArticle: (articleId: number | null) => void
 }
@@ -224,6 +237,9 @@ function normalizeSearchText(value: string) {
 
 function pointMatchesActiveTarget(point: ExplorerPoint, activeMatchTarget: Props['activeMatchTarget']): boolean {
   if (!activeMatchTarget) return false
+  if (activeMatchTarget.type === 'editorial') {
+    return isEditorialValueMatch(point, { dimension: activeMatchTarget.dimension, value: activeMatchTarget.value })
+  }
   if (activeMatchTarget.type === 'story-cluster') {
     return activeMatchTarget.available && (point.analysis.story_cluster_ids ?? []).includes(activeMatchTarget.id)
   }
@@ -244,6 +260,9 @@ function colorForPoint(point: ExplorerPoint, mode: ExplorerColorMode): [number, 
       return point.analysis.is_outlier ? CLUSTER_OUTLIER_COLOR : CLUSTER_NULL_COLOR
     }
     return CLUSTER_PALETTE[(point.analysis.cluster_id - 1) % CLUSTER_PALETTE.length]
+  }
+  if (mode === 'article-type') {
+    return articleTypeColorRgb(point.editorial_preview?.article_type)
   }
   // neutral
   return [67, 56, 202] // indigo-700
@@ -341,6 +360,7 @@ export const MapPanel = forwardRef<MapPanelHandle, Props>(function MapPanel(
     visualMode,
     colorMode,
     activeMatchTarget,
+    editorialTarget,
     onHoverArticle,
     onSelectArticle,
   },
@@ -670,7 +690,11 @@ export const MapPanel = forwardRef<MapPanelHandle, Props>(function MapPanel(
           {!loading && !error && visibleItems.length === 0 && (
             <div className="map-empty-state">
               <strong>No articles match the current filters</strong>
-              <p>Broaden the source or date scope, clear the cluster filter, or switch back to highlight mode.</p>
+              <p>
+                {editorialTarget
+                  ? `No visible points match article type ${editorialTarget.value.replace(/_/g, ' ')}. Clear the lens, switch back to highlight mode, or broaden the base subset.`
+                  : 'Broaden the source or date scope, clear the cluster filter, or switch back to highlight mode.'}
+              </p>
             </div>
           )}
           {tooltip && (
@@ -729,6 +753,7 @@ function Tooltip({
           ? `Cluster ${point.analysis.cluster_id}`
           : 'No cluster'}
       </div>
+      <div className="tooltip-cluster-meta">{describeEditorialPreview(point.editorial_preview)}</div>
       {point.summary_snippet && <p>{point.summary_snippet}</p>}
     </div>
   )

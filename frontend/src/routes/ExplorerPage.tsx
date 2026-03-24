@@ -32,6 +32,8 @@ export function ExplorerPage() {
     setSelectedArticleId,
     setVisualMode,
     setColorMode,
+    editorialTarget,
+    setEditorialTarget,
   } = useExplorerUrlState()
 
   const {
@@ -55,6 +57,13 @@ export function ExplorerPage() {
   const activeMatchTarget = useMemo<ActiveMatchTarget>(() => {
     const points = pointsState.data?.items ?? []
     const metadataAvailable = pointsState.data?.meta.story_cluster_metadata_available ?? false
+    if (editorialTarget) {
+      return {
+        type: 'editorial',
+        dimension: editorialTarget.dimension,
+        value: editorialTarget.value,
+      }
+    }
     if (query.storyClusterId) {
       return {
         type: 'story-cluster',
@@ -66,7 +75,7 @@ export function ExplorerPage() {
     if (query.search.trim()) return { type: 'search', query: query.search.trim() }
     if (query.source) return { type: 'source', source: query.source }
     return null
-  }, [pointsState.data?.items, pointsState.data?.meta.story_cluster_metadata_available, query.storyClusterId, query.clusterId, query.search, query.source])
+  }, [editorialTarget, pointsState.data?.items, pointsState.data?.meta.story_cluster_metadata_available, query.storyClusterId, query.clusterId, query.search, query.source])
 
   return (
     <div className="explorer-layout">
@@ -78,9 +87,12 @@ export function ExplorerPage() {
         activeFilterCount={activeFilterCount}
         loading={pointsState.loading}
         hasSelection={selectedArticleId !== null}
+        editorialTarget={editorialTarget}
+        editorialOptions={pointsState.data?.meta.editorial ?? filtersState.data?.editorial ?? null}
         onViewModeChange={setViewMode}
         onVisualModeChange={setVisualMode}
         onColorModeChange={setColorMode}
+        onEditorialTargetChange={setEditorialTarget}
         onFitAll={() => mapRef.current?.fitAll()}
         onFocusSelected={() => mapRef.current?.focusSelected()}
         onOpenFilters={() => setFiltersOpen(true)}
@@ -100,6 +112,7 @@ export function ExplorerPage() {
             visualMode={visualMode}
             colorMode={colorMode}
             activeMatchTarget={activeMatchTarget}
+            editorialTarget={editorialTarget}
             onHoverArticle={setHoveredArticleId}
             onSelectArticle={setSelectedArticleId}
           />
@@ -115,6 +128,8 @@ export function ExplorerPage() {
           visualMode={visualMode}
           colorMode={colorMode}
           activeMatchTarget={activeMatchTarget}
+          editorialTarget={editorialTarget}
+          editorialMetadata={pointsState.data?.meta.editorial ?? filtersState.data?.editorial ?? null}
           onClearSelection={clearSelectedArticle}
           onSelectArticle={setSelectedArticleId}
           seedContext={seedContext}

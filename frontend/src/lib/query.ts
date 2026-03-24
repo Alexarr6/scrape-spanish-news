@@ -26,6 +26,8 @@ export function buildExplorerPointsQuery(
     cluster_id: query.clusterId,
     sem_story_cluster: query.storyClusterId,
     sem_mode: visualMode,
+    sem_editorial_dim: query.editorialDimension,
+    sem_editorial_value: query.editorialValue,
     date_from: query.dateFrom,
     date_to: query.dateTo,
     outlier_only: query.outlierOnly,
