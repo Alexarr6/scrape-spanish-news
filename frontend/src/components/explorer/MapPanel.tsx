@@ -43,6 +43,10 @@ import {
   POINT_NEIGHBOR_RADIUS_2D,
   POINT_NEIGHBOR_STROKE,
   POINT_NEIGHBOR_STROKE_WIDTH,
+  POINT_NON_MATCH_ALPHA_HIGHLIGHT,
+  POINT_NON_MATCH_RADIUS_SCALE_HIGHLIGHT,
+  POINT_NON_MATCH_STROKE,
+  POINT_NON_MATCH_STROKE_WIDTH,
   POINT_OUTLIER_ALPHA_NO_SELECTION,
   POINT_OUTLIER_ALPHA_UNDER_SELECTION,
   POINT_OUTLIER_RADIUS_2D,
@@ -356,6 +360,10 @@ export const MapPanel = forwardRef<MapPanelHandle, Props>(function MapPanel(
     [points, selectedArticleId],
   )
   const hasSelection = selectedArticleId != null
+  // hasActiveMatch: true when there is a seed target that produces meaningful point differentiation.
+  // For story-cluster, we require metadata to be available on the loaded points — otherwise
+  // we have a seed but can't distinguish matches, so highlight mode is a no-op until data arrives.
+  // The separate hasSeedContext flag lets us show a pending state in the rail without fully degrading.
   const hasActiveMatch = activeMatchTarget != null && (activeMatchTarget.type !== 'story-cluster' || activeMatchTarget.available)
   const visibleItems = useMemo(() => {
     const items = points?.items ?? []
@@ -451,8 +459,11 @@ export const MapPanel = forwardRef<MapPanelHandle, Props>(function MapPanel(
             ? [124, 58, 237]
             : [148, 163, 184]
           : colorForPoint(p, colorMode)
+        // Highlight mode: non-matches stay visible as context (~43% alpha), not hidden.
+        // Filter mode uses the same receded alpha but hides them via visibleItems filtering.
+        // Under selection: standard recede applies on top of any highlight logic.
         const alpha = hasActiveMatch && visualMode === 'highlight' && !isActiveMatch
-          ? 70
+          ? POINT_NON_MATCH_ALPHA_HIGHLIGHT
           : hasSelection
           ? p.analysis.is_outlier
             ? POINT_OUTLIER_ALPHA_UNDER_SELECTION
@@ -533,6 +544,11 @@ export const MapPanel = forwardRef<MapPanelHandle, Props>(function MapPanel(
           if (point.article_id === selectedArticleId) return POINT_SELECTED_RADIUS_2D
           if (neighborIds.has(point.article_id)) return POINT_NEIGHBOR_RADIUS_2D
           if (point.article_id === hoveredArticleId) return POINT_HOVERED_RADIUS_2D
+          // Highlight mode: non-matches shrink slightly so matches stand out by size too.
+          if (hasActiveMatch && visualMode === 'highlight' && !pointMatchesActiveTarget(point, activeMatchTarget)) {
+            const base = point.analysis.is_outlier ? POINT_OUTLIER_RADIUS_2D : POINT_REGULAR_RADIUS_2D
+            return Math.round(base * POINT_NON_MATCH_RADIUS_SCALE_HIGHLIGHT)
+          }
           if (point.analysis.is_outlier) return POINT_OUTLIER_RADIUS_2D
           return POINT_REGULAR_RADIUS_2D
         },
@@ -547,8 +563,11 @@ export const MapPanel = forwardRef<MapPanelHandle, Props>(function MapPanel(
               ? [124, 58, 237]
               : [148, 163, 184]
             : colorForPoint(point, colorMode)
+          // Highlight mode: non-matches stay visible as context (~43% alpha), not hidden.
+          // This is intentionally gentler than filter mode so the map reads as
+          // "everything visible, matches pulled forward" not "everything else gone".
           const alpha = hasActiveMatch && visualMode === 'highlight' && !isActiveMatch
-            ? 70
+            ? POINT_NON_MATCH_ALPHA_HIGHLIGHT
             : hasSelection
             ? point.analysis.is_outlier
               ? POINT_OUTLIER_ALPHA_UNDER_SELECTION
@@ -563,6 +582,10 @@ export const MapPanel = forwardRef<MapPanelHandle, Props>(function MapPanel(
           if (point.article_id === selectedArticleId) return POINT_SELECTED_STROKE
           if (neighborIds.has(point.article_id)) return POINT_NEIGHBOR_STROKE
           if (point.article_id === hoveredArticleId) return POINT_HOVERED_STROKE
+          // Highlight mode: non-matches get a very faint stroke so they read as context without vanishing.
+          if (hasActiveMatch && visualMode === 'highlight' && !pointMatchesActiveTarget(point, activeMatchTarget)) {
+            return POINT_NON_MATCH_STROKE
+          }
           if (hasSelection) return POINT_RECEDING_STROKE
           return POINT_DEFAULT_STROKE
         },
@@ -571,6 +594,10 @@ export const MapPanel = forwardRef<MapPanelHandle, Props>(function MapPanel(
           if (point.article_id === selectedArticleId) return POINT_SELECTED_STROKE_WIDTH
           if (neighborIds.has(point.article_id)) return POINT_NEIGHBOR_STROKE_WIDTH
           if (point.article_id === hoveredArticleId) return POINT_HOVERED_STROKE_WIDTH
+          // Highlight mode: non-matches get thin stroke consistent with context role.
+          if (hasActiveMatch && visualMode === 'highlight' && !pointMatchesActiveTarget(point, activeMatchTarget)) {
+            return POINT_NON_MATCH_STROKE_WIDTH
+          }
           if (hasSelection) return POINT_RECEDING_STROKE_WIDTH
           return POINT_DEFAULT_STROKE_WIDTH
         },
@@ -588,10 +615,10 @@ export const MapPanel = forwardRef<MapPanelHandle, Props>(function MapPanel(
         onClick: (info: PickingInfoLike) => onSelectArticle(info.object?.article_id ?? null),
 
         updateTriggers: {
-          getRadius: [selectedArticleId, hoveredArticleId, neighborKey],
+          getRadius: [visualMode, selectedArticleId, hoveredArticleId, neighborKey, hasActiveMatch, JSON.stringify(activeMatchTarget)],
           getFillColor: [visualMode, colorMode, selectedArticleId, hoveredArticleId, neighborKey, hasSelection, hasActiveMatch, JSON.stringify(activeMatchTarget)],
-          getLineColor: [selectedArticleId, neighborKey, hasSelection],
-          getLineWidth: [selectedArticleId, neighborKey, hasSelection],
+          getLineColor: [visualMode, selectedArticleId, hoveredArticleId, neighborKey, hasSelection, hasActiveMatch, JSON.stringify(activeMatchTarget)],
+          getLineWidth: [visualMode, selectedArticleId, hoveredArticleId, neighborKey, hasSelection, hasActiveMatch, JSON.stringify(activeMatchTarget)],
         },
       }),
     ]

@@ -46,12 +46,12 @@ function describeActiveMatchTarget(target: ActiveMatchTarget) {
   if (!target) return 'No active match target.'
   if (target.type === 'story-cluster') {
     return target.available
-      ? `Story cluster ${target.id} is the active match target.`
-      : `Story cluster ${target.id} is selected, but story-cluster match metadata is not available yet.`
+      ? `Highlighting articles in story cluster ${target.id}.`
+      : `Story cluster ${target.id} — loading match metadata…`
   }
-  if (target.type === 'semantic-cluster') return `Semantic cluster ${target.id} is the active match target.`
-  if (target.type === 'search') return `Search matches for “${target.query}” are active.`
-  return `${target.source} is the active source match.`
+  if (target.type === 'semantic-cluster') return `Highlighting semantic cluster ${target.id}.`
+  if (target.type === 'search') return `Highlighting matches for "${target.query}".`
+  return `Highlighting articles from ${target.source}.`
 }
 
 export function ExplorerContextRail({
@@ -97,9 +97,10 @@ export function ExplorerContextRail({
 
         <div className="context-guide-explainer">
           <p className="context-guide-explainer-text">
-            Proximity = semantic similarity. In <strong>{visualMode}</strong> mode, {visualMode === 'highlight'
-              ? 'non-matches stay visible and recede into the background.'
-              : 'the canvas narrows to the current active match.'}
+            Proximity = semantic similarity. In <strong>{visualMode}</strong> mode,{' '}
+            {visualMode === 'highlight'
+              ? 'matches are pulled forward while non-matches stay visible as context — the full cloud remains.'
+              : 'only the active match set is shown, hiding everything else.'}
           </p>
           <p className="context-guide-explainer-text">{describeActiveMatchTarget(activeMatchTarget)}</p>
         </div>
@@ -123,8 +124,8 @@ export function ExplorerContextRail({
       <div className="context-guide-explainer" style={{ marginTop: 0 }}>
         <p className="context-guide-explainer-text">
           {visualMode === 'highlight'
-            ? 'Highlight mode keeps the full cloud visible and pulls the active match forward.'
-            : 'Filter mode shows only the active match set, plus your focused context.'}
+            ? 'Highlight mode keeps the full cloud visible — matches stand out, non-matches recede as context.'
+            : 'Filter mode narrows to the active match set only.'}
         </p>
         <p className="context-guide-explainer-text">{describeActiveMatchTarget(activeMatchTarget)}</p>
       </div>
@@ -219,8 +220,8 @@ function ColorLegend({
       {colorMode === 'active-match' && (
         <>
           <li className="legend-item legend-item-header">Active match colors</li>
-          <li className="legend-item legend-item-indent"><span className="legend-dot" style={{ background: '#7c3aed' }} /><span>Active match</span></li>
-          <li className="legend-item legend-item-indent"><span className="legend-dot" style={{ background: '#94a3b8' }} /><span>Context / non-match</span></li>
+          <li className="legend-item legend-item-indent"><span className="legend-dot" style={{ background: '#7c3aed' }} /><span>Match — pulled forward</span></li>
+          <li className="legend-item legend-item-indent"><span className="legend-dot" style={{ background: '#94a3b8', opacity: 0.45 }} /><span>Context (non-match, still visible)</span></li>
           <li className="legend-item legend-item-indent"><span>{describeActiveMatchTarget(activeMatchTarget)}</span></li>
         </>
       )}
