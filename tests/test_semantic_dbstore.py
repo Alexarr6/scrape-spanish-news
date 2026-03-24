@@ -444,6 +444,28 @@ def test_load_explorer_points_page_keeps_broader_dataset_for_story_cluster_highl
     assert "EXISTS (SELECT 1 FROM cluster_members cm WHERE cm.article_id = p.article_id AND cm.cluster_id = :story_cluster_id)" not in joined_sql
 
 
+def test_load_explorer_points_page_filters_search_only_in_filter_mode() -> None:
+    session = _ExplorerSession()
+    load_explorer_points_page(
+        session,
+        filters=ExplorerFilters(search="gobierno", visual_mode="filter"),
+    )
+    joined_sql = "\n".join(session.sql)
+    assert "lower(a.title) LIKE :search OR lower(a.summary) LIKE :search" in joined_sql
+    assert any(params.get("search") == "%gobierno%" for params in session.params)
+
+
+def test_load_explorer_points_page_skips_search_where_clause_in_highlight_mode() -> None:
+    session = _ExplorerSession()
+    load_explorer_points_page(
+        session,
+        filters=ExplorerFilters(search="gobierno", visual_mode="highlight"),
+    )
+    joined_sql = "\n".join(session.sql)
+    assert "lower(a.title) LIKE :search OR lower(a.summary) LIKE :search" not in joined_sql
+    assert any(params.get("search") == "%gobierno%" for params in session.params)
+
+
 def test_load_explorer_article_detail_formats_published_at_as_text_sql() -> None:
     session = _ExplorerSession()
     load_explorer_article_detail(session, article_id=1, projection_set="pca_2d_latest")

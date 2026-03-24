@@ -357,6 +357,32 @@ def test_explorer_points_supports_story_cluster_highlight_mode() -> None:
     assert membership_by_article == {1: [501], 2: [502]}
 
 
+def test_explorer_points_search_highlight_mode_keeps_broad_dataset() -> None:
+    client = _build_client()
+
+    response = client.get(
+        "/api/v1/semantic/explorer/points",
+        params={"search": "gobierno", "sem_mode": "highlight"},
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert sorted(item["article_id"] for item in payload["items"]) == [1, 2]
+
+
+def test_explorer_points_search_filter_mode_still_filters_dataset() -> None:
+    client = _build_client()
+
+    response = client.get(
+        "/api/v1/semantic/explorer/points",
+        params={"search": "gobierno", "sem_mode": "filter"},
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert [item["article_id"] for item in payload["items"]] == [1]
+
+
 def test_explorer_filters_returns_available_options() -> None:
     client = _build_client()
     response = client.get("/api/v1/semantic/explorer/filters")

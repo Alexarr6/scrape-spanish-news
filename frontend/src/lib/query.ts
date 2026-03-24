@@ -15,13 +15,17 @@ function buildQuery(params: Record<string, string | number | boolean | null | un
   return text ? `?${text}` : ''
 }
 
-export function buildExplorerPointsQuery(query: ExplorerQuery): string {
+export function buildExplorerPointsQuery(
+  query: ExplorerQuery,
+  visualMode?: 'highlight' | 'filter',
+): string {
   return buildQuery({
     search: query.search.trim(),
     source: query.source,
     section: query.section,
     cluster_id: query.clusterId,
     sem_story_cluster: query.storyClusterId,
+    sem_mode: visualMode,
     date_from: query.dateFrom,
     date_to: query.dateTo,
     outlier_only: query.outlierOnly,

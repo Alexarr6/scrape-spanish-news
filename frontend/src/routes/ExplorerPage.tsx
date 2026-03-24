@@ -43,7 +43,7 @@ export function ExplorerPage() {
     neighborIds,
     clearSelectedArticle,
     setHoveredArticleId,
-  } = useExplorerData(query, selectedArticleId, setSelectedArticleId)
+  } = useExplorerData(query, visualMode, selectedArticleId, setSelectedArticleId)
 
   const seedContext = useMemo<SeedContext>(() => {
     if (query.storyClusterId) return { type: 'story-cluster', clusterId: Number(query.storyClusterId) }

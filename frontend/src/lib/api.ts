@@ -24,8 +24,11 @@ async function requestJson<T>(path: string): Promise<T> {
   return (await response.json()) as T
 }
 
-export function fetchExplorerPoints(query: ExplorerQuery): Promise<ExplorerPointsResponse> {
-  return requestJson(`/api/v1/semantic/explorer/points${buildExplorerPointsQuery(query)}`)
+export function fetchExplorerPoints(
+  query: ExplorerQuery,
+  visualMode?: 'highlight' | 'filter',
+): Promise<ExplorerPointsResponse> {
+  return requestJson(`/api/v1/semantic/explorer/points${buildExplorerPointsQuery(query, visualMode)}`)
 }
 
 export function fetchExplorerFilters(): Promise<ExplorerFiltersResponse> {

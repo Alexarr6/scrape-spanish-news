@@ -1308,12 +1308,14 @@ def _build_explorer_where_clause(
     if filters.date_to:
         clauses.append("date(a.published_at) <= date(:date_to)")
         params["date_to"] = filters.date_to
+    visual_mode = (filters.visual_mode or "filter").lower()
     if filters.search:
-        clauses.append("(lower(a.title) LIKE :search OR lower(a.summary) LIKE :search)")
         params["search"] = f"%{filters.search.strip().lower()}%"
+        if visual_mode == "filter":
+            clauses.append("(lower(a.title) LIKE :search OR lower(a.summary) LIKE :search)")
     if filters.story_cluster_id is not None:
         params["story_cluster_id"] = filters.story_cluster_id
-        if (filters.visual_mode or "filter").lower() == "filter":
+        if visual_mode == "filter":
             clauses.append(
                 "EXISTS (SELECT 1 FROM cluster_members cm WHERE cm.article_id = p.article_id AND cm.cluster_id = :story_cluster_id)"
             )
