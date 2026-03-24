@@ -97,7 +97,7 @@ run_step semantic-sync \
     UV="$UV" \
     LIMIT="$SEMANTIC_LIMIT" \
     OPENAI_API_KEY="$OPENAI_API_KEY" \
-    SEMANTIC_ARGS="--embedding-model $EMBEDDING_MODEL --days-back $DAYS_BACK --prioritize-story-members"
+    SEMANTIC_ARGS="--embedding-model $EMBEDDING_MODEL --days-back $DAYS_BACK --prioritize-story-members --priority-story-cluster-min-size 2"
 
 run_step semantic-project \
   make --no-print-directory -C "$REPO_ROOT" semantic-project \

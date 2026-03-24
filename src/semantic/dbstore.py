@@ -6,6 +6,7 @@ import hashlib
 import math
 import re
 from collections import defaultdict
+from collections.abc import Sequence
 from dataclasses import dataclass
 import json
 from datetime import date, datetime, timedelta, timezone
@@ -19,7 +20,6 @@ from src.core.text_normalization import normalize_text
 from src.persistence.orm_models import ArticleORM
 from src.semantic.analyze import analyze_points
 from src.semantic.contracts import (
-    ClusterArtifact,
     EmbeddingArtifact,
     NeighborArtifact,
     PointAnalysisArtifact,
@@ -235,6 +235,13 @@ class SeedArticleRow:
     embedding_model: str
 
 
+@dataclass(frozen=True)
+class StoryClusterPriorityGroup:
+    cluster_id: int
+    article_count: int
+    article_ids: list[int]
+
+
 def embedding_dimensions_for_model(model: str) -> int:
     try:
         return EMBEDDING_MODEL_DIMENSIONS[model]
@@ -381,6 +388,7 @@ def select_embedding_candidates(
     embedding_model: str = DEFAULT_EMBEDDING_MODEL,
     window: SemanticWindow | None = None,
     prioritize_story_members: bool = False,
+    priority_story_cluster_min_size: int = 2,
 ) -> list[SemanticCandidate]:
     """Select recent articles whose semantic embedding is missing or stale.
 
@@ -405,14 +413,19 @@ def select_embedding_candidates(
         .limit(limit * 4)
         .all()
     )
-    story_member_ids = (
-        _load_story_member_article_ids(session, article_ids=[row.id for row in rows])
+    priority_groups = (
+        _load_story_cluster_priority_groups(
+            session,
+            article_ids=[row.id for row in rows],
+            min_article_count=priority_story_cluster_min_size,
+        )
         if prioritize_story_members and rows
-        else set()
+        else []
     )
+    qualifying_story_member_ids = {
+        article_id for group in priority_groups for article_id in group.article_ids
+    }
     candidates: list[SemanticCandidate] = []
-    member_candidates: list[SemanticCandidate] = []
-    non_member_candidates: list[SemanticCandidate] = []
     for row in rows:
         candidate = build_candidate(row, max_chars=max_chars)
         if candidate is None:
@@ -435,17 +448,20 @@ def select_embedding_candidates(
         ):
             continue
         candidates.append(candidate)
-        if row.id in story_member_ids:
-            member_candidates.append(candidate)
-        else:
-            non_member_candidates.append(candidate)
 
     if prioritize_story_members:
-        ordered_candidates = _source_balance_candidates(member_candidates) + _source_balance_candidates(
-            non_member_candidates
+        ordered_article_ids = select_cluster_aware_article_ids(
+            [candidate.article for candidate in candidates],
+            limit=limit,
+            priority_groups=priority_groups,
         )
-    else:
-        ordered_candidates = _source_balance_candidates(candidates)
+        by_article_id = {candidate.article.article_id: candidate for candidate in candidates}
+        return [
+            by_article_id[article_id]
+            for article_id in ordered_article_ids
+            if article_id in by_article_id
+        ]
+    ordered_candidates = _source_balance_candidates(candidates)
     return ordered_candidates[:limit]
 
 
@@ -897,7 +913,7 @@ class ExplorerArticleDetailRecord:
 
 
 def select_source_balanced_article_ids(
-    records: list[SemanticArticle | EmbeddingArtifact | PointArtifact], *, limit: int
+    records: Sequence[SemanticArticle | EmbeddingArtifact | PointArtifact], *, limit: int
 ) -> list[int]:
     """Pick a bounded article slice without letting one source win by recency alone."""
 
@@ -927,6 +943,93 @@ def select_source_balanced_article_ids(
     return selected
 
 
+def select_cluster_aware_article_ids(
+    records: Sequence[SemanticArticle | EmbeddingArtifact | PointArtifact],
+    *,
+    limit: int,
+    priority_groups: Sequence[StoryClusterPriorityGroup] | None = None,
+) -> list[int]:
+    """Reserve room for complete qualifying story clusters before remainder fill."""
+
+    if limit <= 0:
+        return []
+    record_ids = [int(getattr(record, "article_id")) for record in records]
+    record_id_set = set(record_ids)
+    selected: list[int] = []
+    selected_set: set[int] = set()
+
+    for group in priority_groups or []:
+        cluster_ids = [
+            article_id for article_id in group.article_ids if article_id in record_id_set
+        ]
+        if len(cluster_ids) != group.article_count:
+            continue
+        if len(selected) + len(cluster_ids) > limit:
+            continue
+        for article_id in cluster_ids:
+            if article_id not in selected_set:
+                selected.append(article_id)
+                selected_set.add(article_id)
+
+    remainder_records = [
+        record for record in records if int(getattr(record, "article_id")) not in selected_set
+    ]
+    selected.extend(
+        select_source_balanced_article_ids(remainder_records, limit=max(0, limit - len(selected)))
+    )
+    return selected[:limit]
+
+
+def _load_story_cluster_priority_groups(
+    session: Session, *, article_ids: list[int], min_article_count: int = 2
+) -> list[StoryClusterPriorityGroup]:
+    if not article_ids:
+        return []
+    placeholders = ", ".join(f":article_id_{index}" for index in range(len(article_ids)))
+    params = {f"article_id_{index}": article_id for index, article_id in enumerate(article_ids)}
+    params["min_article_count"] = min_article_count
+    rows = (
+        session.execute(
+            text(
+                f"""
+                SELECT sc.id AS cluster_id,
+                       sc.article_count AS article_count,
+                       cm.article_id AS article_id
+                FROM story_clusters sc
+                JOIN cluster_members cm ON cm.cluster_id = sc.id
+                WHERE sc.article_count >= :min_article_count
+                  AND cm.article_id IN ({placeholders})
+                ORDER BY sc.last_article_published_at DESC NULLS LAST,
+                         sc.id ASC,
+                         cm.article_id ASC
+                """
+            ),
+            params,
+        )
+        .mappings()
+        .all()
+    )
+    grouped: dict[int, dict[str, Any]] = {}
+    order: list[int] = []
+    for row in rows:
+        cluster_id = int(row["cluster_id"])
+        if cluster_id not in grouped:
+            grouped[cluster_id] = {
+                "article_count": int(row["article_count"]),
+                "article_ids": [],
+            }
+            order.append(cluster_id)
+        grouped[cluster_id]["article_ids"].append(int(row["article_id"]))
+    return [
+        StoryClusterPriorityGroup(
+            cluster_id=cluster_id,
+            article_count=grouped[cluster_id]["article_count"],
+            article_ids=grouped[cluster_id]["article_ids"],
+        )
+        for cluster_id in order
+    ]
+
+
 def _source_balance_candidates(candidates: list[SemanticCandidate]) -> list[SemanticCandidate]:
     if not candidates:
         return []
@@ -935,24 +1038,6 @@ def _source_balance_candidates(candidates: list[SemanticCandidate]) -> list[Sema
     )
     by_article_id = {candidate.article.article_id: candidate for candidate in candidates}
     return [by_article_id[article_id] for article_id in article_ids if article_id in by_article_id]
-
-
-def _load_story_member_article_ids(session: Session, *, article_ids: list[int]) -> set[int]:
-    if not article_ids:
-        return set()
-    placeholders = ", ".join(f":article_id_{index}" for index in range(len(article_ids)))
-    params = {f"article_id_{index}": article_id for index, article_id in enumerate(article_ids)}
-    rows = (
-        session.execute(
-            text(
-                f"SELECT article_id FROM cluster_members WHERE article_id IN ({placeholders})"
-            ),
-            params,
-        )
-        .mappings()
-        .all()
-    )
-    return {int(row["article_id"]) for row in rows}
 
 
 def _session_dialect_name(session: Session | Any) -> str:

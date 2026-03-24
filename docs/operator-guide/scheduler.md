@@ -51,8 +51,8 @@ Defaults:
 - shared `REFRESH_DAYS_BACK=3`
 - shared `SURFACE_LIMIT=500`
 - `DAYS_BACK=${REFRESH_DAYS_BACK:-3}`
-- `ENRICH_LIMIT=${SURFACE_LIMIT:-500}`
 - `CLUSTER_LIMIT=${SURFACE_LIMIT:-500}`
+- `ENRICH_LIMIT=max(CLUSTER_LIMIT * 2, SURFACE_LIMIT)`
 - scrape `DATE` is computed in local time to match the wrapper's `LOCAL_TZ`
 - `SCORE_THRESHOLD=0.45`
 - `OUT_PREFIX=sched`
@@ -64,11 +64,11 @@ Note the deliberate asymmetry: Stories and Explorer share the same recency windo
 
 1. `make preflight`
 2. `make semantic-db-init SEMANTIC_ARGS='--embedding-model text-embedding-3-large'`
-3. `make semantic-sync LIMIT=250 SEMANTIC_ARGS='--embedding-model text-embedding-3-large --days-back 3 --prioritize-story-members'`
+3. `make semantic-sync LIMIT=250 SEMANTIC_ARGS='--embedding-model text-embedding-3-large --days-back 3 --prioritize-story-members --priority-story-cluster-min-size 2'`
 4. `make semantic-project SEMANTIC_ARGS='--days-back 3'`
 5. `make semantic-build LIMIT=500 SEMANTIC_ARGS='--days-back 3'`
 
-Stories and Explorer are separate products backed by separate derived tables. That is why a freshly clustered article can appear in Stories before it shows up in Explorer. The bounded mitigation here is simple: semantic sync now gives recent `cluster_members` priority over plain recency, so story-cluster members get embeddings/projections sooner instead of waiting behind unrelated backlog rows.
+Stories and Explorer are separate products backed by separate derived tables. That is why a freshly clustered article can appear in Stories before it shows up in Explorer. The bounded mitigation is stricter now: semantic sync uses `story_clusters` plus `cluster_members`, only treats clusters with `article_count >= 2` as priority work, and tries to complete all embeddable members of those clusters before spending slots on unrelated backlog rows. The bounded semantic build mirrors that rule by reserving output slots for complete qualifying clusters before falling back to source-balanced remainder fill.
 
 Defaults:
 - shared `REFRESH_DAYS_BACK=3`

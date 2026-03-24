@@ -24,6 +24,7 @@ from src.semantic.dbstore import (
     projection_kind_for_set,
     render_init_sql,
     resolve_semantic_window,
+    select_cluster_aware_article_ids,
     select_embedding_candidates,
     select_source_balanced_article_ids,
     summary_snippet,
@@ -122,6 +123,18 @@ class _SelectSession:
 
     def execute(self, statement, params=None):
         sql = str(statement)
+        if "FROM story_clusters sc" in sql:
+            article_ids = set((params or {}).values())
+            rows = [
+                {
+                    "cluster_id": 1,
+                    "article_count": len(self._story_member_ids),
+                    "article_id": article_id,
+                }
+                for article_id in sorted(self._story_member_ids)
+                if article_id in article_ids
+            ]
+            return _ExistingResult(rows=rows)
         if "FROM cluster_members" in sql:
             rows = [
                 {"article_id": article_id}
@@ -486,6 +499,64 @@ def test_select_embedding_candidates_prioritizes_story_members_before_plain_rece
     )
 
     assert [candidate.article.article_id for candidate in candidates] == [2, 3, 1, 4]
+
+
+def test_select_cluster_aware_article_ids_keeps_complete_qualifying_clusters_together() -> None:
+    records = [
+        _article(article_id=10, source="elpais"),
+        _article(article_id=11, source="elmundo"),
+        _article(article_id=20, source="abc"),
+        _article(article_id=21, source="abc"),
+        _article(article_id=30, source="eldiario"),
+    ]
+
+    article_ids = select_cluster_aware_article_ids(
+        records,
+        limit=4,
+        priority_groups=[
+            SimpleNamespace(cluster_id=7, article_count=2, article_ids=[20, 21]),
+            SimpleNamespace(cluster_id=8, article_count=2, article_ids=[10, 11]),
+        ],
+    )
+
+    assert article_ids == [20, 21, 10, 11]
+
+
+def test_select_cluster_aware_article_ids_skips_partial_cluster_that_would_bust_limit() -> None:
+    records = [
+        _article(article_id=1, source="elpais"),
+        _article(article_id=2, source="elmundo"),
+        _article(article_id=3, source="abc"),
+        _article(article_id=4, source="eldiario"),
+    ]
+
+    article_ids = select_cluster_aware_article_ids(
+        records,
+        limit=3,
+        priority_groups=[
+            SimpleNamespace(cluster_id=9, article_count=2, article_ids=[1, 2]),
+            SimpleNamespace(cluster_id=10, article_count=2, article_ids=[3, 4]),
+        ],
+    )
+
+    assert article_ids == [1, 2, 3]
+
+
+def test_select_cluster_aware_article_ids_singletons_do_not_preempt_qualifying_clusters() -> None:
+    records = [
+        _article(article_id=1, source="elpais"),
+        _article(article_id=2, source="elpais"),
+        _article(article_id=3, source="elmundo"),
+        _article(article_id=4, source="eldiario"),
+    ]
+
+    article_ids = select_cluster_aware_article_ids(
+        records,
+        limit=3,
+        priority_groups=[SimpleNamespace(cluster_id=5, article_count=2, article_ids=[2, 3])],
+    )
+
+    assert article_ids[:2] == [2, 3]
 
 
 def test_select_source_balanced_article_ids_round_robins_sources() -> None:

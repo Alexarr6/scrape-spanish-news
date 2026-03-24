@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import json
-from collections import Counter, defaultdict
+from collections import Counter, defaultdict, deque
 from dataclasses import dataclass
 from datetime import UTC, date, datetime, timedelta
 
@@ -127,9 +127,12 @@ class AnalysisPipeline:
             select(ArticleORM)
             .where(ArticleORM.published_at.is_not(None), ArticleORM.published_at >= cutoff)
             .order_by(ArticleORM.published_at.desc())
-            .limit(limit)
+            .limit(limit * 4)
         )
-        rows = self.session.execute(stmt).scalars().all()
+        rows = self._select_source_balanced_enrichment_rows(
+            self.session.execute(stmt).scalars().all(),
+            limit=limit,
+        )
         metrics.article_count = len(rows)
         tag_by_code = {
             row.tag_code: row.id for row in self.session.execute(select(TagORM)).scalars()
@@ -320,6 +323,41 @@ class AnalysisPipeline:
             [article.title, article.summary, article.article_text, article.section, article.tags]
         )
         return hashlib.sha256(raw.encode("utf-8")).hexdigest()
+
+
+    def _select_source_balanced_enrichment_rows(
+        self, rows: list[ArticleORM], *, limit: int
+    ) -> list[ArticleORM]:
+        """Round-robin recent enrichment work across sources after recency filtering.
+
+        This keeps the enrichment window broader than a raw top-N recent slice, so
+        one loud publisher cannot monopolize the bounded run and starve cluster
+        formation for other sources.
+        """
+
+        if limit <= 0 or not rows:
+            return []
+        buckets: dict[str, deque[ArticleORM]] = defaultdict(deque)
+        source_order: list[str] = []
+        for row in rows:
+            source = row.source or ""
+            if source not in buckets:
+                source_order.append(source)
+            buckets[source].append(row)
+
+        selected: list[ArticleORM] = []
+        while len(selected) < limit and source_order:
+            next_round: list[str] = []
+            for source in source_order:
+                bucket = buckets[source]
+                if bucket:
+                    selected.append(bucket.popleft())
+                    if len(selected) >= limit:
+                        break
+                if bucket:
+                    next_round.append(source)
+            source_order = next_round
+        return selected
 
 
 @dataclass

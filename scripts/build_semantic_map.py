@@ -26,6 +26,8 @@ from src.semantic.dbstore import (  # noqa: E402
     load_projected_points,
     projection_kind_for_set,
     resolve_semantic_window,
+    select_cluster_aware_article_ids,
+    _load_story_cluster_priority_groups,
 )
 from src.semantic.export import (  # noqa: E402
     write_analysis_json,
@@ -86,11 +88,18 @@ def main() -> int:
             window=window,
         )
 
+    with make_session(engine) as session:
+        priority_groups = _load_story_cluster_priority_groups(
+            session,
+            article_ids=[point.article_id for point in points],
+        )
+
     embeddings, points = _canonicalize_semantic_records(
         embeddings,
         points,
         limit=args.limit,
         projection_set=args.projection_set,
+        priority_groups=priority_groups,
     )
 
     metrics.fetched_rows = len(embeddings)
@@ -143,6 +152,7 @@ def _canonicalize_semantic_records(
     *,
     limit: int,
     projection_set: str,
+    priority_groups=None,
 ) -> tuple[list[EmbeddingArtifact], list[PointArtifact]]:
     """Force embeddings and projected points into the same ordered article slice."""
 
@@ -159,7 +169,11 @@ def _canonicalize_semantic_records(
         )
 
     canonical_ids = (
-        select_source_balanced_article_ids(points, limit=limit)
+        select_cluster_aware_article_ids(
+            points,
+            limit=limit,
+            priority_groups=priority_groups,
+        )
         if limit
         else [point.article_id for point in points]
     )
