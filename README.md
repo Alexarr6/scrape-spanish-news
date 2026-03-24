@@ -220,16 +220,30 @@ Stories and Explorer are intentionally separate pipelines. That split is fine, b
 
 The new wrappers keep separate lock, log, and state files under `var/` and are the right surface for recurring 6-hour jobs. If you want fresh story clusters, using `run_scheduled.sh` is the wrong hammer.
 
-Default stories wrapper tuning:
-- `DAYS_BACK=3`
-- `ENRICH_LIMIT=300`
-- `CLUSTER_LIMIT=1000`
+Shared wrapper defaults:
+- `REFRESH_DAYS_BACK=3` — shared recency window for both Stories and Explorer
+- `SURFACE_LIMIT=500` — shared surfaced product budget
+
+Stories wrapper defaults:
+- `DAYS_BACK=${REFRESH_DAYS_BACK:-3}`
+- `ENRICH_LIMIT=${SURFACE_LIMIT:-500}`
+- `CLUSTER_LIMIT=${SURFACE_LIMIT:-500}`
 - `SCORE_THRESHOLD=0.45`
+
+Explorer wrapper defaults:
+- `DAYS_BACK=${REFRESH_DAYS_BACK:-3}`
+- `SEMANTIC_BUILD_LIMIT=${SURFACE_LIMIT:-500}`
+- `SEMANTIC_LIMIT=250`
+
+That lower Explorer `SEMANTIC_LIMIT` is intentional. Semantic sync burns embedding calls, so the recent semantic catch-up cap stays lower than the broader surfaced product budget instead of pretending both pipelines should spend the same.
+
+There is still a separate score-threshold mismatch worth knowing about: the stories wrapper defaults `SCORE_THRESHOLD=0.45`, while raw `make build-story-clusters` still defaults to `0.68`. That is documented here on purpose; this change does not widen scope by rewriting clustering policy.
 
 You can override these per run, for example:
 
 ```bash
-ENRICH_LIMIT=400 CLUSTER_LIMIT=1200 bash scripts/run_stories_refresh.sh
+REFRESH_DAYS_BACK=2 SURFACE_LIMIT=400 bash scripts/run_stories_refresh.sh
+SEMANTIC_LIMIT=200 SURFACE_LIMIT=400 bash scripts/run_explorer_refresh.sh
 ```
 
 ### Optional local Postgres via Docker

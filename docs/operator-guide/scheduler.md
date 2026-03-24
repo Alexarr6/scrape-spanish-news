@@ -41,35 +41,45 @@ Useful if you only want persistent scraping and verification.
 1. `make preflight`
 2. `make run-all-persist`
 3. `make analysis-db-init`
-4. `make enrich-articles DAYS_BACK=3`
-5. `make build-story-clusters DAYS_BACK=3 SCORE_THRESHOLD=0.50`
+4. `make enrich-articles DAYS_BACK=3 LIMIT=500`
+5. `make build-story-clusters DAYS_BACK=3 LIMIT=500 SCORE_THRESHOLD=0.45`
 6. `make verify-output`
 7. `make verify-db`
 
 Defaults:
-- `LOCAL_TZ=UTC`
-- `DAYS_BACK=3`
-- scrape `DATE` is computed in UTC to match `src.main --date`
-- `SCORE_THRESHOLD=0.50`
+- `LOCAL_TZ=Europe/Madrid`
+- shared `REFRESH_DAYS_BACK=3`
+- shared `SURFACE_LIMIT=500`
+- `DAYS_BACK=${REFRESH_DAYS_BACK:-3}`
+- `ENRICH_LIMIT=${SURFACE_LIMIT:-500}`
+- `CLUSTER_LIMIT=${SURFACE_LIMIT:-500}`
+- scrape `DATE` is computed in local time to match the wrapper's `LOCAL_TZ`
+- `SCORE_THRESHOLD=0.45`
 - `OUT_PREFIX=sched`
+
+Note the deliberate asymmetry: Stories and Explorer share the same recency window and surfaced product budget, but not every downstream cap.
 
 ### Explorer refresh
 `run_explorer_refresh.sh` is the recurring semantic/explorer pipeline:
 
 1. `make preflight`
 2. `make semantic-db-init SEMANTIC_ARGS='--embedding-model text-embedding-3-large'`
-3. `make semantic-sync SEMANTIC_ARGS='--embedding-model text-embedding-3-large --days-back 3 --prioritize-story-members'`
+3. `make semantic-sync LIMIT=250 SEMANTIC_ARGS='--embedding-model text-embedding-3-large --days-back 3 --prioritize-story-members'`
 4. `make semantic-project SEMANTIC_ARGS='--days-back 3'`
-5. `make semantic-build SEMANTIC_ARGS='--days-back 3'`
+5. `make semantic-build LIMIT=500 SEMANTIC_ARGS='--days-back 3'`
 
 Stories and Explorer are separate products backed by separate derived tables. That is why a freshly clustered article can appear in Stories before it shows up in Explorer. The bounded mitigation here is simple: semantic sync now gives recent `cluster_members` priority over plain recency, so story-cluster members get embeddings/projections sooner instead of waiting behind unrelated backlog rows.
 
 Defaults:
-- `DAYS_BACK=3`
+- shared `REFRESH_DAYS_BACK=3`
+- shared `SURFACE_LIMIT=500`
+- `DAYS_BACK=${REFRESH_DAYS_BACK:-3}`
 - `EMBEDDING_MODEL=text-embedding-3-large`
 - `PROJECTION_SET=pca_3d_latest`
-- `SEMANTIC_LIMIT=100`
-- `SEMANTIC_BUILD_LIMIT=500`
+- `SEMANTIC_LIMIT=250`
+- `SEMANTIC_BUILD_LIMIT=${SURFACE_LIMIT:-500}`
+
+The lower `SEMANTIC_LIMIT` is intentional. Embedding sync is the expensive bit, so Explorer keeps a smaller per-run sync cap while still exporting a 500-item surfaced budget.
 
 ### Full refresh once
 `make full-refresh-once` is the one-shot operator surface for the whole chain:
@@ -111,7 +121,11 @@ Required:
 Optional:
 - `UV`
 - `LOCAL_TZ`
+- `REFRESH_DAYS_BACK`
+- `SURFACE_LIMIT`
 - `DAYS_BACK`
+- `ENRICH_LIMIT`
+- `CLUSTER_LIMIT`
 - `SCORE_THRESHOLD`
 - `OUT_PREFIX`
 
@@ -122,6 +136,8 @@ Required:
 
 Optional:
 - `UV`
+- `REFRESH_DAYS_BACK`
+- `SURFACE_LIMIT`
 - `DAYS_BACK`
 - `EMBEDDING_MODEL`
 - `PROJECTION_SET`
