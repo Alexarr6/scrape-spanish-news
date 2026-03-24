@@ -11,6 +11,7 @@ from src.semantic.dbstore import (
     MIN_TEXT_LENGTH,
     ExplorerFilters,
     SemanticWindow,
+    _load_story_cluster_memberships,
     assemble_article_text,
     content_hash_for_text,
     embedding_dimensions_for_model,
@@ -637,3 +638,153 @@ def test_load_projected_points_applies_window_filters_to_sql() -> None:
 def test_projection_kind_for_set_distinguishes_2d_and_3d_sets() -> None:
     assert projection_kind_for_set("pca_2d_latest") == "pca_2d"
     assert projection_kind_for_set("pca_3d_latest") == "pca_3d"
+
+
+# ---------------------------------------------------------------------------
+# _load_story_cluster_memberships — unit tests
+# ---------------------------------------------------------------------------
+
+
+def _make_membership_row(article_id: int, cluster_id: int) -> dict:
+    return {"article_id": article_id, "cluster_id": cluster_id}
+
+
+class _MembershipSession:
+    """Minimal session stub for _load_story_cluster_memberships tests."""
+
+    def __init__(self, rows: list[dict]) -> None:
+        self._rows = rows
+
+    def execute(self, _statement, _params=None):
+        return SimpleNamespace(
+            mappings=lambda: SimpleNamespace(all=lambda: self._rows)
+        )
+
+
+def test_load_story_cluster_memberships_returns_cluster_ids_per_article() -> None:
+    rows = [
+        _make_membership_row(article_id=10, cluster_id=501),
+        _make_membership_row(article_id=20, cluster_id=502),
+        _make_membership_row(article_id=20, cluster_id=503),
+    ]
+    session = _MembershipSession(rows)
+    result = _load_story_cluster_memberships(session, article_ids=[10, 20, 30])
+    assert result[10] == [501]
+    assert result[20] == [502, 503]
+    assert result[30] == []  # pre-seeded empty list for articles without memberships
+
+
+def test_load_story_cluster_memberships_returns_empty_dict_for_no_article_ids() -> None:
+    session = _MembershipSession([])
+    assert _load_story_cluster_memberships(session, article_ids=[]) == {}
+
+
+def test_load_story_cluster_memberships_handles_article_with_no_memberships() -> None:
+    session = _MembershipSession([])  # DB returns nothing
+    result = _load_story_cluster_memberships(session, article_ids=[1, 2])
+    assert result == {1: [], 2: []}
+
+
+# ---------------------------------------------------------------------------
+# load_explorer_points_page — story_cluster_ids payload wiring tests
+# ---------------------------------------------------------------------------
+
+
+def _make_point_row(**overrides) -> dict:
+    """Return a minimal synthetic row matching load_explorer_points_page expectations."""
+    base: dict = {
+        "article_id": 1,
+        "source": "elpais",
+        "title": "Test",
+        "url": "https://example.com/1",
+        "published_at": "2026-03-17T00:00:00+00:00",
+        "published_date": "2026-03-17",
+        "display_date": "2026-03-17",
+        "section": "politica",
+        "summary_snippet": "resumen",
+        "x": 0.5,
+        "y": -0.3,
+        "z": 0.1,
+        "cluster_id": None,
+        "cluster_size": 0,
+        "is_outlier": False,
+        "local_density_distance": 0.0,
+        "source_neighbor_diversity": 0,
+        "nearby_sources_json": "[]",
+    }
+    base.update(overrides)
+    return base
+
+
+class _ExplorerSessionWithRows(_ExplorerSession):
+    """Explorer session stub that returns configurable point rows and membership data."""
+
+    def __init__(
+        self,
+        *,
+        point_rows: list[dict] | None = None,
+        membership_rows: list[dict] | None = None,
+    ) -> None:
+        super().__init__()
+        self._point_rows = point_rows or []
+        self._membership_rows = membership_rows or []
+
+    def execute(self, statement, params=None):
+        sql = str(statement)
+        self.sql.append(sql)
+        self.params.append(params or {})
+        if "SELECT COUNT(*)" in sql:
+            return _ExplorerQueryResult(scalar=len(self._point_rows))
+        if "SELECT article_id, cluster_id" in sql and "FROM cluster_members" in sql:
+            return _ExplorerQueryResult(rows=self._membership_rows)
+        if "FROM article_projections p" in sql and "LIMIT :limit" in sql:
+            return _ExplorerQueryResult(rows=self._point_rows)
+        # nearest_neighbors is called inside _safe_neighbors; swallow via parent
+        if "FROM article_embeddings seed" in sql:
+            return _ExplorerQueryResult(rows=[])
+        return super().execute(statement, params)
+
+
+def test_load_explorer_points_page_populates_story_cluster_ids_in_highlight_mode() -> None:
+    """story_cluster_ids must appear on returned items even in highlight (non-filter) mode."""
+    point_rows = [
+        _make_point_row(article_id=1),
+        _make_point_row(article_id=2, source="elmundo"),
+    ]
+    membership_rows = [
+        {"article_id": 1, "cluster_id": 501},
+        {"article_id": 2, "cluster_id": 502},
+    ]
+    session = _ExplorerSessionWithRows(
+        point_rows=point_rows,
+        membership_rows=membership_rows,
+    )
+    page = load_explorer_points_page(
+        session,
+        filters=ExplorerFilters(story_cluster_id=502, visual_mode="highlight"),
+    )
+    by_article_id = {item.article_id: item.analysis.story_cluster_ids for item in page.items}
+    assert by_article_id[1] == [501], "article 1 must carry its story cluster even though it is not the highlighted cluster"
+    assert by_article_id[2] == [502], "article 2 must carry its own story cluster"
+
+
+def test_load_explorer_points_page_story_cluster_ids_empty_for_unaffiliated_points() -> None:
+    """Points with no cluster_members rows must get an empty story_cluster_ids list."""
+    point_rows = [_make_point_row(article_id=99, source="abc")]
+    session = _ExplorerSessionWithRows(point_rows=point_rows, membership_rows=[])
+    page = load_explorer_points_page(session, filters=ExplorerFilters())
+    assert page.items[0].analysis.story_cluster_ids == []
+
+
+def test_load_explorer_points_page_story_cluster_ids_deduplicated_and_sorted() -> None:
+    """story_cluster_ids must be sorted and deduplicated (defensive check on _analysis_for_row)."""
+    point_rows = [_make_point_row(article_id=5)]
+    # Simulate duplicate / out-of-order membership rows
+    membership_rows = [
+        {"article_id": 5, "cluster_id": 300},
+        {"article_id": 5, "cluster_id": 100},
+        {"article_id": 5, "cluster_id": 300},
+    ]
+    session = _ExplorerSessionWithRows(point_rows=point_rows, membership_rows=membership_rows)
+    page = load_explorer_points_page(session, filters=ExplorerFilters())
+    assert page.items[0].analysis.story_cluster_ids == [100, 300]
