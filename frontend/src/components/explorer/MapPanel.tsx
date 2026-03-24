@@ -1,19 +1,3 @@
-/**
- * MapPanel.tsx — DeckGL semantic canvas.
- *
- * Bug fixes applied in iter/005:
- *  BUG-1: flex/grid height chain — fixed in styles.css (min-height: 0)
- *  BUG-2: StrictMode double-mount — stable key="explorer-deck" on <DeckGL>
- *  BUG-4: Named view IDs mismatch — removed view IDs (unnamed single-view)
- *  BUG-5: Layer ID changes on every toggle — stable id: 'semantic-points'
- *  BUG-6: !important overrides — removed from styles.css
- *
- * Camera hardening:
- *  - Auto-fit only fires on first data load (null → data) or explicit fitAll()
- *  - Subsequent filter changes preserve the user's camera position
- *  - 3D orbit angles preserved across focusSelected() calls
- */
-
 import { OrbitView, OrthographicView } from '@deck.gl/core'
 import { LineLayer, PointCloudLayer, ScatterplotLayer } from '@deck.gl/layers'
 import DeckGL from '@deck.gl/react'
@@ -21,7 +5,10 @@ import { forwardRef, useEffect, useImperativeHandle, useMemo, useRef, useState }
 import { formatDate } from '../../lib/format'
 import {
   articleTypeColorForPreviewRgb,
+  biasColorForPreviewRgb,
   describeEditorialPreview,
+  humanizeBiasLabel,
+  humanizeEditorialDimension,
   isEditorialValueMatch,
 } from '../../lib/explorerEditorial'
 import {
@@ -93,7 +80,7 @@ type Props = {
   visualMode: ExplorerVisualMode
   colorMode: ExplorerColorMode
   activeMatchTarget:
-    | { type: 'editorial'; dimension: 'article_type'; value: string }
+    | { type: 'editorial'; dimension: 'article_type' | 'bias_label'; value: string }
     | { type: 'story-cluster'; id: number; available: boolean }
     | { type: 'semantic-cluster'; id: number }
     | { type: 'search'; query: string }
@@ -115,8 +102,8 @@ type PointBounds = {
 
 const DEFAULT_3D_ORBIT = 28
 const DEFAULT_3D_TILT = 32
-
-// ─── Bounds helpers ──────────────────────────────────────────────────────────
+const EDITORIAL_MATCH_RGB: [number, number, number] = [124, 58, 237]
+const EDITORIAL_NON_MATCH_RGB: [number, number, number] = [148, 163, 184]
 
 function normalizeBounds(bounds: ExplorerProjectionBounds | null): PointBounds | null {
   if (!bounds) return null
@@ -139,40 +126,21 @@ function boundsFromPoints(items: ExplorerPoint[]): PointBounds | null {
   )
 }
 
-// ─── ViewState builders ──────────────────────────────────────────────────────
-
-// Padding factors: percentage of canvas the data span should occupy (inverted).
-// 1.25 → data occupies 80% of canvas (10% margin per side) in 2D.
-// 1.4  → slightly more padding in 3D for depth comfort.
 const PADDING_2D = 1.25
 const PADDING_3D = 1.4
 
-/**
- * Read the canvas element's tighter dimension (width vs height) at call time.
- * Falls back to 900 (sensible for a ~900px canvas default) when DOM not yet ready.
- */
 function getCanvasPx(canvasRef: React.RefObject<HTMLDivElement>): number {
   const el = canvasRef.current
   if (!el || el.clientWidth === 0 || el.clientHeight === 0) return 900
   return Math.min(el.clientWidth, el.clientHeight)
 }
 
-/**
- * Pixel-aware zoom formula (iter/006 fix).
- *
- * DeckGL OrthographicView semantics: at zoom Z, one world unit renders as 2^Z pixels.
- * To fit `paddedSpan` world units into `canvasPx` pixels:
- *   zoom = log2(canvasPx / paddedSpan)
- *
- * For real projection data in [-1, 1]:
- *   dominantSpan ≈ 2.0, paddedSpan ≈ 2.5, canvasPx ≈ 900 → zoom ≈ 8.5 ✓
- */
 function build2dViewState(bounds: PointBounds | null, canvasPx: number): ViewState2D {
-  if (!bounds) return { target: [0, 0, 0], zoom: 8.5 }  // sensible default for [-1,1] scale
+  if (!bounds) return { target: [0, 0, 0], zoom: 8.5 }
   const spanX = bounds.maxX - bounds.minX
   const spanY = bounds.maxY - bounds.minY
   const dominantSpan = Math.max(spanX, spanY)
-  const paddedSpan = Math.max(dominantSpan * PADDING_2D, 0.01)  // guard against zero-span
+  const paddedSpan = Math.max(dominantSpan * PADDING_2D, 0.01)
   return {
     target: [(bounds.minX + bounds.maxX) / 2, (bounds.minY + bounds.maxY) / 2, 0],
     zoom: Math.max(1.0, Math.min(14.0, Math.log2(canvasPx / paddedSpan))),
@@ -230,7 +198,6 @@ function buildSelectionBounds(selectedPoint: ExplorerPoint, items: ExplorerPoint
   return selectionBounds
 }
 
-
 function normalizeSearchText(value: string) {
   return value.trim().toLowerCase()
 }
@@ -249,8 +216,6 @@ function pointMatchesActiveTarget(point: ExplorerPoint, activeMatchTarget: Props
   return haystack.includes(normalizeSearchText(activeMatchTarget.query))
 }
 
-// ─── Color helpers ───────────────────────────────────────────────────────────
-
 function colorForPoint(point: ExplorerPoint, mode: ExplorerColorMode): [number, number, number] {
   if (mode === 'source') {
     return SOURCE_COLORS[point.source] ?? SOURCE_FALLBACK_COLOR
@@ -264,20 +229,17 @@ function colorForPoint(point: ExplorerPoint, mode: ExplorerColorMode): [number, 
   if (mode === 'article-type') {
     return articleTypeColorForPreviewRgb(point.editorial_preview)
   }
-  // neutral
-  return [67, 56, 202] // indigo-700
+  if (mode === 'bias') {
+    return biasColorForPreviewRgb(point.editorial_preview)
+  }
+  return [67, 56, 202]
 }
 
-// ─── Axis layers ─────────────────────────────────────────────────────────────
+function activeMatchColorForPoint(point: ExplorerPoint, activeMatchTarget: Props['activeMatchTarget']): [number, number, number] {
+  const isActiveMatch = pointMatchesActiveTarget(point, activeMatchTarget)
+  return isActiveMatch ? EDITORIAL_MATCH_RGB : EDITORIAL_NON_MATCH_RGB
+}
 
-type AxisLine2D = { from: [number, number, number]; to: [number, number, number] }
-type AxisLine3D = { from: [number, number, number]; to: [number, number, number]; color: [number, number, number, number] }
-
-/**
- * Build DeckGL axis orientation layers.
- * Always placed first in the layer stack so points render on top.
- * Uses LineLayer (already in @deck.gl/layers — no new packages).
- */
 function buildAxisLayers(viewMode: ExplorerViewMode, bounds: PointBounds | null) {
   const extent = bounds
     ? Math.max(1.5, Math.max(
@@ -287,12 +249,12 @@ function buildAxisLayers(viewMode: ExplorerViewMode, bounds: PointBounds | null)
     : 1.5
 
   if (viewMode === '2d') {
-    const axisData: AxisLine2D[] = [
-      { from: [-extent, 0, 0], to: [extent, 0, 0] },   // X axis
-      { from: [0, -extent, 0], to: [0, extent, 0] },   // Y axis
+    const axisData = [
+      { from: [-extent, 0, 0] as [number, number, number], to: [extent, 0, 0] as [number, number, number] },
+      { from: [0, -extent, 0] as [number, number, number], to: [0, extent, 0] as [number, number, number] },
     ]
     return [
-      new LineLayer<AxisLine2D>({
+      new LineLayer({
         id: 'axis-2d',
         data: axisData,
         getSourcePosition: (d) => d.from,
@@ -305,16 +267,14 @@ function buildAxisLayers(viewMode: ExplorerViewMode, bounds: PointBounds | null)
     ]
   }
 
-  // 3D: RGB-convention XYZ axes + faint XY plane grid
-  const axisData: AxisLine3D[] = [
-    { from: [-extent, 0, 0], to: [extent, 0, 0], color: AXIS_X_COLOR_3D },  // X red
-    { from: [0, -extent, 0], to: [0, extent, 0], color: AXIS_Y_COLOR_3D },  // Y green
-    { from: [0, 0, -extent], to: [0, 0, extent], color: AXIS_Z_COLOR_3D },  // Z blue
+  const axisData = [
+    { from: [-extent, 0, 0] as [number, number, number], to: [extent, 0, 0] as [number, number, number], color: AXIS_X_COLOR_3D },
+    { from: [0, -extent, 0] as [number, number, number], to: [0, extent, 0] as [number, number, number], color: AXIS_Y_COLOR_3D },
+    { from: [0, 0, -extent] as [number, number, number], to: [0, 0, extent] as [number, number, number], color: AXIS_Z_COLOR_3D },
   ]
 
-  // XY plane grid — faint lines at integer intervals to aid depth perception
   const gridExtent = Math.ceil(extent)
-  const gridLines: AxisLine3D[] = []
+  const gridLines: Array<{ from: [number, number, number]; to: [number, number, number]; color: [number, number, number, number] }> = []
   for (let i = -gridExtent; i <= gridExtent; i++) {
     gridLines.push(
       { from: [-extent, i, 0], to: [extent, i, 0], color: AXIS_GRID_COLOR_3D },
@@ -323,7 +283,7 @@ function buildAxisLayers(viewMode: ExplorerViewMode, bounds: PointBounds | null)
   }
 
   return [
-    new LineLayer<AxisLine3D>({
+    new LineLayer({
       id: 'axis-grid-3d',
       data: gridLines,
       getSourcePosition: (d) => d.from,
@@ -333,7 +293,7 @@ function buildAxisLayers(viewMode: ExplorerViewMode, bounds: PointBounds | null)
       widthUnits: 'pixels',
       pickable: false,
     }),
-    new LineLayer<AxisLine3D>({
+    new LineLayer({
       id: 'axis-3d',
       data: axisData,
       getSourcePosition: (d) => d.from,
@@ -345,8 +305,6 @@ function buildAxisLayers(viewMode: ExplorerViewMode, bounds: PointBounds | null)
     }),
   ]
 }
-
-// ─── Component ───────────────────────────────────────────────────────────────
 
 export const MapPanel = forwardRef<MapPanelHandle, Props>(function MapPanel(
   {
@@ -367,8 +325,6 @@ export const MapPanel = forwardRef<MapPanelHandle, Props>(function MapPanel(
   ref,
 ) {
   const [tooltip, setTooltip] = useState<TooltipState>(null)
-  // Initial useState call happens before canvasRef is populated — fallback 900 is acceptable;
-  // the useEffect on first data load will re-fit with real DOM dimensions.
   const [viewState, setViewState] = useState<ViewStateMap>(() => buildInitialViewState(points, 900))
   const [dataLoaded, setDataLoaded] = useState(false)
   const canvasRef = useRef<HTMLDivElement>(null)
@@ -380,10 +336,6 @@ export const MapPanel = forwardRef<MapPanelHandle, Props>(function MapPanel(
     [points, selectedArticleId],
   )
   const hasSelection = selectedArticleId != null
-  // hasActiveMatch: true when there is a seed target that produces meaningful point differentiation.
-  // For story-cluster, we require metadata to be available on the loaded points — otherwise
-  // we have a seed but can't distinguish matches, so highlight mode is a no-op until data arrives.
-  // The separate hasSeedContext flag lets us show a pending state in the rail without fully degrading.
   const hasActiveMatch = activeMatchTarget != null && (activeMatchTarget.type !== 'story-cluster' || activeMatchTarget.available)
   const visibleItems = useMemo(() => {
     const items = points?.items ?? []
@@ -396,8 +348,6 @@ export const MapPanel = forwardRef<MapPanelHandle, Props>(function MapPanel(
     )
   }, [points, visualMode, hasActiveMatch, activeMatchTarget, selectedArticleId, neighborIds, hoveredArticleId])
 
-  // ─── Camera auto-fit: ONLY fires on first data load (null → populated)
-  // Subsequent filter changes preserve user camera position.
   const projectionSet = points?.meta.projection_set
   useEffect(() => {
     if (!points?.items.length) {
@@ -405,15 +355,12 @@ export const MapPanel = forwardRef<MapPanelHandle, Props>(function MapPanel(
       return
     }
     if (!dataLoaded) {
-      // First load or after a full reset — fit to all points with real canvas dimensions
       const px = getCanvasPx(canvasRef)
       setViewState((current) => buildInitialViewState(points, px, current))
       setDataLoaded(true)
     }
-    // Subsequent filter changes: do NOT reset camera — user's pan/zoom is preserved
   }, [points?.items.length, projectionSet]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  // ─── Imperative camera controls ──────────────────────────────────────────
   const fitAll = () => {
     const px = getCanvasPx(canvasRef)
     setViewState((current) => buildInitialViewState(points, px, current))
@@ -430,7 +377,6 @@ export const MapPanel = forwardRef<MapPanelHandle, Props>(function MapPanel(
       '3d': {
         ...focused3d,
         zoom: Math.min(focused3d.zoom + 0.2, 6.2),
-        // Preserve user's orbital angles — do not reset tilt/orbit on focus
         rotationOrbit: current['3d'].rotationOrbit,
         rotationX: current['3d'].rotationX,
       },
@@ -439,11 +385,9 @@ export const MapPanel = forwardRef<MapPanelHandle, Props>(function MapPanel(
 
   useImperativeHandle(ref, () => ({ fitAll, focusSelected }))
 
-  // ─── Dev diagnostic (mount only) ─────────────────────────────────────────
   useEffect(() => {
     if (!import.meta.env.DEV) return
     const el = canvasRef.current
-    // eslint-disable-next-line no-console
     console.debug(
       '[MapPanel] mount diagnostic:',
       '\n  canvas clientHeight:', el?.clientHeight ?? 'NOT FOUND',
@@ -452,17 +396,13 @@ export const MapPanel = forwardRef<MapPanelHandle, Props>(function MapPanel(
       '\n  viewState 2d:', viewState['2d'],
       '\n  bounds:', points?.meta.bounds,
     )
-  }, []) // intentionally run once on mount only
+  }, [])
 
-  // ─── Layer ───────────────────────────────────────────────────────────────
   const layers = useMemo(() => {
     const items = visibleItems
     const bounds = normalizeBounds(points?.meta.bounds ?? null)
-
-    // Axis layers always first — points render on top
     const axisLayers = buildAxisLayers(viewMode, bounds)
 
-    // ─── 3D mode: PointCloudLayer tiers (billboarded volumetric spheres) ──────
     if (viewMode === '3d') {
       const isHighlighted = (p: ExplorerPoint) =>
         p.article_id === selectedArticleId ||
@@ -473,30 +413,24 @@ export const MapPanel = forwardRef<MapPanelHandle, Props>(function MapPanel(
         if (p.article_id === selectedArticleId) return POINT_SELECTED_FILL
         if (neighborIds.has(p.article_id)) return POINT_NEIGHBOR_FILL
         if (p.article_id === hoveredArticleId) return POINT_HOVERED_FILL
-        const isActiveMatch = pointMatchesActiveTarget(p, activeMatchTarget)
         const [r, g, b] = colorMode === 'active-match'
-          ? isActiveMatch
-            ? [124, 58, 237]
-            : [148, 163, 184]
+          ? activeMatchColorForPoint(p, activeMatchTarget)
           : colorForPoint(p, colorMode)
-        // Highlight mode: non-matches stay visible as context (~43% alpha), not hidden.
-        // Filter mode uses the same receded alpha but hides them via visibleItems filtering.
-        // Under selection: standard recede applies on top of any highlight logic.
+        const isActiveMatch = pointMatchesActiveTarget(p, activeMatchTarget)
         const alpha = hasActiveMatch && visualMode === 'highlight' && !isActiveMatch
           ? POINT_NON_MATCH_ALPHA_HIGHLIGHT
           : hasSelection
-          ? p.analysis.is_outlier
-            ? POINT_OUTLIER_ALPHA_UNDER_SELECTION
-            : POINT_REGULAR_ALPHA_UNDER_SELECTION
-          : p.analysis.is_outlier
-            ? POINT_OUTLIER_ALPHA_NO_SELECTION
-            : POINT_REGULAR_ALPHA_NO_SELECTION
+            ? p.analysis.is_outlier
+              ? POINT_OUTLIER_ALPHA_UNDER_SELECTION
+              : POINT_REGULAR_ALPHA_UNDER_SELECTION
+            : p.analysis.is_outlier
+              ? POINT_OUTLIER_ALPHA_NO_SELECTION
+              : POINT_REGULAR_ALPHA_NO_SELECTION
         return [r, g, b, alpha]
       }
 
       const colorTrigger = [visualMode, colorMode, selectedArticleId, hoveredArticleId, neighborKey, hasSelection, hasActiveMatch, JSON.stringify(activeMatchTarget)]
 
-      // Shared hover/click handlers for all PC tiers
       const pcOnHover = (info: PickingInfoLike) => {
         const point = info.object
         onHoverArticle(point?.article_id ?? null)
@@ -517,8 +451,8 @@ export const MapPanel = forwardRef<MapPanelHandle, Props>(function MapPanel(
           pointSize: size,
           getPosition: (p) => [p.x, p.y, p.z],
           getColor: getPC3dColor,
-          getNormal: [0, 0, 1],   // unused for billboard mode, required by API
-          material: false,         // disable Phong — pure flat color preserves encoding
+          getNormal: [0, 0, 1],
+          material: false,
           onHover: pcOnHover,
           onClick: pcOnClick,
           updateTriggers: {
@@ -526,28 +460,26 @@ export const MapPanel = forwardRef<MapPanelHandle, Props>(function MapPanel(
           },
         })
 
-      // Split into tiers — layer order: regular (back) → outlier → neighbor → hovered → selected (top)
-      const regular  = items.filter(p => !isHighlighted(p) && !p.analysis.is_outlier)
-      const outlier  = items.filter(p => !isHighlighted(p) && p.analysis.is_outlier)
-      const neighbor = items.filter(p => neighborIds.has(p.article_id))
-      const hovered  = hoveredArticleId != null ? items.filter(p => p.article_id === hoveredArticleId) : []
-      const selected = selectedArticleId != null ? items.filter(p => p.article_id === selectedArticleId) : []
+      const regular = items.filter((p) => !isHighlighted(p) && !p.analysis.is_outlier)
+      const outlier = items.filter((p) => !isHighlighted(p) && p.analysis.is_outlier)
+      const neighbor = items.filter((p) => neighborIds.has(p.article_id))
+      const hovered = hoveredArticleId != null ? items.filter((p) => p.article_id === hoveredArticleId) : []
+      const selected = selectedArticleId != null ? items.filter((p) => p.article_id === selectedArticleId) : []
 
       return [
         ...axisLayers,
-        pcLayer('pc-regular',  regular,  PC_SIZE_REGULAR),
-        pcLayer('pc-outlier',  outlier,  PC_SIZE_OUTLIER),
+        pcLayer('pc-regular', regular, PC_SIZE_REGULAR),
+        pcLayer('pc-outlier', outlier, PC_SIZE_OUTLIER),
         pcLayer('pc-neighbor', neighbor, PC_SIZE_NEIGHBOR),
-        pcLayer('pc-hovered',  hovered,  PC_SIZE_HOVERED),
+        pcLayer('pc-hovered', hovered, PC_SIZE_HOVERED),
         pcLayer('pc-selected', selected, PC_SIZE_SELECTED),
       ]
     }
 
-    // ─── 2D mode: ScatterplotLayer (stroked circles, correct for flat view) ───
     return [
       ...axisLayers,
       new ScatterplotLayer<ExplorerPoint>({
-        id: 'semantic-points', // stable ID — updateTriggers handle all changes (BUG-5 fix)
+        id: 'semantic-points',
         data: items,
         pickable: true,
         filled: true,
@@ -557,14 +489,11 @@ export const MapPanel = forwardRef<MapPanelHandle, Props>(function MapPanel(
         lineWidthUnits: 'pixels',
         radiusMinPixels: 2,
         radiusMaxPixels: 18,
-
         getPosition: (point: ExplorerPoint) => [point.x, point.y],
-
         getRadius: (point: ExplorerPoint) => {
           if (point.article_id === selectedArticleId) return POINT_SELECTED_RADIUS_2D
           if (neighborIds.has(point.article_id)) return POINT_NEIGHBOR_RADIUS_2D
           if (point.article_id === hoveredArticleId) return POINT_HOVERED_RADIUS_2D
-          // Highlight mode: non-matches shrink slightly so matches stand out by size too.
           if (hasActiveMatch && visualMode === 'highlight' && !pointMatchesActiveTarget(point, activeMatchTarget)) {
             const base = point.analysis.is_outlier ? POINT_OUTLIER_RADIUS_2D : POINT_REGULAR_RADIUS_2D
             return Math.round(base * POINT_NON_MATCH_RADIUS_SCALE_HIGHLIGHT)
@@ -572,56 +501,45 @@ export const MapPanel = forwardRef<MapPanelHandle, Props>(function MapPanel(
           if (point.analysis.is_outlier) return POINT_OUTLIER_RADIUS_2D
           return POINT_REGULAR_RADIUS_2D
         },
-
         getFillColor: (point: ExplorerPoint) => {
           if (point.article_id === selectedArticleId) return POINT_SELECTED_FILL
           if (neighborIds.has(point.article_id)) return POINT_NEIGHBOR_FILL
           if (point.article_id === hoveredArticleId) return POINT_HOVERED_FILL
-          const isActiveMatch = pointMatchesActiveTarget(point, activeMatchTarget)
           const [r, g, b] = colorMode === 'active-match'
-            ? isActiveMatch
-              ? [124, 58, 237]
-              : [148, 163, 184]
+            ? activeMatchColorForPoint(point, activeMatchTarget)
             : colorForPoint(point, colorMode)
-          // Highlight mode: non-matches stay visible as context (~43% alpha), not hidden.
-          // This is intentionally gentler than filter mode so the map reads as
-          // "everything visible, matches pulled forward" not "everything else gone".
+          const isActiveMatch = pointMatchesActiveTarget(point, activeMatchTarget)
           const alpha = hasActiveMatch && visualMode === 'highlight' && !isActiveMatch
             ? POINT_NON_MATCH_ALPHA_HIGHLIGHT
             : hasSelection
-            ? point.analysis.is_outlier
-              ? POINT_OUTLIER_ALPHA_UNDER_SELECTION
-              : POINT_REGULAR_ALPHA_UNDER_SELECTION
-            : point.analysis.is_outlier
-              ? POINT_OUTLIER_ALPHA_NO_SELECTION
-              : POINT_REGULAR_ALPHA_NO_SELECTION
+              ? point.analysis.is_outlier
+                ? POINT_OUTLIER_ALPHA_UNDER_SELECTION
+                : POINT_REGULAR_ALPHA_UNDER_SELECTION
+              : point.analysis.is_outlier
+                ? POINT_OUTLIER_ALPHA_NO_SELECTION
+                : POINT_REGULAR_ALPHA_NO_SELECTION
           return [r, g, b, alpha] as [number, number, number, number]
         },
-
         getLineColor: (point: ExplorerPoint) => {
           if (point.article_id === selectedArticleId) return POINT_SELECTED_STROKE
           if (neighborIds.has(point.article_id)) return POINT_NEIGHBOR_STROKE
           if (point.article_id === hoveredArticleId) return POINT_HOVERED_STROKE
-          // Highlight mode: non-matches get a very faint stroke so they read as context without vanishing.
           if (hasActiveMatch && visualMode === 'highlight' && !pointMatchesActiveTarget(point, activeMatchTarget)) {
             return POINT_NON_MATCH_STROKE
           }
           if (hasSelection) return POINT_RECEDING_STROKE
           return POINT_DEFAULT_STROKE
         },
-
         getLineWidth: (point: ExplorerPoint) => {
           if (point.article_id === selectedArticleId) return POINT_SELECTED_STROKE_WIDTH
           if (neighborIds.has(point.article_id)) return POINT_NEIGHBOR_STROKE_WIDTH
           if (point.article_id === hoveredArticleId) return POINT_HOVERED_STROKE_WIDTH
-          // Highlight mode: non-matches get thin stroke consistent with context role.
           if (hasActiveMatch && visualMode === 'highlight' && !pointMatchesActiveTarget(point, activeMatchTarget)) {
             return POINT_NON_MATCH_STROKE_WIDTH
           }
           if (hasSelection) return POINT_RECEDING_STROKE_WIDTH
           return POINT_DEFAULT_STROKE_WIDTH
         },
-
         onHover: (info: PickingInfoLike) => {
           const point = info.object
           onHoverArticle(point?.article_id ?? null)
@@ -631,9 +549,7 @@ export const MapPanel = forwardRef<MapPanelHandle, Props>(function MapPanel(
             setTooltip(null)
           }
         },
-
         onClick: (info: PickingInfoLike) => onSelectArticle(info.object?.article_id ?? null),
-
         updateTriggers: {
           getRadius: [visualMode, selectedArticleId, hoveredArticleId, neighborKey, hasActiveMatch, JSON.stringify(activeMatchTarget)],
           getFillColor: [visualMode, colorMode, selectedArticleId, hoveredArticleId, neighborKey, hasSelection, hasActiveMatch, JSON.stringify(activeMatchTarget)],
@@ -648,7 +564,6 @@ export const MapPanel = forwardRef<MapPanelHandle, Props>(function MapPanel(
 
   return (
     <div className="map-frame">
-      {/* Initial load overlay */}
       {loading && !points && (
         <div className="map-loading-overlay">
           <div style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-muted)' }}>
@@ -657,13 +572,7 @@ export const MapPanel = forwardRef<MapPanelHandle, Props>(function MapPanel(
         </div>
       )}
 
-      <div
-        ref={canvasRef}
-        className={`map-canvas${loading && points ? ' loading-update' : ''}`}
-      >
-        {/* BUG-2 fix: key="explorer-deck" prevents StrictMode double-mount identity loss.
-            BUG-4 fix: OrthographicView/OrbitView with no id (unnamed single-view mode);
-                       viewState is passed as a plain object — DeckGL handles it correctly. */}
+      <div ref={canvasRef} className={`map-canvas${loading && points ? ' loading-update' : ''}`}>
         <DeckGL
           key="explorer-deck"
           views={viewMode === '3d' ? [new OrbitView()] : [new OrthographicView()]}
@@ -692,7 +601,9 @@ export const MapPanel = forwardRef<MapPanelHandle, Props>(function MapPanel(
               <strong>No articles match the current filters</strong>
               <p>
                 {editorialTarget
-                  ? `No visible points match article type ${editorialTarget.value.replace(/_/g, ' ')}. Clear the lens, switch back to highlight mode, or broaden the base subset.`
+                  ? editorialTarget.dimension === 'bias_label'
+                    ? `No visible points match the strict ${humanizeBiasLabel(editorialTarget.value)} bias slice. Clear the lens, switch back to highlight mode, or broaden the base subset.`
+                    : `No visible points match ${humanizeEditorialDimension(editorialTarget.dimension).toLowerCase()} ${editorialTarget.value.replace(/_/g, ' ')}. Clear the lens, switch back to highlight mode, or broaden the base subset.`
                   : 'Broaden the source or date scope, clear the cluster filter, or switch back to highlight mode.'}
               </p>
             </div>
@@ -706,7 +617,6 @@ export const MapPanel = forwardRef<MapPanelHandle, Props>(function MapPanel(
           )}
         </DeckGL>
 
-        {/* Dev diagnostic overlay — stripped in production builds */}
         {import.meta.env.DEV && (
           <DevDiagnostic
             points={points}
@@ -719,10 +629,8 @@ export const MapPanel = forwardRef<MapPanelHandle, Props>(function MapPanel(
   )
 })
 
-// ─── Tooltip ─────────────────────────────────────────────────────────────────
-
-const TOOLTIP_WIDTH = 288  // max-width: 18rem ≈ 288px
-const TOOLTIP_HEIGHT = 120 // approximate
+const TOOLTIP_WIDTH = 288
+const TOOLTIP_HEIGHT = 120
 
 function Tooltip({
   tooltip,
@@ -734,7 +642,6 @@ function Tooltip({
   canvasHeight: number
 }) {
   const point = tooltip.point
-  // Clamp tooltip so it doesn't overflow canvas edges
   const left = Math.min(tooltip.x + 14, canvasWidth - TOOLTIP_WIDTH - 8)
   const top = Math.min(tooltip.y + 14, canvasHeight - TOOLTIP_HEIGHT - 8)
 
@@ -758,8 +665,6 @@ function Tooltip({
     </div>
   )
 }
-
-// ─── Dev diagnostic overlay ───────────────────────────────────────────────────
 
 function DevDiagnostic({
   points,

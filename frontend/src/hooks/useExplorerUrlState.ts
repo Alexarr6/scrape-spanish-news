@@ -41,13 +41,13 @@ function parseVisualMode(value: string | null): ExplorerVisualMode {
 }
 
 function parseColorMode(value: string | null): ExplorerColorMode {
-  return value === 'source' || value === 'cluster' || value === 'active-match' || value === 'article-type'
+  return value === 'source' || value === 'cluster' || value === 'active-match' || value === 'article-type' || value === 'bias'
     ? value
     : 'neutral'
 }
 
 function parseEditorialDimension(value: string | null): ExplorerEditorialDimension | '' {
-  return value === 'article_type' ? value : ''
+  return value === 'article_type' || value === 'bias_label' ? value : ''
 }
 
 function readInitialState() {

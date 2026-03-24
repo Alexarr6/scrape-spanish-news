@@ -14,6 +14,8 @@ export type ExplorerPointEditorialPreview = {
   editorial_applicability: 'full' | 'limited' | 'out_of_domain'
   article_type: string
   article_type_confidence: number
+  bias_label: string
+  bias_confidence: number
   review_flags: ExplorerEditorialReviewFlags
 }
 
@@ -62,6 +64,7 @@ export type ExplorerEditorialOption = {
 
 export type ExplorerEditorialMetadata = {
   article_type: ExplorerEditorialOption[]
+  bias_label: ExplorerEditorialOption[]
   coverage: Record<string, number>
 }
 
@@ -169,7 +172,7 @@ export type ExplorerArticleDetail = {
   neighbors: ExplorerNeighbor[]
 }
 
-export type ExplorerEditorialDimension = 'article_type'
+export type ExplorerEditorialDimension = 'article_type' | 'bias_label'
 
 export type ExplorerEditorialTarget = {
   dimension: ExplorerEditorialDimension
@@ -192,7 +195,7 @@ export type ExplorerQuery = {
 
 export type ExplorerViewMode = '2d' | '3d'
 export type ExplorerVisualMode = 'highlight' | 'filter'
-export type ExplorerColorMode = 'neutral' | 'source' | 'cluster' | 'active-match' | 'article-type'
+export type ExplorerColorMode = 'neutral' | 'source' | 'cluster' | 'active-match' | 'article-type' | 'bias'
 
 export const DEFAULT_QUERY: ExplorerQuery = {
   search: '',

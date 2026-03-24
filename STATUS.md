@@ -1,6 +1,31 @@
 - State: DONE
-- Current phase: iter/009 backend bias-lens slice landed for Explorer; repo ready for frontend handoff
+- Current phase: iter/009 frontend bias-lens slice landed for Explorer; repo ready for review
 - Last update: 2026-03-24 UTC
+
+## iter/009 frontend bias-lens slice summary
+- widened Explorer frontend editorial types/state to support `article_type | bias_label` and added `sem_color=bias`
+- preserved one active editorial target at a time while expanding the compact toolbar lens control to offer both article type and bias targets
+- wired strict bias semantics into Explorer matching/color logic:
+  - highlight keeps the full cloud visible and emphasizes only strict confident in-domain bias matches
+  - filter relies on the backend-narrowed strict confident subset
+  - color-by-bias applies categorical colors only to strict confident in-domain labels while diagnostics stay muted
+- added bias legend/copy and dataset coverage text driven by backend metadata/options/counts instead of reverse-engineering the map state
+- kept article-type lens behavior intact; no tone work, no multi-lens builder, no broad toolbar redesign
+
+## verification status
+- passed: `cd frontend && npm run build`
+- note: Vite still emits the pre-existing loaders.gl browser-external `spawn` warning and chunk-size warning during build, but the build exits successfully
+
+## files changed in this pass
+- `frontend/src/lib/types.ts`
+- `frontend/src/lib/explorerEditorial.ts`
+- `frontend/src/hooks/useExplorerUrlState.ts`
+- `frontend/src/components/explorer/ExplorerControlBar.tsx`
+- `frontend/src/components/explorer/ExplorerContextRail.tsx`
+- `frontend/src/components/explorer/MapPanel.tsx`
+- `STATUS.md`
+- `RESULTS.md`
+
 
 ## iter/009 backend bias-lens slice summary
 - added `bias_label` and `bias_confidence` to `ExplorerPointEditorialPreview` so Explorer points can carry real bias state instead of dropping it on the floor

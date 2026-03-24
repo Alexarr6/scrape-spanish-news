@@ -2,10 +2,13 @@ import { useMemo } from 'react'
 import { CLUSTER_PALETTE, SOURCE_COLORS_HEX } from '../../lib/explorerColors'
 import {
   ARTICLE_TYPE_COLOR_HEX,
+  BIAS_COLOR_HEX,
   EDITORIAL_DIAGNOSTIC_COLOR_HEX,
   buildArticleTypeOptions,
+  buildBiasOptions,
   getCoverageCount,
   humanizeArticleType,
+  humanizeBiasLabel,
 } from '../../lib/explorerEditorial'
 import { clampText, formatDate, formatSimilarity } from '../../lib/format'
 import type {
@@ -29,7 +32,7 @@ export type SeedContext =
   | null
 
 export type ActiveMatchTarget =
-  | { type: 'editorial'; dimension: 'article_type'; value: string }
+  | { type: 'editorial'; dimension: 'article_type' | 'bias_label'; value: string }
   | { type: 'story-cluster'; id: number; available: boolean }
   | { type: 'semantic-cluster'; id: number }
   | { type: 'search'; query: string }
@@ -56,7 +59,11 @@ type Props = {
 
 function describeActiveMatchTarget(target: ActiveMatchTarget) {
   if (!target) return 'No active match target.'
-  if (target.type === 'editorial') return `Highlighting article type ${humanizeArticleType(target.value)}.`
+  if (target.type === 'editorial') {
+    return target.dimension === 'bias_label'
+      ? `Highlighting bias ${humanizeBiasLabel(target.value)}.`
+      : `Highlighting article type ${humanizeArticleType(target.value)}.`
+  }
   if (target.type === 'story-cluster') {
     return target.available
       ? `Highlighting articles in story cluster ${target.id}.`
@@ -65,6 +72,19 @@ function describeActiveMatchTarget(target: ActiveMatchTarget) {
   if (target.type === 'semantic-cluster') return `Highlighting semantic cluster ${target.id}.`
   if (target.type === 'search') return `Highlighting matches for "${target.query}".`
   return `Highlighting articles from ${target.source}.`
+}
+
+function describeEditorialMode(target: ExplorerEditorialTarget, visualMode: ExplorerVisualMode) {
+  if (!target) return null
+  const label = target.dimension === 'bias_label' ? humanizeBiasLabel(target.value) : humanizeArticleType(target.value)
+  if (target.dimension === 'bias_label') {
+    return visualMode === 'highlight'
+      ? `${label} stays emphasized while the full cloud remains visible. Only confident in-domain bias matches count as positives; low-confidence, unclear, pending, failed, limited, and out-of-domain items stay visible but muted.`
+      : `Explorer is narrowed to confident in-domain ${label} bias matches only. Low-confidence, unclear, pending, failed, limited, and out-of-domain items are excluded.`
+  }
+  return visualMode === 'highlight'
+    ? `${label} stays emphasized while the rest of the cloud remains visible as context.`
+    : `Explorer is narrowed to the ${label} subset returned by the backend.`
 }
 
 export function ExplorerContextRail({
@@ -90,11 +110,7 @@ export function ExplorerContextRail({
     return clusterSummaries.find((c) => c.cluster_id === clusterId) ?? null
   }, [clusterSummaries, detail?.semantic_summary.cluster_id, selectedPoint?.analysis.cluster_id])
 
-  const editorialSummary = editorialTarget
-    ? visualMode === 'highlight'
-      ? `${humanizeArticleType(editorialTarget.value)} stays emphasized while the rest of the cloud remains visible as context.`
-      : `Explorer is narrowed to the ${humanizeArticleType(editorialTarget.value)} subset returned by the backend.`
-    : null
+  const editorialSummary = describeEditorialMode(editorialTarget, visualMode)
 
   if (!selectedPoint) {
     return (
@@ -238,6 +254,7 @@ function ColorLegend({
   editorialMetadata: ExplorerEditorialMetadata | null
 }) {
   const articleTypeOptions = buildArticleTypeOptions(editorialMetadata)
+  const biasOptions = buildBiasOptions(editorialMetadata)
 
   return (
     <ul className="legend-list">
@@ -301,6 +318,25 @@ function ColorLegend({
           <li className="legend-item legend-item-indent"><span className="legend-dot" style={{ background: EDITORIAL_DIAGNOSTIC_COLOR_HEX.out_of_domain }} /><span>Out of domain · {getCoverageCount(editorialMetadata, 'out_of_domain')}</span></li>
         </>
       )}
+
+      {colorMode === 'bias' && (
+        <>
+          <li className="legend-item legend-item-header">Color by bias</li>
+          <li className="legend-item legend-item-indent"><span>Distribution view for confident in-domain bias labels only. Diagnostic states stay muted.</span></li>
+          {biasOptions.map((option) => (
+            <li key={option.value} className="legend-item legend-item-indent">
+              <span className="legend-dot" style={{ background: BIAS_COLOR_HEX[option.value] ?? BIAS_COLOR_HEX.unclear }} />
+              <span>{option.label} · {option.count}</span>
+            </li>
+          ))}
+          <li className="legend-item legend-item-indent"><span className="legend-dot" style={{ background: EDITORIAL_DIAGNOSTIC_COLOR_HEX.low_confidence }} /><span>Low confidence · {getCoverageCount(editorialMetadata, 'bias_low_confidence')}</span></li>
+          <li className="legend-item legend-item-indent"><span className="legend-dot" style={{ background: EDITORIAL_DIAGNOSTIC_COLOR_HEX.unknown }} /><span>Unknown / unclear bias · {getCoverageCount(editorialMetadata, 'bias_unknown')}</span></li>
+          <li className="legend-item legend-item-indent"><span className="legend-dot" style={{ background: EDITORIAL_DIAGNOSTIC_COLOR_HEX.pending }} /><span>Pending analysis · {getCoverageCount(editorialMetadata, 'bias_pending')}</span></li>
+          <li className="legend-item legend-item-indent"><span className="legend-dot" style={{ background: EDITORIAL_DIAGNOSTIC_COLOR_HEX.failed }} /><span>Analysis failed · {getCoverageCount(editorialMetadata, 'bias_failed')}</span></li>
+          <li className="legend-item legend-item-indent"><span className="legend-dot" style={{ background: EDITORIAL_DIAGNOSTIC_COLOR_HEX.limited }} /><span>Limited editorial signal · {getCoverageCount(editorialMetadata, 'bias_limited')}</span></li>
+          <li className="legend-item legend-item-indent"><span className="legend-dot" style={{ background: EDITORIAL_DIAGNOSTIC_COLOR_HEX.out_of_domain }} /><span>Out of domain · {getCoverageCount(editorialMetadata, 'bias_out_of_domain')}</span></li>
+        </>
+      )}
     </ul>
   )
 }
@@ -322,12 +358,21 @@ function DatasetSummary({
       <div className="context-dataset-row"><strong>{clusterSummaries.length}</strong> clusters · <strong>{allSources.size}</strong> sources</div>
       {totalArticles > 0 && <div className="context-dataset-row"><strong>{totalArticles}</strong> clustered articles</div>}
       {editorialMetadata && (
-        <div className="context-dataset-row">
-          Editorial coverage · <strong>{getCoverageCount(editorialMetadata, 'total')}</strong> visible points in this subset,{' '}
-          <strong>{Math.max(getCoverageCount(editorialMetadata, 'total') - getCoverageCount(editorialMetadata, 'pending') - getCoverageCount(editorialMetadata, 'failed'), 0)}</strong> analyzed,{' '}
-          <strong>{getCoverageCount(editorialMetadata, 'pending')}</strong> pending,{' '}
-          <strong>{getCoverageCount(editorialMetadata, 'failed')}</strong> failed.
-        </div>
+        <>
+          <div className="context-dataset-row">
+            Editorial coverage · <strong>{getCoverageCount(editorialMetadata, 'total')}</strong> visible points in this subset,{' '}
+            <strong>{Math.max(getCoverageCount(editorialMetadata, 'total') - getCoverageCount(editorialMetadata, 'pending') - getCoverageCount(editorialMetadata, 'failed'), 0)}</strong> analyzed,{' '}
+            <strong>{getCoverageCount(editorialMetadata, 'pending')}</strong> pending,{' '}
+            <strong>{getCoverageCount(editorialMetadata, 'failed')}</strong> failed.
+          </div>
+          <div className="context-dataset-row">
+            Bias coverage · <strong>{getCoverageCount(editorialMetadata, 'bias_total_completed')}</strong> completed,{' '}
+            <strong>{getCoverageCount(editorialMetadata, 'bias_low_confidence')}</strong> low confidence,{' '}
+            <strong>{getCoverageCount(editorialMetadata, 'bias_unknown')}</strong> unclear,{' '}
+            <strong>{getCoverageCount(editorialMetadata, 'bias_limited')}</strong> limited,{' '}
+            <strong>{getCoverageCount(editorialMetadata, 'bias_out_of_domain')}</strong> out of domain.
+          </div>
+        </>
       )}
       <div className="context-dataset-row" style={{ color: 'var(--color-text-muted)' }}>
         {viewMode === '3d' ? '3D: inspect depth / overlap.' : '2D: compare layout.'}

@@ -1,3 +1,58 @@
+## 2026-03-24 — iter/009 frontend Explorer bias lens
+
+**Role:** frontend implementer  
+**Outcome:** ✅ Complete  
+**Scope:** bounded frontend slice for Explorer bias-lens state, toolbar, map semantics, legend, and copy
+
+### What I changed
+- widened Explorer frontend contracts/state to support:
+  - `sem_editorial_dim=bias_label`
+  - `sem_color=bias`
+- preserved the one-active-editorial-target rule and upgraded the compact toolbar trigger into a bounded `Editorial lens` menu with:
+  - `Article type` options
+  - `Bias` options
+  - one in-menu clear action
+- added strict bias target semantics on the map:
+  - highlight keeps the full cloud visible and only emphasizes strict confident in-domain bias matches
+  - filter uses the backend-narrowed strict confident subset
+  - color-by-bias uses categorical colors only for strict confident in-domain labels
+- added muted diagnostic handling and explanatory copy for:
+  - low confidence
+  - unknown / unclear
+  - pending
+  - failed
+  - limited
+  - out_of_domain
+- used backend metadata/options/counts to populate bias options and legend/dataset diagnostics instead of inferring from visible points
+- preserved article-type behavior and existing active-match precedence
+
+### Files changed
+- `frontend/src/lib/types.ts`
+- `frontend/src/lib/explorerEditorial.ts`
+- `frontend/src/hooks/useExplorerUrlState.ts`
+- `frontend/src/components/explorer/ExplorerControlBar.tsx`
+- `frontend/src/components/explorer/ExplorerContextRail.tsx`
+- `frontend/src/components/explorer/MapPanel.tsx`
+- `STATUS.md`
+- `RESULTS.md`
+
+### Verification
+Commands run:
+- `cd frontend && npm run build`
+
+Results:
+- frontend build: passed (`tsc -b && vite build`)
+- note: build still prints the pre-existing loaders.gl browser-external `spawn` warning and the standard Vite chunk-size warning, but exits successfully
+
+### UI / review notes
+- the toolbar stays compact: one bounded `Editorial lens` trigger now exposes both article type and bias targets without adding a second control row
+- when bias is active, the rail copy now says the quiet part out loud:
+  - highlight preserves context and only treats confident in-domain matches as positives
+  - filter is a strict subset
+  - color-by-bias is a distribution view, not certainty theater
+- diagnostics use backend counts (`bias_low_confidence`, `bias_unknown`, `bias_pending`, `bias_failed`, `bias_limited`, `bias_out_of_domain`) so the legend stays honest even when visible points are narrowed
+- article-type behavior remains intact; this pass widens the current lens grammar instead of replacing it with some generic-control nonsense
+
 ## 2026-03-24 — iter/009 backend Explorer bias lens
 
 **Role:** backend/data implementer  
