@@ -112,6 +112,7 @@ def _to_points_response(page: ExplorerPointsPage) -> ExplorerPointsResponse:
             available_sections=page.available_sections,
             available_clusters=page.available_clusters,
             cluster_summaries=page.cluster_summaries,
+            story_cluster_metadata_available=page.story_cluster_metadata_available,
         ),
     )
 

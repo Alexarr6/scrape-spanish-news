@@ -350,6 +350,7 @@ def test_explorer_points_supports_story_cluster_highlight_mode() -> None:
 
     assert response.status_code == 200
     payload = response.json()
+    assert payload["meta"]["story_cluster_metadata_available"] is True
     assert sorted(item["article_id"] for item in payload["items"]) == [1, 2]
     membership_by_article = {
         item["article_id"]: item["analysis"]["story_cluster_ids"] for item in payload["items"]

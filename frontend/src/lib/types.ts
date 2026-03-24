@@ -56,6 +56,7 @@ export type ExplorerMeta = {
   available_sections: string[]
   available_clusters: number[]
   cluster_summaries: ExplorerClusterSummary[]
+  story_cluster_metadata_available: boolean
 }
 
 export type ExplorerPointsResponse = {

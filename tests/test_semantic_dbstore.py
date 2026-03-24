@@ -763,6 +763,7 @@ def test_load_explorer_points_page_populates_story_cluster_ids_in_highlight_mode
         session,
         filters=ExplorerFilters(story_cluster_id=502, visual_mode="highlight"),
     )
+    assert page.story_cluster_metadata_available is True
     by_article_id = {item.article_id: item.analysis.story_cluster_ids for item in page.items}
     assert by_article_id[1] == [501], "article 1 must carry its story cluster even though it is not the highlighted cluster"
     assert by_article_id[2] == [502], "article 2 must carry its own story cluster"
@@ -779,7 +780,6 @@ def test_load_explorer_points_page_story_cluster_ids_empty_for_unaffiliated_poin
 def test_load_explorer_points_page_story_cluster_ids_deduplicated_and_sorted() -> None:
     """story_cluster_ids must be sorted and deduplicated (defensive check on _analysis_for_row)."""
     point_rows = [_make_point_row(article_id=5)]
-    # Simulate duplicate / out-of-order membership rows
     membership_rows = [
         {"article_id": 5, "cluster_id": 300},
         {"article_id": 5, "cluster_id": 100},

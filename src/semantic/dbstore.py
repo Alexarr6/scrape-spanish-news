@@ -903,6 +903,7 @@ class ExplorerPointsPage:
     available_sections: list[str]
     available_clusters: list[int]
     cluster_summaries: list[dict[str, Any]]
+    story_cluster_metadata_available: bool = False
 
 
 @dataclass
@@ -1076,6 +1077,22 @@ def load_explorer_points_page(session: Session, *, filters: ExplorerFilters) -> 
     projection_kind = projection_kind_for_set(filters.projection_set)
     where_sql, params = _build_explorer_where_clause(filters, projection_kind=projection_kind)
     published_at_sql = _explorer_published_at_sql(dialect_name=_session_dialect_name(session))
+    visual_mode = (filters.visual_mode or "filter").lower()
+    order_by_sql = "ORDER BY a.published_at DESC, a.id DESC"
+    if filters.story_cluster_id is not None and visual_mode == "highlight":
+        order_by_sql = """
+            ORDER BY CASE
+                WHEN EXISTS (
+                    SELECT 1
+                    FROM cluster_members cm
+                    WHERE cm.article_id = p.article_id
+                      AND cm.cluster_id = :story_cluster_id
+                ) THEN 0
+                ELSE 1
+            END,
+            a.published_at DESC,
+            a.id DESC
+        """
     rows = (
         session.execute(
             text(
@@ -1103,7 +1120,7 @@ def load_explorer_points_page(session: Session, *, filters: ExplorerFilters) -> 
               ON spa.article_id = p.article_id
              AND spa.projection_set = p.projection_set
             {where_sql}
-            ORDER BY a.published_at DESC, a.id DESC
+            {order_by_sql}
             LIMIT :limit
             """
             ),
@@ -1175,6 +1192,7 @@ def load_explorer_points_page(session: Session, *, filters: ExplorerFilters) -> 
         ),
         available_clusters=_load_available_clusters(session, projection_set=filters.projection_set),
         cluster_summaries=_load_cluster_summaries(session, projection_set=filters.projection_set),
+        story_cluster_metadata_available=(filters.story_cluster_id is not None and visual_mode == "highlight"),
     )
 
 

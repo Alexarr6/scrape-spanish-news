@@ -112,6 +112,7 @@ class ExplorerMeta(BaseModel):
     available_sections: list[str] = Field(default_factory=list)
     available_clusters: list[int] = Field(default_factory=list)
     cluster_summaries: list[ExplorerClusterSummary] = Field(default_factory=list)
+    story_cluster_metadata_available: bool = False
 
 
 class ExplorerPointsResponse(BaseModel):

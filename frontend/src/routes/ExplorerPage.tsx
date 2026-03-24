@@ -12,8 +12,8 @@ import type {
   ExplorerViewMode,
 } from '../lib/types'
 
-function hasStoryClusterMetadata(points: ExplorerPoint[]) {
-  return points.some((point) => Array.isArray(point.analysis.story_cluster_ids))
+function hasStoryClusterMetadata(points: ExplorerPoint[], metadataAvailable: boolean) {
+  return metadataAvailable || points.some((point) => Array.isArray(point.analysis.story_cluster_ids))
 }
 
 export function ExplorerPage() {
@@ -54,18 +54,19 @@ export function ExplorerPage() {
 
   const activeMatchTarget = useMemo<ActiveMatchTarget>(() => {
     const points = pointsState.data?.items ?? []
+    const metadataAvailable = pointsState.data?.meta.story_cluster_metadata_available ?? false
     if (query.storyClusterId) {
       return {
         type: 'story-cluster',
         id: Number(query.storyClusterId),
-        available: hasStoryClusterMetadata(points),
+        available: hasStoryClusterMetadata(points, metadataAvailable),
       }
     }
     if (query.clusterId) return { type: 'semantic-cluster', id: Number(query.clusterId) }
     if (query.search.trim()) return { type: 'search', query: query.search.trim() }
     if (query.source) return { type: 'source', source: query.source }
     return null
-  }, [pointsState.data?.items, query.storyClusterId, query.clusterId, query.search, query.source])
+  }, [pointsState.data?.items, pointsState.data?.meta.story_cluster_metadata_available, query.storyClusterId, query.clusterId, query.search, query.source])
 
   return (
     <div className="explorer-layout">
