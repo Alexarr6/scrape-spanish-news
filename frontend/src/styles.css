@@ -1059,35 +1059,111 @@ input::placeholder {
   white-space: nowrap;
 }
 
-.explorer-inline-field {
-  display: flex;
-  flex-direction: column;
-  gap: 0.2rem;
+.explorer-toolbar-menu {
+  position: relative;
 }
 
-.explorer-inline-field > span {
-  font-size: 10px;
-  font-weight: 600;
-  letter-spacing: 0.05em;
-  text-transform: uppercase;
-  color: var(--color-text-muted);
-}
-
-.explorer-inline-field-row {
-  display: flex;
+.explorer-toolbar-trigger {
+  display: inline-flex;
   align-items: center;
   gap: var(--space-2);
-}
-
-.explorer-inline-field-row select {
-  height: 2rem;
-  min-width: 12rem;
-  padding: 0 0.65rem;
+  min-height: 2rem;
+  padding: 0.35rem 0.75rem;
   border: 1px solid var(--color-border);
   border-radius: var(--radius-sm);
   background: var(--color-surface);
   color: var(--color-text);
   font-size: var(--text-sm);
+  font-weight: 500;
+  line-height: 1;
+  transition: border-color 120ms ease, background 120ms ease, color 120ms ease, box-shadow 120ms ease;
+  white-space: nowrap;
+}
+
+.explorer-toolbar-trigger:hover {
+  border-color: var(--color-border-strong);
+  background: var(--color-hover-bg);
+}
+
+.explorer-toolbar-trigger.active {
+  border-color: var(--color-accent-border);
+  background: var(--color-accent-light);
+  color: var(--color-accent);
+}
+
+.explorer-toolbar-trigger-chevron {
+  font-size: 0.7rem;
+  opacity: 0.7;
+}
+
+.explorer-toolbar-popover {
+  position: absolute;
+  top: calc(100% + var(--space-2));
+  left: 0;
+  z-index: 30;
+  display: flex;
+  flex-direction: column;
+  min-width: 14rem;
+  max-height: 18rem;
+  overflow-y: auto;
+  padding: var(--space-2);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+  box-shadow: var(--shadow-md);
+}
+
+.explorer-toolbar-popover-divider {
+  height: 1px;
+  margin: var(--space-2) 0;
+  background: var(--color-border);
+}
+
+.explorer-toolbar-option {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  width: 100%;
+  padding: 0.5rem 0.625rem;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--color-text);
+  text-align: left;
+}
+
+.explorer-toolbar-option:hover {
+  background: var(--color-hover-bg);
+}
+
+.explorer-toolbar-option.selected {
+  background: var(--color-accent-light);
+  color: var(--color-accent);
+}
+
+.explorer-toolbar-option-label {
+  font-size: var(--text-sm);
+  font-weight: 500;
+}
+
+.explorer-toolbar-option-meta {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--text-xs);
+  color: var(--color-text-muted);
+  white-space: nowrap;
+}
+
+.explorer-toolbar-option.selected .explorer-toolbar-option-meta {
+  color: inherit;
+}
+
+.explorer-toolbar-option-check {
+  width: 0.75rem;
+  text-align: center;
+  font-weight: 700;
 }
 
 /* ─── EXPLORER CONTEXT RAIL ─────────────────────────────────────────────── */

@@ -1,5 +1,5 @@
 - State: DONE
-- Current phase: iter/008 bounded cleanup pass landed after article-type lens review; repo ready for final review
+- Current phase: iter/008 frontend UX correction landed for the article-type lens control; repo ready for final review
 - Last update: 2026-03-24 UTC
 
 ## iter/008 bounded slice summary
@@ -22,6 +22,14 @@
 - passed: `python3 -m py_compile src/api/contracts/semantic.py src/api/v1/semantic.py src/semantic/contracts.py src/semantic/dbstore.py tests/test_api_semantic_explorer.py`
 - passed: `/home/node/.local/bin/uv run --group dev python -m pytest tests/test_api_semantic_explorer.py`
 - passed: `cd frontend && npm run build`
+- passed: `cd frontend && npm run build` after the bounded article-type lens toolbar UX correction
+
+## frontend UX correction follow-up
+- replaced the stacked `Editorial lens` label + select + separate clear button with a compact inline toolbar trigger that sits cleanly beside the surrounding segmented controls
+- trigger now reads `Article type` by default and `Type: <Value>` when active
+- clear/reset moved inside the opened menu as a first menu action instead of living as a separate always-visible button
+- removed the redundant right-side `Article type lens` badge noise while preserving the current article-type URL/query behavior
+- tightened control styling so the article-type lens matches the toolbar’s height, baseline rhythm, and active-state treatment
 
 ## files changed in this pass
 - `src/api/contracts/semantic.py`

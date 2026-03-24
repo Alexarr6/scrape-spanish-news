@@ -82,3 +82,36 @@ Results:
 ### Notes
 - this cleanup pass hardens the current article-type slice instead of widening it
 - that was the right call; adding bias on top of a fuzzy preview contract would have been dumb
+
+## 2026-03-24 — iter/008 frontend UX correction for article-type lens control
+
+**Role:** frontend implementer  
+**Outcome:** ✅ Complete  
+**Scope:** bounded Explorer toolbar correction for the article-type editorial lens
+
+### What I changed
+- replaced the stacked `Editorial lens` form block with a compact inline toolbar trigger/popover in `ExplorerControlBar.tsx`
+- kept the control in the same Explorer control zone and preserved all current article-type target behavior and URL semantics
+- trigger label now follows the approved rule:
+  - default: `Article type`
+  - active: `Type: <Value>`
+- moved clear/reset into the opened menu as `Clear lens · All article types`
+- removed the redundant right-side `Article type lens` badge
+- aligned the control visually with the surrounding toolbar controls via dedicated toolbar trigger/popover styles
+
+### Files changed
+- `frontend/src/components/explorer/ExplorerControlBar.tsx`
+- `frontend/src/styles.css`
+- `STATUS.md`
+- `RESULTS.md`
+
+### Verification
+Commands run:
+- `cd frontend && npm run build`
+
+Results:
+- frontend build: passed (`tsc -b && vite build`)
+
+### Notes
+- this is intentionally a toolbar-grammar fix, not a broader Explorer control-bar redesign
+- no backend, bias, or tone changes were made

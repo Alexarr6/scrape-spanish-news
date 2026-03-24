@@ -1,3 +1,4 @@
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { buildArticleTypeOptions } from '../../lib/explorerEditorial'
 import type {
   ExplorerColorMode,
@@ -64,6 +65,36 @@ export function ExplorerControlBar({
     : `${pointCount} points`
 
   const articleTypeOptions = buildArticleTypeOptions(editorialOptions)
+  const [articleTypeMenuOpen, setArticleTypeMenuOpen] = useState(false)
+  const articleTypeMenuRef = useRef<HTMLDivElement | null>(null)
+
+  const activeArticleTypeLabel = useMemo(
+    () => articleTypeOptions.find((option) => option.value === editorialTarget?.value)?.label ?? editorialTarget?.value ?? null,
+    [articleTypeOptions, editorialTarget],
+  )
+
+  useEffect(() => {
+    if (!articleTypeMenuOpen) return
+
+    const handlePointerDown = (event: MouseEvent) => {
+      if (!articleTypeMenuRef.current?.contains(event.target as Node)) {
+        setArticleTypeMenuOpen(false)
+      }
+    }
+
+    const handleEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setArticleTypeMenuOpen(false)
+      }
+    }
+
+    document.addEventListener('mousedown', handlePointerDown)
+    document.addEventListener('keydown', handleEscape)
+    return () => {
+      document.removeEventListener('mousedown', handlePointerDown)
+      document.removeEventListener('keydown', handleEscape)
+    }
+  }, [articleTypeMenuOpen])
 
   return (
     <div className="explorer-control-bar">
@@ -113,31 +144,62 @@ export function ExplorerControlBar({
           ))}
         </div>
 
-        <label className="explorer-inline-field explorer-editorial-field">
-          <span>Editorial lens</span>
-          <div className="explorer-inline-field-row">
-            <select
-              aria-label="Article type editorial lens"
-              value={editorialTarget?.value ?? ''}
-              onChange={(event) => {
-                const value = event.target.value
-                onEditorialTargetChange(value ? { dimension: 'article_type', value } : null)
-              }}
-            >
-              <option value="">Article type…</option>
-              {articleTypeOptions.map((option) => (
-                <option key={option.value} value={option.value}>
-                  {option.label} · {option.count}
-                </option>
-              ))}
-            </select>
-            {editorialTarget && (
-              <button className="btn-ghost" type="button" onClick={() => onEditorialTargetChange(null)}>
-                Clear lens
+        <div className="explorer-toolbar-menu" ref={articleTypeMenuRef}>
+          <button
+            type="button"
+            className={`explorer-toolbar-trigger${editorialTarget ? ' active' : ''}`}
+            aria-haspopup="menu"
+            aria-expanded={articleTypeMenuOpen}
+            aria-label={editorialTarget ? `Article type lens: ${activeArticleTypeLabel}` : 'Article type lens'}
+            onClick={() => setArticleTypeMenuOpen((open) => !open)}
+          >
+            <span>{editorialTarget ? `Type: ${activeArticleTypeLabel}` : 'Article type'}</span>
+            <span className="explorer-toolbar-trigger-chevron" aria-hidden="true">▾</span>
+          </button>
+
+          {articleTypeMenuOpen && (
+            <div className="explorer-toolbar-popover" role="menu" aria-label="Article type lens options">
+              <button
+                type="button"
+                role="menuitemradio"
+                aria-checked={editorialTarget === null}
+                className={`explorer-toolbar-option${editorialTarget === null ? ' selected' : ''}`}
+                onClick={() => {
+                  onEditorialTargetChange(null)
+                  setArticleTypeMenuOpen(false)
+                }}
+              >
+                <span className="explorer-toolbar-option-label">Clear lens</span>
+                <span className="explorer-toolbar-option-meta">All article types</span>
               </button>
-            )}
-          </div>
-        </label>
+
+              <div className="explorer-toolbar-popover-divider" />
+
+              {articleTypeOptions.map((option) => {
+                const selected = editorialTarget?.value === option.value
+                return (
+                  <button
+                    key={option.value}
+                    type="button"
+                    role="menuitemradio"
+                    aria-checked={selected}
+                    className={`explorer-toolbar-option${selected ? ' selected' : ''}`}
+                    onClick={() => {
+                      onEditorialTargetChange({ dimension: 'article_type', value: option.value })
+                      setArticleTypeMenuOpen(false)
+                    }}
+                  >
+                    <span className="explorer-toolbar-option-label">{option.label}</span>
+                    <span className="explorer-toolbar-option-meta">
+                      {option.count}
+                      <span className="explorer-toolbar-option-check" aria-hidden="true">{selected ? '✓' : ''}</span>
+                    </span>
+                  </button>
+                )
+              })}
+            </div>
+          )}
+        </div>
 
         <button className="btn-ghost" type="button" onClick={onFitAll}>
           Fit all
@@ -151,7 +213,6 @@ export function ExplorerControlBar({
 
       <div className="explorer-controls-right">
         <span className="explorer-point-count">{pointCountLabel}</span>
-        {editorialTarget && <span className="badge accent">Article type lens</span>}
         {activeFilterCount > 0 && <span className="badge accent">{activeFilterCount} filters</span>}
         <button className="btn-ghost" type="button" onClick={onOpenFilters}>
           Refine ↓
