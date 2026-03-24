@@ -5,12 +5,15 @@ from typing import Callable
 
 from src.core.adapter import RunConfig
 
+SkipPredicate = Callable[[list[str]], bool]
+
 
 @dataclass(frozen=True)
 class DiscoveryLayer:
     strategy_name: str
     load_candidates: Callable[[], tuple[list[str], int]]
     min_existing_candidates_to_skip: int | None = None
+    should_skip: SkipPredicate | None = None
 
 
 def run_layered_discovery(
@@ -26,6 +29,8 @@ def run_layered_discovery(
     metrics: list[dict] = []
 
     for layer in layers:
+        if layer.should_skip is not None and layer.should_skip(urls):
+            continue
         if (
             layer.min_existing_candidates_to_skip is not None
             and len(urls) >= layer.min_existing_candidates_to_skip

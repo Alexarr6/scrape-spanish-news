@@ -1,44 +1,49 @@
 - State: DONE
-- Current phase: iter/007 Phase C implementer freshness-first discovery hardening completed; repo ready for final whole-project architect review
+- Current phase: iter/007 final bounded implementer follow-up landed; repo ready for review
 - Last update: 2026-03-23 UTC
 
-## iter/007 Phase C architect status
-- replaced `ARCH_REVIEW.md` with a deep repo-specific scrape coverage review covering adapters, runtime windows, discovery attrition, downstream skew amplification, and per-source diagnosis
-- reviewed current scrape/runtime code across:
-  - `src/core/adapter.py`
-  - `src/adapters/{elpais,elmundo,abc,lavanguardia,eldiario,minutos20}.py`
-  - `src/adapters/{layered_discovery,rss_adapter,url_filters}.py`
-  - `scripts/{run_scheduled,run_stories_refresh,run_explorer_refresh}.sh`
-  - relevant enrichment / clustering / semantic windowing code
-- used repo evidence from current metrics/data artifacts rather than vibes, including scheduled metrics from 2026-03-15..23 and semantic export counts from `data/semantic/articles_points_20260323-113527.json`
+## iter/007 bounded follow-up summary
+- landed source-aware semantic selection in two downstream places that were still amplifying source skew via global recent-row caps:
+  - `select_embedding_candidates()` now round-robins stale/missing embedding work across sources after recency filtering instead of taking the first globally recent rows
+  - `build_semantic_map.py` now uses source-balanced article-id selection for the exported bounded slice instead of a raw first-N recency cut
+- refined `elDiario` layered-discovery skip behavior so sitemap/html fallback layers can skip based on likely usable/fresh candidates rather than raw accepted URL volume alone
+- surfaced cluster membership diagnostics in Stories article detail so users can inspect why a member article belongs in a cluster without spelunking backend JSON
+- kept the pass bounded: no clustering rewrite, no new explorer contract churn, no changes to the already-fixed Stories → Explorer handoff logic
 
-## Architect conclusions
-- source imbalance is a mix of real publisher volume differences and self-inflicted pipeline bias
-- El País high counts are mostly real and aided by a clean RSS-heavy funnel
-- 20minutos and El Mundo look comparatively honest, just smaller/narrower
-- elDiario appears underrepresented partly because layered discovery skip thresholds are based on raw candidate count, not fresh usable same-day candidates
-- ABC and especially La Vanguardia waste extraction budget on stale/junk candidates because date filtering happens after extraction and layered discovery is not freshness-prioritized
-- downstream global caps (`ENRICH_LIMIT`, `CLUSTER_LIMIT`, `SEMANTIC_LIMIT`, `SEMANTIC_BUILD_LIMIT`) amplify whichever sources dominate recent rows, which is why Explorer semantic outputs skew harder than raw scrape counts
+## review-relevant notes
+- the highest-leverage issue from the architect review was downstream source-skew amplification from global caps; this pass addresses that in the semantic sync/build slice without inventing a giant re-ranking framework
+- `elDiario` freshness/usable heuristics remain deliberately modest:
+  - same-day URLs count as clearly usable
+  - explicitly dated stale URLs no longer satisfy the skip threshold
+  - undated but section-valid URLs can still count, which avoids dropping plausible article pages too aggressively
+- Stories now exposes `membership_diagnostics` in the article-detail panel with:
+  - support edge count
+  - best / mean support score
+  - guarded-merge marker
+  - risky-bridge marker
+  - penalties
+  - quick links to supporting article ids
 
-## Specific implementer handoff
-- recommended bounded slice: freshness-first candidate filtering and ordering for `abc` + `lavanguardia`
-- exact aim:
-  - reject obvious static asset/non-article URLs before extraction
-  - use modest URL-date heuristics to prioritize same-day / near-day candidates
-  - process freshest-looking candidates first so the 120 extraction slots stop getting burned on stale sitemap sludge
-- likely touched areas:
-  - `src/adapters/abc.py`
-  - `src/adapters/lavanguardia.py`
-  - `src/adapters/url_filters.py`
-  - optional shared ordering hook in `src/adapters/layered_discovery.py`
-  - tests: `tests/test_abc_adapter.py`, `tests/test_lavanguardia_adapter.py`, `tests/test_layered_discovery.py`
-- recommended verification:
-  - `pytest tests/test_abc_adapter.py tests/test_lavanguardia_adapter.py tests/test_layered_discovery.py tests/test_rss_adapter_extraction.py`
-  - if env is available, compare source metrics before/after for manual runs of ABC and La Vanguardia and look for lower `discarded_by_date` + better kept/processed ratio
+## verification status
+- passed: `python3 -m unittest tests.test_eldiario_adapter`
+- passed: `python3 -m py_compile src/semantic/dbstore.py src/adapters/eldiario.py src/adapters/layered_discovery.py scripts/build_semantic_map.py`
+- passed: `cd frontend && npm run build`
+- blocked environment:
+  - repo `.venv/bin/python` points at a dead interpreter path, so the targeted pytest slice could not be run from the repo venv in this container
+  - system Python in this container also lacks project deps like `sqlalchemy`, so deeper backend runtime smoke tests were constrained
 
-## Next phase
-- Phase C implementer should land exactly that bounded discovery-quality fix before any broader scheduler/source-balancing work
+## files changed in this pass
+- `src/semantic/dbstore.py`
+- `scripts/build_semantic_map.py`
+- `src/adapters/layered_discovery.py`
+- `src/adapters/eldiario.py`
+- `frontend/src/components/stories/StoryFocusPanel.tsx`
+- `frontend/src/lib/types.ts`
+- `tests/test_eldiario_adapter.py`
+- `tests/test_semantic_dbstore.py`
+- `STATUS.md`
+- `RESULTS.md`
 
-## Prior phase summary kept for continuity
-- Phase B implementer anti-bridge clustering pass completed and verified
-- Phase A real Stories → Explorer story-cluster handoff completed and architect-reviewed
+## remaining bounded follow-up ideas
+- if review still sees source skew, the next move should be extending source-aware capping to other globally bounded downstream stages (`ENRICH_LIMIT`, cluster build windows), not undoing this pass
+- if Stories needs more debuggability later, a small next step would be showing membership diagnostics inline in source-group cards, not just article detail

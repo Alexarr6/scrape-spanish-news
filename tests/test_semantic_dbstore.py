@@ -25,6 +25,7 @@ from src.semantic.dbstore import (
     render_init_sql,
     resolve_semantic_window,
     select_embedding_candidates,
+    select_source_balanced_article_ids,
     summary_snippet,
     upsert_embeddings,
     vector_literal,
@@ -438,6 +439,33 @@ def test_select_embedding_candidates_applies_window_filters() -> None:
     assert [candidate.article.article_id for candidate in candidates] == [1]
     assert any("window_date_from" in params for params in session.last_query.params_seen)
     assert any("window_date_to" in params for params in session.last_query.params_seen)
+
+
+def test_select_embedding_candidates_uses_source_balanced_round_robin() -> None:
+    rows = [
+        _Row(id=1, source="elpais"),
+        _Row(id=2, source="elpais"),
+        _Row(id=3, source="elpais"),
+        _Row(id=4, source="elmundo"),
+        _Row(id=5, source="eldiario"),
+    ]
+    session = _SelectSession(rows, existing_by_article_id={})
+
+    candidates = select_embedding_candidates(session, limit=4, max_chars=500)
+
+    assert [candidate.article.article_id for candidate in candidates] == [1, 4, 5, 2]
+
+
+def test_select_source_balanced_article_ids_round_robins_sources() -> None:
+    records = [
+        _article(article_id=1, source="elpais"),
+        _article(article_id=2, source="elpais"),
+        _article(article_id=3, source="elmundo"),
+        _article(article_id=4, source="eldiario"),
+        _article(article_id=5, source="eldiario"),
+    ]
+
+    assert select_source_balanced_article_ids(records, limit=4) == [1, 3, 4, 2]
 
 
 def test_load_projected_points_applies_window_filters_to_sql() -> None:

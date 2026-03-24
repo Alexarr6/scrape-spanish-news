@@ -1,320 +1,59 @@
-## 2026-03-23 — implementer pass for iter/007 Phase C freshness-first discovery hardening
+## 2026-03-23 — bounded final implementer follow-up for iter/007
 
 **Role:** implementer  
 **Outcome:** ✅ Complete  
-**Scope:** bounded scrape-quality fix for ABC + La Vanguardia candidate filtering/ordering per Phase C architect review
+**Scope:** bounded architect-review follow-up focused on downstream source skew, `elDiario` usable-candidate skip thresholds, and Stories cluster-membership diagnostics
 
 ### What I accomplished
-- stopped discarding `target_date` inside the ABC and La Vanguardia adapters, because throwing away the freshness signal was obviously sabotaging the whole exercise
-- added shared URL hardening in `src/adapters/url_filters.py` so obvious static asset URLs (`.jpg`, `.png`, `.webp`, etc.) get rejected as noise before they can waste extraction budget
-- added a modest shared URL-date heuristic for path shapes like `YYYY/MM/DD` and `YYYY-MM-DD`
-- extended `run_layered_discovery()` with an optional candidate-ordering hook so layered adapters can rank candidates before the extraction loop starts burning through its 120-slot budget
-- updated `ABCAdapter` and `LaVanguardiaAdapter` to sort candidates freshness-first against `target_date`, which pushes same-day / near-day URLs ahead of stale sitemap leftovers
-- kept the change intentionally bounded to the architect’s recommendation instead of turning it into a giant source-balancing rewrite cosplay
+- fixed the highest-leverage downstream skew amplifier in semantic sync:
+  - `src/semantic/dbstore.py::select_embedding_candidates()` still over-fetched by recency and then took the first stale/missing rows globally
+  - changed it to keep the recency gate but select the bounded batch round-robin across sources after stale/missing filtering
+- fixed the same downstream skew pattern in semantic export/build slicing:
+  - added `select_source_balanced_article_ids()` in `src/semantic/dbstore.py`
+  - switched `scripts/build_semantic_map.py` to use that helper instead of a raw first-`N` recency slice when choosing the bounded point/export payload
+- refined `elDiario` layered discovery so fallback-layer skipping depends on likely usable candidates rather than raw URL count:
+  - extended `DiscoveryLayer` with an optional `should_skip` predicate in `src/adapters/layered_discovery.py`
+  - updated `src/adapters/eldiario.py` so sitemap/html fallback skip decisions are based on a small freshness-aware usability heuristic
+  - explicitly dated stale URLs no longer let early layers falsely suppress fallback discovery
+- exposed cluster membership diagnostics in Stories article detail:
+  - added `membership_diagnostics` typing in `frontend/src/lib/types.ts`
+  - added a sober `Cluster membership` section in `frontend/src/components/stories/StoryFocusPanel.tsx`
+  - surface includes support-edge counts, best/mean support, guarded-merge marker, risky-bridge marker, penalties, and quick links to supporting member articles
+
+### Why this is the right bounded fix
+- the architect’s main complaint was real: recent-row global caps were still letting one source dominate the semantic bounded slice
+- this pass fixes that where it was easiest to do responsibly without dragging the repo into a giant ranking-framework rewrite
+- the `elDiario` tweak is intentionally conservative: enough to stop raw stale-volume skip mistakes, not aggressive enough to start nuking plausible undated article pages
+- the Stories UI diagnostic section uses already-persisted `membership_diagnostics`; no new backend payload invention was needed
 
 ### Files changed
-- `src/adapters/abc.py`
-- `src/adapters/lavanguardia.py`
-- `src/adapters/layered_discovery.py`
-- `src/adapters/url_filters.py`
-- `tests/test_abc_adapter.py`
-- `tests/test_lavanguardia_adapter.py`
-- `tests/test_layered_discovery.py`
-- `STATUS.md`
-- `RESULTS.md`
-
-### Verification
-Commands run:
-- `PYTHONPATH=.venv/lib/python3.11/site-packages python3 -m pytest tests/test_abc_adapter.py tests/test_lavanguardia_adapter.py tests/test_layered_discovery.py tests/test_rss_adapter_extraction.py`
-- `.venv/bin/ruff check src/adapters/abc.py src/adapters/lavanguardia.py src/adapters/url_filters.py src/adapters/layered_discovery.py tests/test_abc_adapter.py tests/test_lavanguardia_adapter.py tests/test_layered_discovery.py`
-
-Results:
-- targeted pytest slice: `13 passed`
-- targeted lint: passed
-
-### Relevant notes for the next pass
-- this is the right fix for the diagnosed upstream waste: better ordering and earlier junk rejection before downstream caps amplify the skew
-- it is still heuristic, deliberately so; I did not make URL-date parsing aggressive enough to start silently dropping undated legit article pages
-- if final review still sees structural source skew, the next bounded move should be downstream source-aware windowing or elDiario skip-threshold refinement, not pretending ABC/LV intake waste was fine
-
-## 2026-03-23 — implementer anti-bridge clustering pass for iter/007 Phase B
-
-**Role:** implementer  
-**Outcome:** ✅ Complete  
-**Scope:** bounded precision-first same-story clustering hardening per Phase B architect review
-
-### What I accomplished
-- tightened `ClusterPipeline.score_pair()` so risky acceptance now gets explicit penalties/diagnostics for:
-  - follow-up drift with weak lexical support
-  - secondary-form article pairs (`analysis`, `explainer`, `feature`, `interview`)
-  - entity-heavy / event-light bridge pairs
-- replaced raw connected-components merging with a guarded strongest-edge-first cluster growth pass
-- prevented low-grade bridge edges from cheaply fusing components while still allowing strong same-event matches to cluster
-- expanded persisted member diagnostics so cluster membership now stores:
-  - support edge count
-  - best / mean support score
-  - supporting article ids
-  - guarded-merge flag
-  - risky-bridge support flag
-  - accumulated penalties
-- surfaced those diagnostics in cluster detail API payloads as `membership_diagnostics`
-- added focused regression coverage for:
-  - bridge-article false merge prevention
-  - follow-up separation
-  - same-event / different-headline matching
-  - analysis/explainer bridge contamination
-
-### Files changed
-- `src/analysis/contracts.py`
-- `src/analysis/pipeline.py`
-- `src/analysis/readside.py`
-- `src/api/contracts/clusters.py`
-- `tests/test_story_clustering.py`
-- `tests/test_story_pair_scoring.py`
-- `tests/test_api_clusters.py`
-- `STATUS.md`
-- `RESULTS.md`
-
-### Verification
-Commands run:
-- `PYTHONPATH=.venv/lib/python3.11/site-packages python3 -m pytest tests/test_story_clustering.py tests/test_story_pair_scoring.py tests/test_api_clusters.py`
-- `.venv/bin/ruff check src/analysis/pipeline.py src/analysis/readside.py tests/test_story_clustering.py tests/test_story_pair_scoring.py tests/test_api_clusters.py`
-
-Results:
-- targeted pytest slice: `13 passed`
-- targeted backend lint: passed
-
-### Relevant notes for the next pass
-- this is intentionally a precision-first bounded fix, not an embeddings rewrite or a new clustering framework cosplay
-- same-event recall still depends on heuristic lexical/entity evidence; Phase B improved the worst false-merge behavior without pretending the whole problem is solved
-- cluster detail payloads now expose enough member-support evidence to debug weird merges/splits without digging straight into the database
-- repo is ready for Phase C architect review on scrape/source coverage imbalance
-
-## 2026-03-23 — implementer cleanup patch for iter/007 Phase A URL-state + reverse-link contract
-
-**Role:** implementer  
-**Outcome:** ✅ Complete  
-**Scope:** tiny follow-up cleanup after architect review; no clustering review started
-
-### What I accomplished
-- fixed the Explorer URL writeback contract so `sem_story_cluster` is included in the serialized/cleared parameter set inside `useExplorerUrlState()`
-- preserved the existing read path and active-filter counting so story-cluster scope now round-trips cleanly between URL and in-memory query state
-- removed the misleading Explorer → Stories reverse link in `ExplorerContextRail` instead of passing a semantic cluster id off as a Stories cluster id
-- left the compact editorial card fallback intact, so Explorer still shows semantic cluster context without pretending it knows the matching Stories cluster id
-- updated `STATUS.md` / `RESULTS.md` to record the cleanup and the remaining next step
-
-### Coverage / verification note
-- the frontend repo does **not** currently include a dedicated unit/integration test harness, so there was no existing suitable browser-side surface for a tiny regression test without adding new tooling
-- verified the cleanup with targeted frontend build/typecheck instead of expanding scope with a test-framework install
-
-### Verification
-Commands run:
-- `cd /home/node/.openclaw/workspace/repos/spain-news-bias-scraper/frontend && npm run build`
-
-Results:
-- frontend build: passed
-- existing non-blocking Vite/loaders.gl browser warning plus chunk-size warning still remain; build output completes successfully
-
-### Relevant notes for the next pass
-- `sem_story_cluster` is now a real URL-state participant, not a half-read ghost field
-- Explorer no longer claims it can open a Stories view from a semantic cluster id it cannot actually map
-- Phase B can proceed to the clustering-quality review without this navigation/state banana peel
-
-## 2026-03-23 — implementer pass for real Stories → Explorer story-cluster handoff (iter/007 Phase A)
-
-**Role:** implementer  
-**Outcome:** ✅ Complete  
-**Scope:** bounded Phase A slice to replace seeded title-search handoff with explicit story-cluster-scoped Explorer context
-
-### What I accomplished
-- replaced the Stories → Explorer handoff hack that seeded Explorer with title/source/date search params
-- introduced a new explicit Explorer route/query contract key: `sem_story_cluster`
-- preserved `sem_article` when opening Explorer from a selected story article
-- added backend Explorer support for story-cluster-scoped filtering by same-story membership via `cluster_members`
-- kept semantic cluster filtering (`sem_cluster`) separate from story cluster scoping (`sem_story_cluster`)
-- updated Explorer seed-chip copy so the UI clearly distinguishes:
-  - `📰 Story cluster <id>`
-  - `📍 Semantic cluster <id>`
-- expanded regression coverage for:
-  - API-level story-cluster-scoped Explorer filtering
-  - SQL/read-side story-cluster membership filtering
-
-### Files changed
-- `frontend/src/lib/navigation.ts`
-- `frontend/src/lib/query.ts`
-- `frontend/src/lib/types.ts`
-- `frontend/src/hooks/useExplorerUrlState.ts`
-- `frontend/src/routes/ExplorerPage.tsx`
-- `frontend/src/components/explorer/ExplorerContextRail.tsx`
-- `src/api/v1/semantic.py`
 - `src/semantic/dbstore.py`
-- `tests/test_api_semantic_explorer.py`
+- `scripts/build_semantic_map.py`
+- `src/adapters/layered_discovery.py`
+- `src/adapters/eldiario.py`
+- `frontend/src/components/stories/StoryFocusPanel.tsx`
+- `frontend/src/lib/types.ts`
+- `tests/test_eldiario_adapter.py`
 - `tests/test_semantic_dbstore.py`
 - `STATUS.md`
 - `RESULTS.md`
 
 ### Verification
 Commands run:
-- `PYTHONPATH=.venv/lib/python3.11/site-packages /usr/bin/python3 -m pytest tests/test_api_semantic_explorer.py tests/test_semantic_dbstore.py`
+- `python3 -m unittest tests.test_eldiario_adapter`
+- `python3 -m py_compile src/semantic/dbstore.py src/adapters/eldiario.py src/adapters/layered_discovery.py scripts/build_semantic_map.py`
 - `cd /home/node/.openclaw/workspace/repos/spain-news-bias-scraper/frontend && npm run build`
 
 Results:
-- pytest slice: `28 passed`
-- frontend build: passed
-- existing non-blocking Vite/loaders.gl browser warning plus chunk-size warning still remain; build output completes successfully
+- `unittest` slice for `elDiario`: passed (`3 tests`)
+- backend syntax compile for touched Python files: passed
+- frontend production build/typecheck: passed
+- repo pytest slice: **could not run in this container** because `.venv/bin/python` points at a dead interpreter path, and the system Python lacks project deps like `sqlalchemy`
 
-### Relevant notes for architect review
-- this pass does **not** pretend story cluster ids and semantic cluster ids are interchangeable; they now travel on different keys and hit different filters
-- `sem_story_cluster` acts as a scope constraint over Explorer articles, while `sem_cluster` still means semantic cluster filtering inside the projection
-- handoff now prefers a clean contract over inference: Stories sends cluster identity directly instead of leaking intent through title search
-- selected-article focus is preserved through `sem_article`, so Explorer can open already focused on the clicked article when available
-- no extra UI filter was added for story clusters in the Explorer drawer; this stays intentionally scoped to handoff/context for Phase A
+### Relevant details for review
+- there were already unrelated dirty files in the repo worktree when I started (`ARCH_REVIEW.md`, some existing frontend files already modified); I kept this pass bounded to the follow-up scope instead of trying to clean unrelated state
+- no commit was created in this pass
 
-### Git summary
-- branch: `iter/007`
-- recent commits before this pass:
-  - `a5e4f24 chore(iteration): scaffold iter/007 (WEBAPP_STACK.md)`
-  - `42063aa feat(editorial): add cluster comparative metrics and divergence signals`
-  - `94643a0 feat(editorial): integrate product-facing editorial analysis surfaces`
-- rollback hint: inspect/revert from `a5e4f24` baseline if this Phase A slice needs to be backed out cleanly
-
-## 2026-03-23 — implementer pass for cluster-scoped comparative editorial metrics in Stories
-
-**Role:** implementer  
-**Outcome:** ✅ Complete  
-**Scope:** bounded iter/006 implementation of comparative source metrics + divergence signals inside the existing cluster Editorial lens
-
-### What I accomplished
-- added additive `comparative_metrics` to `StoryClusterEditorialSummary`
-- introduced conservative cluster-scoped comparative payloads covering:
-  - per-source usable article counts
-  - full vs limited applicability counts
-  - low-confidence counts
-  - source eligibility states and comparison notes
-  - dimension indices only when support is actually sufficient
-  - divergence signals only when thresholds are met
-- kept weak or mixed cases honest by hiding unsupported dimension indices instead of inventing certainty
-- surfaced limited / out-of-domain comparison caveats through comparison notes and confidence bands
-- upgraded `EditorialLensSection` so Stories now shows:
-  - a comparative note
-  - source-level comparative rows with usable counts and confidence bands
-  - restrained divergence callouts with support counts and article drillbacks
-  - honest empty states when the cluster is too thin
-- expanded cluster API regression coverage for:
-  - meaningful divergence
-  - limited/out-of-domain caveats
-  - insufficient-comparison suppression
-  - hidden metrics for under-supported dimensions
-
-### Files changed
-- `src/api/contracts/clusters.py`
-- `src/analysis/readside.py`
-- `frontend/src/lib/types.ts`
-- `frontend/src/components/stories/EditorialLensSection.tsx`
-- `frontend/src/styles.css`
-- `tests/test_api_clusters.py`
-- `STATUS.md`
-- `RESULTS.md`
-
-### Verification
-Commands run:
-- `PYTHONPATH=.venv/lib/python3.11/site-packages python3 -m pytest tests/test_api_clusters.py`
-- `PYTHONPATH=.venv/lib/python3.11/site-packages .venv/bin/ruff check src/api/contracts/clusters.py src/analysis/readside.py`
-- `cd /home/node/.openclaw/workspace/repos/spain-news-bias-scraper/frontend && npm run build`
-
-Results:
-- cluster API pytest slice: `5 passed`
-- backend lint for touched source files: passed
-- frontend build: passed
-- existing non-blocking Vite/loaders.gl browser warning plus chunk-size warning still remain; build output completes successfully
-
-### Relevant notes for architect review
-- the payload stays cluster-scoped; nothing implies stable outlet branding outside the current story
-- limited sources can still appear in comparison, but they are explicitly marked limited and pulled down to lower confidence
-- dimensions fall back to `null` when support/status quality is weak instead of forcing a pseudo-precise score
-- divergence signals currently prefer the strongest supported source gap per dimension; if product wants broader comparative coverage later, that belongs in phase 2 rather than bloating this cluster view
-
-## 2026-03-23 — frontend.react pass for editorial UI integration in Stories + Explorer
-
-**Role:** frontend.react  
-**Outcome:** ✅ Complete  
-**Scope:** bounded frontend implementation for iter/005 editorial analysis product surfaces
-
-### What I accomplished
-- built shared editorial display components for article-level rendering, evidence, dimension summaries, and review/applicability state
-- added a new cluster-scoped `Editorial lens` section to `StoryFocusPanel`
-- wired selected Stories article detail to render the full editorial card using the shaped `article.editorial` payload
-- added restrained article preview badges in the story member list using `editorial_preview`
-- wired `ExplorerContextRail` to render a compact editorial card for the selected article with a path back to Stories
-- added matching styling so the new layer feels analytical instead of like a carnival of ideology stickers
-
-### Files changed
-- `frontend/src/components/editorial/EditorialStatusBadge.tsx`
-- `frontend/src/components/editorial/EditorialDimensionGrid.tsx`
-- `frontend/src/components/editorial/EditorialEvidenceList.tsx`
-- `frontend/src/components/editorial/EditorialAnalysisCard.tsx`
-- `frontend/src/components/editorial/editorialFormat.ts`
-- `frontend/src/components/stories/EditorialLensSection.tsx`
-- `frontend/src/components/stories/StoryFocusPanel.tsx`
-- `frontend/src/components/explorer/ExplorerContextRail.tsx`
-- `frontend/src/styles.css`
-- `STATUS.md`
-- `RESULTS.md`
-
-### Verification
-Commands run:
-- `cd /home/node/.openclaw/workspace/repos/spain-news-bias-scraper/frontend && npm run build`
-
-Results:
-- frontend build: passed
-- existing non-blocking warning remains from Vite/loaders.gl browser bundling (`spawn` external) plus chunk-size warning; build output still completes successfully
-
-### Relevant notes
-- Stories now has the highest-value editorial workflow: cluster comparison first, article evidence second
-- Explorer gets the compact read, which keeps semantic navigation tied to editorial interpretation without turning the map into a toy dashboard
-- review-state/applicability/low-confidence visibility is preserved inline instead of buried
-- raw diagnostics are still correctly kept out of the main analytical UI
-
-## 2026-03-23 — implementer pass for product-facing editorial payloads in Stories + Explorer
-
-**Role:** implementer  
-**Outcome:** ✅ Complete  
-**Scope:** bounded backend/read-model/data-contract implementation for iter/005 editorial product integration
-
-### What I accomplished
-- added `ExplorerArticleDetail.editorial` as a shaped article-level editorial summary for product use
-- added `StoryClusterDetail.editorial_summary` as a conservative cluster comparison payload with source summaries, cluster signals, confidence note, and scope note
-- added `StoryClusterMemberItem.editorial_preview` for badge/row-level use in story member lists
-- kept the raw editorial audit/operator API untouched so product UI does not consume raw analysis rows directly
-- updated frontend TS types to match the new shaped payloads
-- added regression coverage for:
-  - explorer article detail with completed editorial data
-  - explorer article detail with missing row -> pending editorial state
-  - cluster detail source/applicability/review summaries
-  - cluster detail out-of-domain preservation and scope messaging
-
-### Files changed
-- `src/api/contracts/semantic.py`
-- `src/api/contracts/clusters.py`
-- `src/api/v1/semantic.py`
-- `src/analysis/readside.py`
-- `frontend/src/lib/types.ts`
-- `tests/test_api_semantic_explorer.py`
-- `tests/test_api_clusters.py`
-- `STATUS.md`
-- `RESULTS.md`
-
-### Verification
-Commands run:
-- `PYTHONPATH=.venv/lib/python3.11/site-packages python3 -m pytest tests/test_api_semantic_explorer.py tests/test_api_clusters.py`
-- `PYTHONPATH=.venv/lib/python3.11/site-packages .venv/bin/ruff check --fix src/api/contracts/semantic.py src/api/contracts/clusters.py src/api/v1/semantic.py src/analysis/readside.py`
-
-Results:
-- pytest: `10 passed`
-- ruff check: passed for touched backend source files
-
-### Relevant notes for the next pass
-- Stories is now the best first consumer: it has cluster editorial summary + member previews + article-level detail
-- Explorer has the compact article-level editorial payload it needs
-- cluster signals are intentionally conservative; if support is weak, the payload says so instead of hallucinating a clean story-wide claim
-- missing editorial rows are surfaced as `pending`, not silently omitted
+### What remains
+- broad project pytest verification still needs a healthy Python env / working repo venv
+- if another bounded iteration happens, the next best target is extending source-aware caps to other downstream bounded stages outside semantic sync/build, not revisiting this same slice again

@@ -318,6 +318,16 @@ export type StoryClusterEditorialSummary = {
   scope_note: string
 }
 
+export type StoryClusterMemberDiagnostics = {
+  support_edge_count: number
+  best_support_score: number
+  mean_support_score: number
+  supporting_article_ids: number[]
+  accepted_via_guarded_merge: boolean
+  risky_bridge_support: boolean
+  penalties: string[]
+}
+
 export type StoryClusterMemberItem = {
   article_id: number
   source: string
@@ -327,6 +337,7 @@ export type StoryClusterMemberItem = {
   section: string
   summary: string
   membership_score: number
+  membership_diagnostics: StoryClusterMemberDiagnostics | null
   tags: ClusterTagSummary[]
   entities: ClusterEntitySummary[]
   editorial_preview: StoryClusterMemberEditorialPreview | null

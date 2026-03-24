@@ -159,7 +159,7 @@ def _canonicalize_semantic_records(
         )
 
     canonical_ids = (
-        [point.article_id for point in points[:limit]]
+        select_source_balanced_article_ids(points, limit=limit)
         if limit
         else [point.article_id for point in points]
     )

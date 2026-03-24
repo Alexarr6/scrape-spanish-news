@@ -5,6 +5,7 @@ from __future__ import annotations
 import hashlib
 import math
 import re
+from collections import defaultdict
 from dataclasses import dataclass
 import json
 from datetime import date, datetime, timedelta, timezone
@@ -874,6 +875,37 @@ class ExplorerArticleDetailRecord:
     projection_set: str
     point: PointArtifact | None
     neighbors: list[NeighborArtifact]
+
+
+def select_source_balanced_article_ids(
+    records: list[SemanticArticle | EmbeddingArtifact | PointArtifact], *, limit: int
+) -> list[int]:
+    """Pick a bounded article slice without letting one source win by recency alone."""
+
+    if limit <= 0:
+        return []
+    buckets: dict[str, list[int]] = defaultdict(list)
+    source_order: list[str] = []
+    for record in records:
+        source = getattr(record, "source", "") or ""
+        article_id = int(getattr(record, "article_id"))
+        if source not in buckets:
+            source_order.append(source)
+        buckets[source].append(article_id)
+
+    selected: list[int] = []
+    while len(selected) < limit and source_order:
+        next_round: list[str] = []
+        for source in source_order:
+            bucket = buckets[source]
+            if bucket:
+                selected.append(bucket.pop(0))
+                if len(selected) >= limit:
+                    break
+            if bucket:
+                next_round.append(source)
+        source_order = next_round
+    return selected
 
 
 def _session_dialect_name(session: Session | Any) -> str:
