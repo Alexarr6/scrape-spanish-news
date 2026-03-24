@@ -310,6 +310,13 @@ def test_explorer_points_returns_cluster_metadata() -> None:
     preview_by_article = {item["article_id"]: item["editorial_preview"] for item in payload["items"]}
     assert preview_by_article[1]["article_type"] == "news"
     assert preview_by_article[1]["analysis_status"] == "completed"
+    assert set(preview_by_article[1].keys()) == {
+        "analysis_status",
+        "editorial_applicability",
+        "article_type",
+        "article_type_confidence",
+        "review_flags",
+    }
     assert preview_by_article[2]["analysis_status"] == "pending"
     assert payload["meta"]["editorial"]["coverage"]["pending"] == 1
     assert any(option == {"value": "news", "count": 1} for option in payload["meta"]["editorial"]["article_type"])

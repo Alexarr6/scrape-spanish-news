@@ -35,6 +35,21 @@ export function articleTypeColorRgb(label: string | null | undefined): [number, 
   return ARTICLE_TYPE_COLOR_RGB[label] ?? ARTICLE_TYPE_COLOR_RGB.unclear
 }
 
+export function articleTypeColorForPreviewRgb(
+  preview: ExplorerPointEditorialPreview | null | undefined,
+): [number, number, number] {
+  const bucket = getEditorialStatusBucket(preview)
+  if (bucket === 'pending') return hexToRgb(EDITORIAL_DIAGNOSTIC_COLOR_HEX.pending)
+  if (bucket === 'failed') return hexToRgb(EDITORIAL_DIAGNOSTIC_COLOR_HEX.failed)
+  if (bucket === 'unknown') return hexToRgb(EDITORIAL_DIAGNOSTIC_COLOR_HEX.unknown)
+  if (bucket === 'out_of_domain') return hexToRgb(EDITORIAL_DIAGNOSTIC_COLOR_HEX.out_of_domain)
+  const base = articleTypeColorRgb(preview?.article_type)
+  if (bucket === 'limited') {
+    return mixRgb(base, hexToRgb(EDITORIAL_DIAGNOSTIC_COLOR_HEX.limited), 0.35)
+  }
+  return base
+}
+
 export function humanizeArticleType(value: string | null | undefined) {
   return humanizeValue(value, 'Unknown')
 }
@@ -77,6 +92,19 @@ export function buildArticleTypeOptions(editorial: ExplorerEditorialMetadata | n
 
 export function getCoverageCount(editorial: ExplorerEditorialMetadata | null | undefined, key: string) {
   return editorial?.coverage?.[key] ?? 0
+}
+
+function mixRgb(
+  left: [number, number, number],
+  right: [number, number, number],
+  rightWeight: number,
+): [number, number, number] {
+  const leftWeight = 1 - rightWeight
+  return [
+    Math.round(left[0] * leftWeight + right[0] * rightWeight),
+    Math.round(left[1] * leftWeight + right[1] * rightWeight),
+    Math.round(left[2] * leftWeight + right[2] * rightWeight),
+  ]
 }
 
 function hexToRgb(hex: string): [number, number, number] {

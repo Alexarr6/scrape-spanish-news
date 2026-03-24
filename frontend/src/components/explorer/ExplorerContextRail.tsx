@@ -294,10 +294,10 @@ function ColorLegend({
               <span>{option.label} · {option.count}</span>
             </li>
           ))}
-          <li className="legend-item legend-item-indent"><span className="legend-dot" style={{ background: EDITORIAL_DIAGNOSTIC_COLOR_HEX.unknown }} /><span>Unknown · {getCoverageCount(editorialMetadata, 'unknown')}</span></li>
-          <li className="legend-item legend-item-indent"><span className="legend-dot" style={{ background: EDITORIAL_DIAGNOSTIC_COLOR_HEX.pending }} /><span>Pending · {getCoverageCount(editorialMetadata, 'pending')}</span></li>
-          <li className="legend-item legend-item-indent"><span className="legend-dot" style={{ background: EDITORIAL_DIAGNOSTIC_COLOR_HEX.failed }} /><span>Failed · {getCoverageCount(editorialMetadata, 'failed')}</span></li>
-          <li className="legend-item legend-item-indent"><span className="legend-dot" style={{ background: EDITORIAL_DIAGNOSTIC_COLOR_HEX.limited }} /><span>Limited scope · {getCoverageCount(editorialMetadata, 'limited')}</span></li>
+          <li className="legend-item legend-item-indent"><span className="legend-dot" style={{ background: EDITORIAL_DIAGNOSTIC_COLOR_HEX.unknown }} /><span>Unknown article type · {getCoverageCount(editorialMetadata, 'unknown')}</span></li>
+          <li className="legend-item legend-item-indent"><span className="legend-dot" style={{ background: EDITORIAL_DIAGNOSTIC_COLOR_HEX.pending }} /><span>Pending analysis · {getCoverageCount(editorialMetadata, 'pending')}</span></li>
+          <li className="legend-item legend-item-indent"><span className="legend-dot" style={{ background: EDITORIAL_DIAGNOSTIC_COLOR_HEX.failed }} /><span>Analysis failed · {getCoverageCount(editorialMetadata, 'failed')}</span></li>
+          <li className="legend-item legend-item-indent"><span className="legend-dot" style={{ background: EDITORIAL_DIAGNOSTIC_COLOR_HEX.limited }} /><span>Limited scope · {getCoverageCount(editorialMetadata, 'limited')} (same type hue, muted)</span></li>
           <li className="legend-item legend-item-indent"><span className="legend-dot" style={{ background: EDITORIAL_DIAGNOSTIC_COLOR_HEX.out_of_domain }} /><span>Out of domain · {getCoverageCount(editorialMetadata, 'out_of_domain')}</span></li>
         </>
       )}
@@ -323,7 +323,8 @@ function DatasetSummary({
       {totalArticles > 0 && <div className="context-dataset-row"><strong>{totalArticles}</strong> clustered articles</div>}
       {editorialMetadata && (
         <div className="context-dataset-row">
-          Editorial coverage · <strong>{getCoverageCount(editorialMetadata, 'total')}</strong> analyzed / visible points,{' '}
+          Editorial coverage · <strong>{getCoverageCount(editorialMetadata, 'total')}</strong> visible points in this subset,{' '}
+          <strong>{Math.max(getCoverageCount(editorialMetadata, 'total') - getCoverageCount(editorialMetadata, 'pending') - getCoverageCount(editorialMetadata, 'failed'), 0)}</strong> analyzed,{' '}
           <strong>{getCoverageCount(editorialMetadata, 'pending')}</strong> pending,{' '}
           <strong>{getCoverageCount(editorialMetadata, 'failed')}</strong> failed.
         </div>

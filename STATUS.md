@@ -1,5 +1,5 @@
 - State: DONE
-- Current phase: iter/008 explorer article-type editorial lens frontend landed; ready for review
+- Current phase: iter/008 bounded cleanup pass landed after article-type lens review; repo ready for final review
 - Last update: 2026-03-24 UTC
 
 ## iter/008 bounded slice summary
@@ -12,6 +12,11 @@
   - `sem_mode=filter` shows the backend-narrowed article-type subset clearly as a narrowed view
 - added legend/context handling for `unknown`, `pending`, `failed`, `limited`, and `out_of_domain`
 - kept the slice deliberately narrow: no bias/tone lensing, no multi-dimension builder, no Phase 1 visual grammar churn
+- bounded cleanup pass tightened the point-level `editorial_preview` contract to the fields Explorer actually promises today
+- legend/dataset copy now says coverage more honestly instead of implying all visible points are analyzed
+- article-type color semantics now better match the explanatory copy:
+  - pending / failed / unknown / out-of-domain render with diagnostic-muted colors
+  - limited keeps its article-type hue but is visually muted instead of pretending to be a separate type
 
 ## verification status
 - passed: `python3 -m py_compile src/api/contracts/semantic.py src/api/v1/semantic.py src/semantic/contracts.py src/semantic/dbstore.py tests/test_api_semantic_explorer.py`

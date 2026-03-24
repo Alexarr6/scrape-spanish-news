@@ -54,3 +54,31 @@ Results:
 - color-by article type colors all currently visible points categorically; pending/failed/unknown/out-of-domain stay muted and honest in the legend
 - story/search/source/cluster seed state still exists, but an active editorial target now owns the active-match channel so the UI does not try to shout two different truths at once
 - bias/tone are still deferred, on purpose, because shipping a one-lens slice that reads clearly beats bolting a clown car onto Explorer
+
+## 2026-03-24 — iter/008 bounded cleanup pass after review
+
+**Role:** implementer  
+**Outcome:** ✅ Complete  
+**Scope:** contract tightening + legend/copy honesty + bounded visual-semantic cleanup
+
+### What I changed
+- tightened `ExplorerPoint.editorial_preview` to the fields the API actually promises right now for Explorer article-type lensing
+- removed backend shaper leakage of future bias/tone preview fields that were being silently dropped at the contract layer anyway
+- made article-type color rendering align better with the rail/legend story:
+  - `pending`, `failed`, `unknown`, and `out_of_domain` now render as muted diagnostic states
+  - `limited` keeps the base article-type hue but is visually muted instead of pretending to be its own categorical bucket
+- fixed dataset copy so coverage no longer implies that all visible points are analyzed
+- kept the model intentionally narrow: still one active article-type lens only, no bias/tone expansion
+
+### Cleanup verification
+Commands run:
+- `/home/node/.local/bin/uv run --group dev python -m pytest tests/test_api_semantic_explorer.py`
+- `cd frontend && npm run build`
+
+Results:
+- semantic explorer pytest slice: passed
+- frontend build: passed
+
+### Notes
+- this cleanup pass hardens the current article-type slice instead of widening it
+- that was the right call; adding bias on top of a fuzzy preview contract would have been dumb

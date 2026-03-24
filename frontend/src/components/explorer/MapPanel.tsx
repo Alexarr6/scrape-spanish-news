@@ -20,7 +20,7 @@ import DeckGL from '@deck.gl/react'
 import { forwardRef, useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react'
 import { formatDate } from '../../lib/format'
 import {
-  articleTypeColorRgb,
+  articleTypeColorForPreviewRgb,
   describeEditorialPreview,
   isEditorialValueMatch,
 } from '../../lib/explorerEditorial'
@@ -262,7 +262,7 @@ function colorForPoint(point: ExplorerPoint, mode: ExplorerColorMode): [number, 
     return CLUSTER_PALETTE[(point.analysis.cluster_id - 1) % CLUSTER_PALETTE.length]
   }
   if (mode === 'article-type') {
-    return articleTypeColorRgb(point.editorial_preview?.article_type)
+    return articleTypeColorForPreviewRgb(point.editorial_preview)
   }
   // neutral
   return [67, 56, 202] // indigo-700

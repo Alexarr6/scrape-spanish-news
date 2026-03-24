@@ -1408,7 +1408,6 @@ def _editorial_preview_for_row(row: Any) -> dict[str, Any]:
     article_type_confidence = float(row.get("editorial_article_type_confidence") or 0.0)
     bias_label = str(row.get("editorial_bias_label") or "unclear")
     bias_confidence = float(row.get("editorial_bias_confidence") or 0.0)
-    tone_emotional = str(row.get("editorial_tone_emotional") or "unclear")
     unclear_reasons = _parse_json_scalar_list(row.get("editorial_unclear_reasons_json"))
     evidence_spans = _parse_json_list(row.get("editorial_evidence_spans_json"))
     return {
@@ -1416,9 +1415,6 @@ def _editorial_preview_for_row(row: Any) -> dict[str, Any]:
         "editorial_applicability": editorial_applicability,
         "article_type": article_type,
         "article_type_confidence": article_type_confidence,
-        "bias_label": bias_label,
-        "bias_confidence": bias_confidence,
-        "tone_emotional": tone_emotional,
         "review_flags": _build_editorial_review_flags(
             analysis_status=analysis_status,
             bias_label=bias_label,
