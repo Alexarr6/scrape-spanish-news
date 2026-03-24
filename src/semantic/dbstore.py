@@ -885,6 +885,7 @@ class ExplorerFilters:
     section: str | None = None
     cluster_id: int | None = None
     story_cluster_id: int | None = None
+    visual_mode: str | None = None
     outlier_only: bool = False
     date_from: str | None = None
     date_to: str | None = None
@@ -1111,6 +1112,10 @@ def load_explorer_points_page(session: Session, *, filters: ExplorerFilters) -> 
         .mappings()
         .all()
     )
+    story_cluster_ids_by_article = _load_story_cluster_memberships(
+        session,
+        article_ids=[int(row["article_id"]) for row in rows],
+    )
     items: list[PointArtifact] = []
     for row in rows:
         neighbors = _safe_neighbors(session, article_id=row["article_id"], limit=3)
@@ -1128,7 +1133,11 @@ def load_explorer_points_page(session: Session, *, filters: ExplorerFilters) -> 
                 x=float(row["x"]),
                 y=float(row["y"]),
                 z=float(row["z"]),
-                analysis=_analysis_for_row(row, neighbors=neighbors),
+                analysis=_analysis_for_row(
+                    row,
+                    neighbors=neighbors,
+                    story_cluster_ids=story_cluster_ids_by_article.get(int(row["article_id"]), []),
+                ),
             )
         )
     total = session.execute(
@@ -1237,6 +1246,7 @@ def load_explorer_article_detail(
     if row is None:
         return None
     neighbors = _safe_neighbors(session, article_id=article_id, limit=5)
+    story_cluster_ids_by_article = _load_story_cluster_memberships(session, article_ids=[article_id])
     point = None
     if row["x"] is not None and row["y"] is not None:
         point = PointArtifact(
@@ -1252,7 +1262,11 @@ def load_explorer_article_detail(
             x=float(row["x"]),
             y=float(row["y"]),
             z=float(row["z"]),
-            analysis=_analysis_for_row(row, neighbors=neighbors),
+            analysis=_analysis_for_row(
+                row,
+                neighbors=neighbors,
+                story_cluster_ids=story_cluster_ids_by_article.get(article_id, []),
+            ),
         )
     return ExplorerArticleDetailRecord(
         article={
@@ -1298,10 +1312,11 @@ def _build_explorer_where_clause(
         clauses.append("(lower(a.title) LIKE :search OR lower(a.summary) LIKE :search)")
         params["search"] = f"%{filters.search.strip().lower()}%"
     if filters.story_cluster_id is not None:
-        clauses.append(
-            "EXISTS (SELECT 1 FROM cluster_members cm WHERE cm.article_id = p.article_id AND cm.cluster_id = :story_cluster_id)"
-        )
         params["story_cluster_id"] = filters.story_cluster_id
+        if (filters.visual_mode or "filter").lower() == "filter":
+            clauses.append(
+                "EXISTS (SELECT 1 FROM cluster_members cm WHERE cm.article_id = p.article_id AND cm.cluster_id = :story_cluster_id)"
+            )
     if filters.cluster_id is not None or filters.outlier_only:
         clauses.append("spa.projection_set = :analysis_projection_set")
         params["analysis_projection_set"] = filters.projection_set
@@ -1394,6 +1409,34 @@ def _safe_neighbors(session: Session, *, article_id: int, limit: int) -> list[Ne
         ]
     except Exception:
         return []
+
+
+def _load_story_cluster_memberships(
+    session: Session, *, article_ids: list[int]
+) -> dict[int, list[int]]:
+    if not article_ids:
+        return {}
+    placeholders = ", ".join(f":article_id_{index}" for index in range(len(article_ids)))
+    params = {f"article_id_{index}": article_id for index, article_id in enumerate(article_ids)}
+    rows = (
+        session.execute(
+            text(
+                f"""
+                SELECT article_id, cluster_id
+                FROM cluster_members
+                WHERE article_id IN ({placeholders})
+                ORDER BY article_id ASC, cluster_id ASC
+                """
+            ),
+            params,
+        )
+        .mappings()
+        .all()
+    )
+    memberships: dict[int, list[int]] = {int(article_id): [] for article_id in article_ids}
+    for row in rows:
+        memberships.setdefault(int(row["article_id"]), []).append(int(row["cluster_id"]))
+    return memberships
 
 
 def _persist_projection_analysis(
@@ -1528,7 +1571,12 @@ def _load_cluster_summaries(session: Session, *, projection_set: str) -> list[di
     ]
 
 
-def _analysis_for_row(row: Any, *, neighbors: list[NeighborArtifact]) -> PointAnalysisArtifact:
+def _analysis_for_row(
+    row: Any,
+    *,
+    neighbors: list[NeighborArtifact],
+    story_cluster_ids: list[int] | None = None,
+) -> PointAnalysisArtifact:
     return PointAnalysisArtifact(
         article_id=row["article_id"],
         cluster_id=row.get("cluster_id"),
@@ -1542,4 +1590,5 @@ def _analysis_for_row(row: Any, *, neighbors: list[NeighborArtifact]) -> PointAn
             set(json.loads(row.get("nearby_sources_json") or "[]") or [])
             | {neighbor.source for neighbor in neighbors}
         ),
+        story_cluster_ids=sorted(set(story_cluster_ids or [])),
     )

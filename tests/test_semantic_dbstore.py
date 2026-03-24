@@ -255,6 +255,8 @@ class _ExplorerSession:
         self.params.append(params or {})
         if "SELECT COUNT(*)" in sql:
             return _ExplorerQueryResult(scalar=0)
+        if "SELECT article_id, cluster_id" in sql and "FROM cluster_members" in sql:
+            return _ExplorerQueryResult(rows=[])
         if "FROM article_projections p" in sql:
             return _ExplorerQueryResult(rows=[])
         if "FROM articles a" in sql and "WHERE a.id = :article_id" in sql:
@@ -419,11 +421,27 @@ def test_load_explorer_points_page_joins_semantic_analysis_when_filters_need_it(
 
 def test_load_explorer_points_page_filters_by_story_cluster_membership() -> None:
     session = _ExplorerSession()
-    load_explorer_points_page(session, filters=ExplorerFilters(story_cluster_id=17))
+    load_explorer_points_page(
+        session,
+        filters=ExplorerFilters(story_cluster_id=17, visual_mode="filter"),
+    )
     joined_sql = "\n".join(session.sql)
     assert "FROM cluster_members cm" in joined_sql
     assert "cm.article_id = p.article_id" in joined_sql
     assert "cm.cluster_id = :story_cluster_id" in joined_sql
+
+
+def test_load_explorer_points_page_keeps_broader_dataset_for_story_cluster_highlight() -> None:
+    session = _ExplorerSession()
+    load_explorer_points_page(
+        session,
+        filters=ExplorerFilters(story_cluster_id=17, visual_mode="highlight"),
+    )
+    joined_sql = "\n".join(session.sql)
+    assert ":story_cluster_id" in joined_sql or any(
+        params.get("story_cluster_id") == 17 for params in session.params
+    )
+    assert "EXISTS (SELECT 1 FROM cluster_members cm WHERE cm.article_id = p.article_id AND cm.cluster_id = :story_cluster_id)" not in joined_sql
 
 
 def test_load_explorer_article_detail_formats_published_at_as_text_sql() -> None:

@@ -307,6 +307,10 @@ def test_explorer_points_returns_cluster_metadata() -> None:
     assert payload["meta"]["cluster_summaries"][0]["cluster_id"] == 1
     assert payload["items"][0]["analysis"]["local_density_distance"] >= 0
     assert payload["items"][0]["analysis"]["nearby_sources"]
+    membership_by_article = {
+        item["article_id"]: item["analysis"]["story_cluster_ids"] for item in payload["items"]
+    }
+    assert membership_by_article == {1: [501], 2: [502]}
 
 
 def test_explorer_points_supports_cluster_and_outlier_filters() -> None:
@@ -324,10 +328,33 @@ def test_explorer_points_supports_cluster_and_outlier_filters() -> None:
 def test_explorer_points_supports_story_cluster_scope_filter() -> None:
     client = _build_client()
 
-    response = client.get("/api/v1/semantic/explorer/points", params={"sem_story_cluster": 502})
+    response = client.get(
+        "/api/v1/semantic/explorer/points",
+        params={"sem_story_cluster": 502, "sem_mode": "filter"},
+    )
 
     assert response.status_code == 200
-    assert [item["article_id"] for item in response.json()["items"]] == [2]
+    payload = response.json()
+    assert [item["article_id"] for item in payload["items"]] == [2]
+    assert payload["items"][0]["analysis"]["story_cluster_ids"] == [502]
+
+
+
+def test_explorer_points_supports_story_cluster_highlight_mode() -> None:
+    client = _build_client()
+
+    response = client.get(
+        "/api/v1/semantic/explorer/points",
+        params={"sem_story_cluster": 502, "sem_mode": "highlight"},
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert sorted(item["article_id"] for item in payload["items"]) == [1, 2]
+    membership_by_article = {
+        item["article_id"]: item["analysis"]["story_cluster_ids"] for item in payload["items"]
+    }
+    assert membership_by_article == {1: [501], 2: [502]}
 
 
 def test_explorer_filters_returns_available_options() -> None:

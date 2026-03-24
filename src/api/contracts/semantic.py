@@ -55,6 +55,7 @@ class ExplorerSemanticSummary(BaseModel):
     local_density_distance: float | None = None
     source_neighbor_diversity: int | None = None
     nearby_sources: list[str] = Field(default_factory=list)
+    story_cluster_ids: list[int] = Field(default_factory=list)
     neighbor_count: int = 0
 
 

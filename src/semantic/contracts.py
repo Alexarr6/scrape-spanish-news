@@ -65,6 +65,7 @@ class PointAnalysisArtifact:
     local_density_distance: float = 0.0
     source_neighbor_diversity: int = 0
     nearby_sources: list[str] = field(default_factory=list)
+    story_cluster_ids: list[int] = field(default_factory=list)
 
     def model_dump(self) -> dict[str, Any]:
         return asdict(self)
