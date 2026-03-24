@@ -35,6 +35,14 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--date-from", default="")
     parser.add_argument("--date-to", default="")
     parser.add_argument("--ensure-ann-index", action="store_true")
+    parser.add_argument(
+        "--prioritize-story-members",
+        action="store_true",
+        help=(
+            "Prioritize recent articles that already belong to story clusters so "
+            "Stories members get semantic embeddings before plain-recency rows."
+        ),
+    )
     return parser.parse_args()
 
 
@@ -63,6 +71,7 @@ def main() -> int:
             max_chars=args.max_chars,
             embedding_model=args.embedding_model,
             window=window,
+            prioritize_story_members=args.prioritize_story_members,
         )
         metrics.fetched_rows = len(candidates)
         if not candidates:

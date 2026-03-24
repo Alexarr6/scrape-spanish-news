@@ -380,12 +380,15 @@ def select_embedding_candidates(
     max_chars: int,
     embedding_model: str = DEFAULT_EMBEDDING_MODEL,
     window: SemanticWindow | None = None,
+    prioritize_story_members: bool = False,
 ) -> list[SemanticCandidate]:
     """Select recent articles whose semantic embedding is missing or stale.
 
     The query intentionally over-fetches recent article rows, then filters in
     Python so short/empty articles and unchanged content hashes do not consume
-    embedding requests.
+    embedding requests. When requested, recently clustered story members are
+    drained ahead of plain-recency rows so Stories freshness gets semantic
+    coverage sooner.
     """
 
     query = session.query(ArticleORM)
@@ -402,7 +405,14 @@ def select_embedding_candidates(
         .limit(limit * 4)
         .all()
     )
+    story_member_ids = (
+        _load_story_member_article_ids(session, article_ids=[row.id for row in rows])
+        if prioritize_story_members and rows
+        else set()
+    )
     candidates: list[SemanticCandidate] = []
+    member_candidates: list[SemanticCandidate] = []
+    non_member_candidates: list[SemanticCandidate] = []
     for row in rows:
         candidate = build_candidate(row, max_chars=max_chars)
         if candidate is None:
@@ -425,9 +435,18 @@ def select_embedding_candidates(
         ):
             continue
         candidates.append(candidate)
-        if len(candidates) >= limit:
-            break
-    return candidates
+        if row.id in story_member_ids:
+            member_candidates.append(candidate)
+        else:
+            non_member_candidates.append(candidate)
+
+    if prioritize_story_members:
+        ordered_candidates = _source_balance_candidates(member_candidates) + _source_balance_candidates(
+            non_member_candidates
+        )
+    else:
+        ordered_candidates = _source_balance_candidates(candidates)
+    return ordered_candidates[:limit]
 
 
 def upsert_embeddings(
@@ -906,6 +925,34 @@ def select_source_balanced_article_ids(
                 next_round.append(source)
         source_order = next_round
     return selected
+
+
+def _source_balance_candidates(candidates: list[SemanticCandidate]) -> list[SemanticCandidate]:
+    if not candidates:
+        return []
+    article_ids = select_source_balanced_article_ids(
+        [candidate.article for candidate in candidates], limit=len(candidates)
+    )
+    by_article_id = {candidate.article.article_id: candidate for candidate in candidates}
+    return [by_article_id[article_id] for article_id in article_ids if article_id in by_article_id]
+
+
+def _load_story_member_article_ids(session: Session, *, article_ids: list[int]) -> set[int]:
+    if not article_ids:
+        return set()
+    placeholders = ", ".join(f":article_id_{index}" for index in range(len(article_ids)))
+    params = {f"article_id_{index}": article_id for index, article_id in enumerate(article_ids)}
+    rows = (
+        session.execute(
+            text(
+                f"SELECT article_id FROM cluster_members WHERE article_id IN ({placeholders})"
+            ),
+            params,
+        )
+        .mappings()
+        .all()
+    )
+    return {int(row["article_id"]) for row in rows}
 
 
 def _session_dialect_name(session: Session | Any) -> str:

@@ -20,6 +20,7 @@ make scheduler-dry-run
 make scheduler-once
 make stories-refresh-once
 make explorer-refresh-once
+make full-refresh-once
 ```
 
 ## Job split
@@ -57,9 +58,11 @@ Defaults:
 
 1. `make preflight`
 2. `make semantic-db-init SEMANTIC_ARGS='--embedding-model text-embedding-3-large'`
-3. `make semantic-sync SEMANTIC_ARGS='--embedding-model text-embedding-3-large --days-back 3'`
+3. `make semantic-sync SEMANTIC_ARGS='--embedding-model text-embedding-3-large --days-back 3 --prioritize-story-members'`
 4. `make semantic-project SEMANTIC_ARGS='--days-back 3'`
 5. `make semantic-build SEMANTIC_ARGS='--days-back 3'`
+
+Stories and Explorer are separate products backed by separate derived tables. That is why a freshly clustered article can appear in Stories before it shows up in Explorer. The bounded mitigation here is simple: semantic sync now gives recent `cluster_members` priority over plain recency, so story-cluster members get embeddings/projections sooner instead of waiting behind unrelated backlog rows.
 
 Defaults:
 - `DAYS_BACK=3`
@@ -67,6 +70,14 @@ Defaults:
 - `PROJECTION_SET=pca_3d_latest`
 - `SEMANTIC_LIMIT=100`
 - `SEMANTIC_BUILD_LIMIT=500`
+
+### Full refresh once
+`make full-refresh-once` is the one-shot operator surface for the whole chain:
+
+1. `make stories-refresh-once`
+2. `make explorer-refresh-once`
+
+Use it when you want the obvious end-to-end refresh command instead of manually remembering the split.
 
 ## Lock, log, and state layout
 

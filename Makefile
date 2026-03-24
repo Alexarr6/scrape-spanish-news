@@ -36,7 +36,7 @@ LOCAL_DB_USER ?= spain_news
 LOCAL_DB_PASSWORD ?= spain_news_dev
 LOCAL_DATABASE_URL := postgresql+psycopg://$(LOCAL_DB_USER):$(LOCAL_DB_PASSWORD)@$(LOCAL_DB_HOST):$(LOCAL_DB_PORT)/$(LOCAL_DB_NAME)
 
-.PHONY: help print-app-root preflight sync pre-commit lint check test docs-build docs-serve smoke run-source run-source-persist run-all run-all-persist api analysis-db-init enrich-articles analyze-editorial analyze-editorial-failed build-story-clusters story-cluster-report semantic-db-init semantic-sync semantic-project semantic-neighbors semantic-build semantic-smoke scheduler-once scheduler-dry-run stories-refresh-once explorer-refresh-once status tail-log verify-output verify-db db-url db-up db-down db-logs db-psql db-check clean-state
+.PHONY: help print-app-root preflight sync pre-commit lint check test docs-build docs-serve smoke run-source run-source-persist run-all run-all-persist api analysis-db-init enrich-articles analyze-editorial analyze-editorial-failed build-story-clusters story-cluster-report semantic-db-init semantic-sync semantic-project semantic-neighbors semantic-build semantic-smoke scheduler-once scheduler-dry-run stories-refresh-once explorer-refresh-once full-refresh-once status tail-log verify-output verify-db db-url db-up db-down db-logs db-psql db-check clean-state
 
 help:
 	@printf '%s\n' \
@@ -77,6 +77,7 @@ help:
 	  '  make scheduler-once           Run the LEGACY scrape-only wrapper once (prefer stories-refresh-once)' \
 	  '  make stories-refresh-once     Run scrape + analysis + clustering refresh once' \
 	  '  make explorer-refresh-once    Run semantic explorer refresh once' \
+	  '  make full-refresh-once        Run stories refresh, then explorer refresh' \
 	  '  make status                   Show LEGACY scheduler state files' \
 	  '  make tail-log                 Tail LEGACY scheduler log' \
 	  '  make verify-output            Check expected JSON/metrics files for DATE' \
@@ -248,6 +249,10 @@ stories-refresh-once:
 
 explorer-refresh-once:
 	@DATABASE_URL="$(DATABASE_URL)" OPENAI_API_KEY="$(OPENAI_API_KEY)" UV="$(UV)" bash scripts/run_explorer_refresh.sh
+
+full-refresh-once:
+	@$(MAKE) --no-print-directory stories-refresh-once DATABASE_URL="$(DATABASE_URL)" UV="$(UV)"
+	@$(MAKE) --no-print-directory explorer-refresh-once DATABASE_URL="$(DATABASE_URL)" OPENAI_API_KEY="$(OPENAI_API_KEY)" UV="$(UV)"
 
 status:
 	@set -euo pipefail; \

@@ -205,6 +205,7 @@ export DATABASE_URL='postgresql+psycopg://user:pass@host:5432/dbname'
 export OPENAI_API_KEY='sk-...'
 make stories-refresh-once
 make explorer-refresh-once
+make full-refresh-once
 make verify-output DATE=$(TZ=UTC date +%F) OUT_PREFIX=sched
 make verify-db
 ```
@@ -213,6 +214,9 @@ Entrypoints:
 - `bash scripts/run_scheduled.sh` — deprecated legacy scrape + verify wrapper; does **not** run analysis or clustering
 - `bash scripts/run_stories_refresh.sh` — scrape + persist + analysis + clustering
 - `bash scripts/run_explorer_refresh.sh` — semantic sync + projection + explorer export
+- `make full-refresh-once` — one-shot operator command that runs the stories refresh first, then the explorer refresh
+
+Stories and Explorer are intentionally separate pipelines. That split is fine, but it means fresh story-cluster members can briefly exist in Stories before Explorer catches up. The explorer refresh now compensates by prioritizing recent `cluster_members` rows during semantic embedding sync, so freshly clustered stories get semantic coverage before plain-recency backlog items.
 
 The new wrappers keep separate lock, log, and state files under `var/` and are the right surface for recurring 6-hour jobs. If you want fresh story clusters, using `run_scheduled.sh` is the wrong hammer.
 
@@ -316,6 +320,18 @@ export DATABASE_URL='postgresql+psycopg://user:pass@host:5432/dbname'
 export OPENAI_API_KEY='sk-...'
 make explorer-refresh-once
 ```
+
+This wrapper now passes `--prioritize-story-members` into `scripts/semantic_sync.py`, so recent articles already present in `cluster_members` are embedded ahead of plain-recency backlog rows.
+
+### 8) Run the full stories + explorer chain once
+
+```bash
+export DATABASE_URL='postgresql+psycopg://user:pass@host:5432/dbname'
+export OPENAI_API_KEY='sk-...'
+make full-refresh-once
+```
+
+Use this when you want the obvious do-the-whole-thing command instead of remembering that Stories and Explorer are separate jobs.
 
 ## Where outputs go
 

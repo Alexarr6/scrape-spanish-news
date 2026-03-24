@@ -84,14 +84,18 @@ class _FakeQuery:
 
 
 class _ExistingResult:
-    def __init__(self, row):
+    def __init__(self, row=None, rows=None):
         self._row = row
+        self._rows = rows or []
 
     def mappings(self):
         return self
 
     def first(self):
         return self._row
+
+    def all(self):
+        return self._rows
 
 
 class _ScalarResult:
@@ -106,16 +110,25 @@ class _ScalarResult:
 
 
 class _SelectSession:
-    def __init__(self, rows, existing_by_article_id):
+    def __init__(self, rows, existing_by_article_id, story_member_ids=None):
         self._rows = rows
         self._existing_by_article_id = existing_by_article_id
+        self._story_member_ids = set(story_member_ids or [])
         self.last_query = None
 
     def query(self, _model):
         self.last_query = _FakeQuery(self._rows)
         return self.last_query
 
-    def execute(self, _statement, params=None):
+    def execute(self, statement, params=None):
+        sql = str(statement)
+        if "FROM cluster_members" in sql:
+            rows = [
+                {"article_id": article_id}
+                for article_id in self._story_member_ids
+                if article_id in set((params or {}).values())
+            ]
+            return _ExistingResult(rows=rows)
         return _ExistingResult(self._existing_by_article_id.get(params["article_id"]))
 
 
@@ -454,6 +467,25 @@ def test_select_embedding_candidates_uses_source_balanced_round_robin() -> None:
     candidates = select_embedding_candidates(session, limit=4, max_chars=500)
 
     assert [candidate.article.article_id for candidate in candidates] == [1, 4, 5, 2]
+
+
+def test_select_embedding_candidates_prioritizes_story_members_before_plain_recency() -> None:
+    rows = [
+        _Row(id=1, source="elpais"),
+        _Row(id=2, source="elpais"),
+        _Row(id=3, source="elmundo"),
+        _Row(id=4, source="eldiario"),
+    ]
+    session = _SelectSession(rows, existing_by_article_id={}, story_member_ids={2, 3})
+
+    candidates = select_embedding_candidates(
+        session,
+        limit=4,
+        max_chars=500,
+        prioritize_story_members=True,
+    )
+
+    assert [candidate.article.article_id for candidate in candidates] == [2, 3, 1, 4]
 
 
 def test_select_source_balanced_article_ids_round_robins_sources() -> None:
