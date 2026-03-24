@@ -36,7 +36,7 @@ LOCAL_DB_USER ?= spain_news
 LOCAL_DB_PASSWORD ?= spain_news_dev
 LOCAL_DATABASE_URL := postgresql+psycopg://$(LOCAL_DB_USER):$(LOCAL_DB_PASSWORD)@$(LOCAL_DB_HOST):$(LOCAL_DB_PORT)/$(LOCAL_DB_NAME)
 
-.PHONY: help print-app-root preflight sync pre-commit lint check test docs-build docs-serve smoke run-source run-source-persist run-all run-all-persist api analysis-db-init enrich-articles analyze-editorial build-story-clusters story-cluster-report semantic-db-init semantic-sync semantic-project semantic-neighbors semantic-build semantic-smoke scheduler-once scheduler-dry-run stories-refresh-once explorer-refresh-once status tail-log verify-output verify-db db-url db-up db-down db-logs db-psql db-check clean-state
+.PHONY: help print-app-root preflight sync pre-commit lint check test docs-build docs-serve smoke run-source run-source-persist run-all run-all-persist api analysis-db-init enrich-articles analyze-editorial analyze-editorial-failed build-story-clusters story-cluster-report semantic-db-init semantic-sync semantic-project semantic-neighbors semantic-build semantic-smoke scheduler-once scheduler-dry-run stories-refresh-once explorer-refresh-once status tail-log verify-output verify-db db-url db-up db-down db-logs db-psql db-check clean-state
 
 help:
 	@printf '%s\n' \
@@ -62,6 +62,7 @@ help:
 	  '  make analysis-db-init DATABASE_URL=...           Create analysis/enrichment tables + seed taxonomy' \
 	  '  make enrich-articles DATABASE_URL=...            Enrich recent persisted articles (OpenRouter optional)' \
 	  '  make analyze-editorial DATABASE_URL=...          Run dedicated LLM editorial analysis for recent articles' \
+	  '  make analyze-editorial-failed DATABASE_URL=...   Re-run failed editorial analysis for recent articles' \
 	  '  make build-story-clusters DATABASE_URL=...       Rebuild bounded same-story clusters' \
 	  '  make story-cluster-report DATABASE_URL=...       Print recent cluster summaries' \
 	  '  make semantic-db-init DATABASE_URL=...           Create pgvector extension + semantic tables' \
@@ -188,6 +189,11 @@ analyze-editorial: preflight
 	@set -euo pipefail; \
 	[[ -n "$(DATABASE_URL)" ]] || { echo 'DATABASE_URL is required for analyze-editorial'; exit 1; }; \
 	cd "$(APP_ROOT)" && PYTHONPATH="$(APP_ROOT):$${PYTHONPATH:-}" $(PYTHON) scripts/analyze_editorial.py --db-url "$(DATABASE_URL)" --days-back "$${DAYS_BACK:-2}" --limit "$${LIMIT:-100}" $${REPROCESS:+--reprocess}
+
+analyze-editorial-failed: preflight
+	@set -euo pipefail; \
+	[[ -n "$(DATABASE_URL)" ]] || { echo 'DATABASE_URL is required for analyze-editorial-failed'; exit 1; }; \
+	cd "$(APP_ROOT)" && PYTHONPATH="$(APP_ROOT):$${PYTHONPATH:-}" $(PYTHON) scripts/analyze_editorial.py --db-url "$(DATABASE_URL)" --days-back "$${DAYS_BACK:-3}" --limit "$${LIMIT:-50}" --failed-only
 
 build-story-clusters: preflight
 	@set -euo pipefail; \
