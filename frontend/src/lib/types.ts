@@ -1,5 +1,6 @@
 export type ExplorerSemanticSummary = {
   cluster_id: number | null
+  story_cluster_ids?: number[] | null
   cluster_size: number | null
   is_outlier: boolean
   local_density_distance: number | null
@@ -159,7 +160,8 @@ export type ExplorerQuery = {
 }
 
 export type ExplorerViewMode = '2d' | '3d'
-export type ExplorerColorMode = 'neutral' | 'source' | 'cluster'
+export type ExplorerVisualMode = 'highlight' | 'filter'
+export type ExplorerColorMode = 'neutral' | 'source' | 'cluster' | 'active-match'
 
 export const DEFAULT_QUERY: ExplorerQuery = {
   search: '',

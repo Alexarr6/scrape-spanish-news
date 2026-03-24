@@ -45,6 +45,8 @@ export function buildSemanticExplorerHref(options: {
   params.delete('sem_cluster')
   params.delete('sem_section')
   params.delete('sem_outliers')
+  params.set('sem_mode', 'highlight')
+  params.set('sem_color', 'active-match')
 
   if (seededStoryClusterId != null) params.set('sem_story_cluster', String(seededStoryClusterId))
   else params.delete('sem_story_cluster')

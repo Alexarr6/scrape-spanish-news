@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { DEFAULT_QUERY } from '../lib/types'
-import type { ExplorerQuery } from '../lib/types'
+import type { ExplorerColorMode, ExplorerQuery, ExplorerVisualMode } from '../lib/types'
 
 const EXPLORER_PARAM_KEYS = [
   'view',
@@ -14,6 +14,8 @@ const EXPLORER_PARAM_KEYS = [
   'sem_outliers',
   'sem_limit',
   'sem_article',
+  'sem_mode',
+  'sem_color',
 ] as const
 
 function parseStrictPositiveInteger(value: string | null, fallback: number): number {
@@ -24,6 +26,14 @@ function parseStrictPositiveInteger(value: string | null, fallback: number): num
 function parseOptionalInteger(value: string | null): number | null {
   const parsed = Number(value)
   return Number.isInteger(parsed) && parsed > 0 ? parsed : null
+}
+
+function parseVisualMode(value: string | null): ExplorerVisualMode {
+  return value === 'filter' ? 'filter' : 'highlight'
+}
+
+function parseColorMode(value: string | null): ExplorerColorMode {
+  return value === 'source' || value === 'cluster' || value === 'active-match' ? value : 'neutral'
 }
 
 function readInitialState() {
@@ -43,6 +53,8 @@ function readInitialState() {
   return {
     query,
     selectedArticleId: parseOptionalInteger(params.get('sem_article')),
+    visualMode: parseVisualMode(params.get('sem_mode')),
+    colorMode: parseColorMode(params.get('sem_color')),
   }
 }
 
@@ -64,6 +76,8 @@ export function useExplorerUrlState() {
     if (state.query.outlierOnly) params.set('sem_outliers', 'true')
     if (state.query.limit !== DEFAULT_QUERY.limit) params.set('sem_limit', String(state.query.limit))
     if (state.selectedArticleId != null) params.set('sem_article', String(state.selectedArticleId))
+    if (state.visualMode !== 'highlight') params.set('sem_mode', state.visualMode)
+    if (state.colorMode !== 'neutral') params.set('sem_color', state.colorMode)
 
     const nextUrl = `${window.location.pathname}?${params.toString()}${window.location.hash}`
     window.history.replaceState(null, '', nextUrl)
@@ -88,19 +102,31 @@ export function useExplorerUrlState() {
   }, [])
 
   const resetQuery = useCallback(() => {
-    setState({ query: { ...DEFAULT_QUERY }, selectedArticleId: null })
+    setState((current) => ({ ...current, query: { ...DEFAULT_QUERY }, selectedArticleId: null }))
   }, [])
 
   const setSelectedArticleId = useCallback((articleId: number | null) => {
     setState((current) => ({ ...current, selectedArticleId: articleId }))
   }, [])
 
+  const setVisualMode = useCallback((visualMode: ExplorerVisualMode) => {
+    setState((current) => ({ ...current, visualMode }))
+  }, [])
+
+  const setColorMode = useCallback((colorMode: ExplorerColorMode) => {
+    setState((current) => ({ ...current, colorMode }))
+  }, [])
+
   return {
     query: state.query,
     selectedArticleId: state.selectedArticleId,
+    visualMode: state.visualMode,
+    colorMode: state.colorMode,
     activeFilterCount,
     updateQuery,
     resetQuery,
     setSelectedArticleId,
+    setVisualMode,
+    setColorMode,
   }
 }

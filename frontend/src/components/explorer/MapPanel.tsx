@@ -64,6 +64,7 @@ import type {
   ExplorerPointsResponse,
   ExplorerProjectionBounds,
   ExplorerViewMode,
+  ExplorerVisualMode,
 } from '../../lib/types'
 
 export type MapPanelHandle = {
@@ -79,7 +80,9 @@ type Props = {
   hoveredArticleId: number | null
   neighborIds: Set<number>
   viewMode: ExplorerViewMode
+  visualMode: ExplorerVisualMode
   colorMode: ExplorerColorMode
+  activeMatchTarget: { type: 'story-cluster'; id: number; available: boolean } | { type: 'semantic-cluster'; id: number } | { type: 'search'; query: string } | { type: 'source'; source: string } | null
   onHoverArticle: (articleId: number | null) => void
   onSelectArticle: (articleId: number | null) => void
 }
@@ -210,6 +213,22 @@ function buildSelectionBounds(selectedPoint: ExplorerPoint, items: ExplorerPoint
   return selectionBounds
 }
 
+
+function normalizeSearchText(value: string) {
+  return value.trim().toLowerCase()
+}
+
+function pointMatchesActiveTarget(point: ExplorerPoint, activeMatchTarget: Props['activeMatchTarget']): boolean {
+  if (!activeMatchTarget) return false
+  if (activeMatchTarget.type === 'story-cluster') {
+    return activeMatchTarget.available && (point.analysis.story_cluster_ids ?? []).includes(activeMatchTarget.id)
+  }
+  if (activeMatchTarget.type === 'semantic-cluster') return point.analysis.cluster_id === activeMatchTarget.id
+  if (activeMatchTarget.type === 'source') return point.source === activeMatchTarget.source
+  const haystack = `${point.title} ${point.summary_snippet}`.toLowerCase()
+  return haystack.includes(normalizeSearchText(activeMatchTarget.query))
+}
+
 // ─── Color helpers ───────────────────────────────────────────────────────────
 
 function colorForPoint(point: ExplorerPoint, mode: ExplorerColorMode): [number, number, number] {
@@ -315,7 +334,9 @@ export const MapPanel = forwardRef<MapPanelHandle, Props>(function MapPanel(
     hoveredArticleId,
     neighborIds,
     viewMode,
+    visualMode,
     colorMode,
+    activeMatchTarget,
     onHoverArticle,
     onSelectArticle,
   },
@@ -335,6 +356,17 @@ export const MapPanel = forwardRef<MapPanelHandle, Props>(function MapPanel(
     [points, selectedArticleId],
   )
   const hasSelection = selectedArticleId != null
+  const hasActiveMatch = activeMatchTarget != null && (activeMatchTarget.type !== 'story-cluster' || activeMatchTarget.available)
+  const visibleItems = useMemo(() => {
+    const items = points?.items ?? []
+    if (visualMode !== 'filter' || !hasActiveMatch) return items
+    return items.filter((point) =>
+      pointMatchesActiveTarget(point, activeMatchTarget) ||
+      point.article_id === selectedArticleId ||
+      neighborIds.has(point.article_id) ||
+      point.article_id === hoveredArticleId,
+    )
+  }, [points, visualMode, hasActiveMatch, activeMatchTarget, selectedArticleId, neighborIds, hoveredArticleId])
 
   // ─── Camera auto-fit: ONLY fires on first data load (null → populated)
   // Subsequent filter changes preserve user camera position.
@@ -396,7 +428,7 @@ export const MapPanel = forwardRef<MapPanelHandle, Props>(function MapPanel(
 
   // ─── Layer ───────────────────────────────────────────────────────────────
   const layers = useMemo(() => {
-    const items = points?.items ?? []
+    const items = visibleItems
     const bounds = normalizeBounds(points?.meta.bounds ?? null)
 
     // Axis layers always first — points render on top
@@ -413,8 +445,15 @@ export const MapPanel = forwardRef<MapPanelHandle, Props>(function MapPanel(
         if (p.article_id === selectedArticleId) return POINT_SELECTED_FILL
         if (neighborIds.has(p.article_id)) return POINT_NEIGHBOR_FILL
         if (p.article_id === hoveredArticleId) return POINT_HOVERED_FILL
-        const [r, g, b] = colorForPoint(p, colorMode)
-        const alpha = hasSelection
+        const isActiveMatch = pointMatchesActiveTarget(p, activeMatchTarget)
+        const [r, g, b] = colorMode === 'active-match'
+          ? isActiveMatch
+            ? [124, 58, 237]
+            : [148, 163, 184]
+          : colorForPoint(p, colorMode)
+        const alpha = hasActiveMatch && visualMode === 'highlight' && !isActiveMatch
+          ? 70
+          : hasSelection
           ? p.analysis.is_outlier
             ? POINT_OUTLIER_ALPHA_UNDER_SELECTION
             : POINT_REGULAR_ALPHA_UNDER_SELECTION
@@ -424,7 +463,7 @@ export const MapPanel = forwardRef<MapPanelHandle, Props>(function MapPanel(
         return [r, g, b, alpha]
       }
 
-      const colorTrigger = [colorMode, selectedArticleId, hoveredArticleId, neighborKey, hasSelection]
+      const colorTrigger = [visualMode, colorMode, selectedArticleId, hoveredArticleId, neighborKey, hasSelection, hasActiveMatch, JSON.stringify(activeMatchTarget)]
 
       // Shared hover/click handlers for all PC tiers
       const pcOnHover = (info: PickingInfoLike) => {
@@ -502,8 +541,15 @@ export const MapPanel = forwardRef<MapPanelHandle, Props>(function MapPanel(
           if (point.article_id === selectedArticleId) return POINT_SELECTED_FILL
           if (neighborIds.has(point.article_id)) return POINT_NEIGHBOR_FILL
           if (point.article_id === hoveredArticleId) return POINT_HOVERED_FILL
-          const [r, g, b] = colorForPoint(point, colorMode)
-          const alpha = hasSelection
+          const isActiveMatch = pointMatchesActiveTarget(point, activeMatchTarget)
+          const [r, g, b] = colorMode === 'active-match'
+            ? isActiveMatch
+              ? [124, 58, 237]
+              : [148, 163, 184]
+            : colorForPoint(point, colorMode)
+          const alpha = hasActiveMatch && visualMode === 'highlight' && !isActiveMatch
+            ? 70
+            : hasSelection
             ? point.analysis.is_outlier
               ? POINT_OUTLIER_ALPHA_UNDER_SELECTION
               : POINT_REGULAR_ALPHA_UNDER_SELECTION
@@ -543,13 +589,13 @@ export const MapPanel = forwardRef<MapPanelHandle, Props>(function MapPanel(
 
         updateTriggers: {
           getRadius: [selectedArticleId, hoveredArticleId, neighborKey],
-          getFillColor: [colorMode, selectedArticleId, hoveredArticleId, neighborKey, hasSelection],
+          getFillColor: [visualMode, colorMode, selectedArticleId, hoveredArticleId, neighborKey, hasSelection, hasActiveMatch, JSON.stringify(activeMatchTarget)],
           getLineColor: [selectedArticleId, neighborKey, hasSelection],
           getLineWidth: [selectedArticleId, neighborKey, hasSelection],
         },
       }),
     ]
-  }, [points, viewMode, colorMode, selectedArticleId, hoveredArticleId, neighborIds, neighborKey, onHoverArticle, onSelectArticle, hasSelection])
+  }, [points, visibleItems, viewMode, visualMode, colorMode, activeMatchTarget, selectedArticleId, hoveredArticleId, neighborIds, neighborKey, onHoverArticle, onSelectArticle, hasSelection, hasActiveMatch])
 
   const activeViewState = viewState[viewMode]
 
@@ -594,10 +640,10 @@ export const MapPanel = forwardRef<MapPanelHandle, Props>(function MapPanel(
               <p>{error}</p>
             </div>
           )}
-          {!loading && !error && (points?.items.length ?? 0) === 0 && (
+          {!loading && !error && visibleItems.length === 0 && (
             <div className="map-empty-state">
               <strong>No articles match the current filters</strong>
-              <p>Broaden the source or date scope, or clear the cluster filter.</p>
+              <p>Broaden the source or date scope, clear the cluster filter, or switch back to highlight mode.</p>
             </div>
           )}
           {tooltip && (
