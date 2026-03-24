@@ -8,6 +8,7 @@ const EXPLORER_PARAM_KEYS = [
   'sem_source',
   'sem_section',
   'sem_cluster',
+  'sem_story_cluster',
   'sem_from',
   'sem_to',
   'sem_outliers',
@@ -57,6 +58,7 @@ export function useExplorerUrlState() {
     if (state.query.source) params.set('sem_source', state.query.source)
     if (state.query.section) params.set('sem_section', state.query.section)
     if (state.query.clusterId) params.set('sem_cluster', state.query.clusterId)
+    if (state.query.storyClusterId) params.set('sem_story_cluster', state.query.storyClusterId)
     if (state.query.dateFrom) params.set('sem_from', state.query.dateFrom)
     if (state.query.dateTo) params.set('sem_to', state.query.dateTo)
     if (state.query.outlierOnly) params.set('sem_outliers', 'true')

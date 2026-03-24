@@ -14,7 +14,6 @@ import {
   SOURCE_COLORS_HEX,
 } from '../../lib/explorerColors'
 import { clampText, formatDate, formatSimilarity } from '../../lib/format'
-import { buildStoriesHref } from '../../lib/navigation'
 import type {
   ExplorerArticleDetail,
   ExplorerClusterSummary,
@@ -115,10 +114,6 @@ export function ExplorerContextRail({
   }
 
   // ─── Selection state ─────────────────────────────────────────────────────
-  const storiesHref = buildStoriesHref(
-    detail?.semantic_summary.cluster_id ?? selectedPoint.analysis.cluster_id ?? null,
-  )
-
   return (
     <div className="context-rail">
       {/* Header with clear button */}
@@ -163,11 +158,6 @@ export function ExplorerContextRail({
             >
               Open article ↗
             </a>
-            {storiesHref && (
-              <a href={storiesHref} className="btn-ghost">
-                Open in Stories →
-              </a>
-            )}
           </div>
         </div>
       ) : (
@@ -192,7 +182,6 @@ export function ExplorerContextRail({
             editorial={detail.editorial}
             variant="compact"
             clusterId={detail.semantic_summary.cluster_id}
-            storiesHref={storiesHref}
           />
 
           <SectionDivider label="Cluster context" />
