@@ -1,3 +1,72 @@
+## 2026-03-24 — iter/009 backend Explorer bias lens
+
+**Role:** backend/data implementer  
+**Outcome:** ✅ Complete  
+**Scope:** bounded backend slice for Explorer bias-lens contracts, filtering, metadata, and tests
+
+### What I changed
+- widened `ExplorerPointEditorialPreview` to expose:
+  - `bias_label`
+  - `bias_confidence`
+- added strict backend filter support for:
+  - `sem_editorial_dim=bias_label`
+  - `sem_editorial_value=<label>`
+- locked bias-positive filter semantics to require:
+  - completed analysis
+  - full applicability
+  - exact label match
+  - non-low-confidence
+  - non-unclear
+  - non-limited
+  - non-out-of-domain
+- preserved highlight-mode breadth by continuing to return previews for all points when `sem_mode=highlight`
+- expanded Explorer editorial metadata with:
+  - `bias_label` option counts for strict confident matches only
+  - diagnostic coverage counts for completed/low-confidence/unknown/pending/failed/limited/out-of-domain bias states
+- added targeted API tests covering:
+  - bias preview fields on points
+  - strict bias filter semantics
+  - broad bias highlight semantics
+  - metadata bias options and diagnostic counts
+  - article-type behavior still working after widening
+
+### Files changed
+- `src/api/contracts/semantic.py`
+- `src/semantic/dbstore.py`
+- `tests/test_api_semantic_explorer.py`
+- `STATUS.md`
+- `RESULTS.md`
+
+### Verification
+Commands run:
+- `/home/node/.local/bin/uv run --group dev python -m pytest tests/test_api_semantic_explorer.py`
+
+Results:
+- semantic explorer pytest slice: passed (`14 passed`)
+
+### Backend contract added/changed
+- `ExplorerPointEditorialPreview`
+  - added `bias_label: str = "unclear"`
+  - added `bias_confidence: float = 0.0`
+- `ExplorerEditorialMetadata`
+  - added `bias_label: list[ExplorerEditorialOption]`
+  - expanded `coverage` payload with bias diagnostics:
+    - `bias_total_completed`
+    - `bias_low_confidence`
+    - `bias_unknown`
+    - `bias_pending`
+    - `bias_failed`
+    - `bias_limited`
+    - `bias_out_of_domain`
+- `/api/v1/semantic/explorer/points`
+  - backend now honors `sem_editorial_dim=bias_label` + `sem_editorial_value=<label>` in `filter` mode with strict match semantics
+
+### Frontend handoff notes
+- frontend can now wire `bias_label` the same way article type was wired, but the semantics are stricter on purpose
+- for bias menus, use `meta.editorial.bias_label` as the option source; it already excludes low-confidence / unclear / limited / out-of-domain junk
+- for legends and copy, use `meta.editorial.coverage` to show muted diagnostic buckets without pretending they are positive matches
+- highlight mode still returns the full point cloud, so bias highlighting can preserve context without extra backend work
+
 ## 2026-03-24 — iter/008 explorer article-type editorial lens
 
 **Role:** implementer  

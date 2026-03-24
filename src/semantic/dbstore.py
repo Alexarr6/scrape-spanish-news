@@ -1384,9 +1384,19 @@ def _build_explorer_where_clause(
                 "EXISTS (SELECT 1 FROM cluster_members cm WHERE cm.article_id = p.article_id AND cm.cluster_id = :story_cluster_id)"
             )
     if filters.editorial_dimension and filters.editorial_value:
+        params["editorial_value"] = filters.editorial_value
         if filters.editorial_dimension == "article_type" and visual_mode == "filter":
             clauses.append("aea.article_type = :editorial_value")
-            params["editorial_value"] = filters.editorial_value
+        elif filters.editorial_dimension == "bias_label" and visual_mode == "filter":
+            clauses.extend(
+                [
+                    "COALESCE(aea.analysis_status, 'pending') = 'completed'",
+                    "COALESCE(aea.editorial_applicability, 'full') = 'full'",
+                    "COALESCE(aea.bias_label, 'unclear') = :editorial_value",
+                    "COALESCE(aea.bias_label, 'unclear') <> 'unclear'",
+                    "COALESCE(aea.bias_confidence, 0.0) >= 0.45",
+                ]
+            )
     if filters.cluster_id is not None or filters.outlier_only:
         clauses.append("spa.projection_set = :analysis_projection_set")
         params["analysis_projection_set"] = filters.projection_set
@@ -1415,6 +1425,8 @@ def _editorial_preview_for_row(row: Any) -> dict[str, Any]:
         "editorial_applicability": editorial_applicability,
         "article_type": article_type,
         "article_type_confidence": article_type_confidence,
+        "bias_label": bias_label,
+        "bias_confidence": bias_confidence,
         "review_flags": _build_editorial_review_flags(
             analysis_status=analysis_status,
             bias_label=bias_label,
@@ -1429,7 +1441,7 @@ def _editorial_preview_for_row(row: Any) -> dict[str, Any]:
 def _load_explorer_editorial_metadata(session: Session, *, filters: ExplorerFilters) -> dict[str, Any]:
     projection_kind = projection_kind_for_set(filters.projection_set)
     where_sql, params = _build_explorer_where_clause(filters, projection_kind=projection_kind)
-    rows = (
+    article_type_rows = (
         session.execute(
             text(
                 f"""
@@ -1452,6 +1464,33 @@ def _load_explorer_editorial_metadata(session: Session, *, filters: ExplorerFilt
         .mappings()
         .all()
     )
+    bias_rows = (
+        session.execute(
+            text(
+                f"""
+                SELECT COALESCE(aea.bias_label, 'unclear') AS value, COUNT(*) AS count
+                FROM article_projections p
+                JOIN articles a ON a.id = p.article_id
+                JOIN article_embeddings e ON e.id = p.embedding_id
+                LEFT JOIN semantic_point_analysis spa
+                  ON spa.article_id = p.article_id
+                 AND spa.projection_set = p.projection_set
+                LEFT JOIN article_editorial_analysis aea
+                  ON aea.article_id = p.article_id
+                {where_sql}
+                  AND COALESCE(aea.analysis_status, 'pending') = 'completed'
+                  AND COALESCE(aea.editorial_applicability, 'full') = 'full'
+                  AND COALESCE(aea.bias_label, 'unclear') <> 'unclear'
+                  AND COALESCE(aea.bias_confidence, 0.0) >= 0.45
+                GROUP BY COALESCE(aea.bias_label, 'unclear')
+                ORDER BY count DESC, value ASC
+                """
+            ),
+            params,
+        )
+        .mappings()
+        .all()
+    )
     coverage_row = (
         session.execute(
             text(
@@ -1462,7 +1501,14 @@ def _load_explorer_editorial_metadata(session: Session, *, filters: ExplorerFilt
                   SUM(CASE WHEN COALESCE(aea.analysis_status, '') = 'failed' THEN 1 ELSE 0 END) AS failed,
                   SUM(CASE WHEN COALESCE(aea.article_type, 'unclear') = 'unclear' THEN 1 ELSE 0 END) AS unknown,
                   SUM(CASE WHEN COALESCE(aea.editorial_applicability, 'full') = 'limited' THEN 1 ELSE 0 END) AS limited,
-                  SUM(CASE WHEN COALESCE(aea.editorial_applicability, 'full') = 'out_of_domain' THEN 1 ELSE 0 END) AS out_of_domain
+                  SUM(CASE WHEN COALESCE(aea.editorial_applicability, 'full') = 'out_of_domain' THEN 1 ELSE 0 END) AS out_of_domain,
+                  SUM(CASE WHEN COALESCE(aea.analysis_status, 'pending') = 'completed' THEN 1 ELSE 0 END) AS bias_total_completed,
+                  SUM(CASE WHEN COALESCE(aea.analysis_status, 'pending') = 'completed' AND COALESCE(aea.bias_confidence, 0.0) < 0.45 THEN 1 ELSE 0 END) AS bias_low_confidence,
+                  SUM(CASE WHEN COALESCE(aea.analysis_status, 'pending') = 'completed' AND COALESCE(aea.bias_label, 'unclear') = 'unclear' THEN 1 ELSE 0 END) AS bias_unknown,
+                  SUM(CASE WHEN aea.article_id IS NULL OR COALESCE(aea.analysis_status, 'pending') = 'pending' THEN 1 ELSE 0 END) AS bias_pending,
+                  SUM(CASE WHEN COALESCE(aea.analysis_status, '') = 'failed' THEN 1 ELSE 0 END) AS bias_failed,
+                  SUM(CASE WHEN COALESCE(aea.editorial_applicability, 'full') = 'limited' THEN 1 ELSE 0 END) AS bias_limited,
+                  SUM(CASE WHEN COALESCE(aea.editorial_applicability, 'full') = 'out_of_domain' THEN 1 ELSE 0 END) AS bias_out_of_domain
                 FROM article_projections p
                 JOIN articles a ON a.id = p.article_id
                 JOIN article_embeddings e ON e.id = p.embedding_id
@@ -1482,11 +1528,28 @@ def _load_explorer_editorial_metadata(session: Session, *, filters: ExplorerFilt
     coverage = coverage_row or {}
     return {
         "article_type": [
-            {"value": str(row["value"]), "count": int(row["count"] or 0)} for row in rows if row["value"]
+            {"value": str(row["value"]), "count": int(row["count"] or 0)} for row in article_type_rows if row["value"]
+        ],
+        "bias_label": [
+            {"value": str(row["value"]), "count": int(row["count"] or 0)} for row in bias_rows if row["value"]
         ],
         "coverage": {
             key: int(coverage.get(key) or 0)
-            for key in ["total", "pending", "failed", "unknown", "limited", "out_of_domain"]
+            for key in [
+                "total",
+                "pending",
+                "failed",
+                "unknown",
+                "limited",
+                "out_of_domain",
+                "bias_total_completed",
+                "bias_low_confidence",
+                "bias_unknown",
+                "bias_pending",
+                "bias_failed",
+                "bias_limited",
+                "bias_out_of_domain",
+            ]
         },
     }
 

@@ -55,6 +55,8 @@ class ExplorerPointEditorialPreview(BaseModel):
     editorial_applicability: str = "full"
     article_type: str = "unclear"
     article_type_confidence: float = 0.0
+    bias_label: str = "unclear"
+    bias_confidence: float = 0.0
     review_flags: ExplorerEditorialReviewFlags = Field(default_factory=ExplorerEditorialReviewFlags)
 
 
@@ -65,6 +67,7 @@ class ExplorerEditorialOption(BaseModel):
 
 class ExplorerEditorialMetadata(BaseModel):
     article_type: list[ExplorerEditorialOption] = Field(default_factory=list)
+    bias_label: list[ExplorerEditorialOption] = Field(default_factory=list)
     coverage: dict[str, int] = Field(default_factory=dict)
 
 class ExplorerSemanticSummary(BaseModel):

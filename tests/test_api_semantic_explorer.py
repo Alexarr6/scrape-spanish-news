@@ -119,6 +119,58 @@ def _build_client() -> TestClient:
                 "article_text": "Texto articulo dos con contexto suficiente.",
                 "tags": "energia,economia",
             },
+            {
+                "id": 3,
+                "source": "abc",
+                "title": "Opinion fiscal dura",
+                "url": "https://example.com/a3",
+                "published_at": created,
+                "scraped_at": created,
+                "section": "opinion",
+                "author": "Columnista 3",
+                "summary": "Resumen fiscal duro",
+                "article_text": "Texto articulo tres con contexto suficiente.",
+                "tags": "fiscal,opinion",
+            },
+            {
+                "id": 4,
+                "source": "eldiario",
+                "title": "Analisis social incompleto",
+                "url": "https://example.com/a4",
+                "published_at": created,
+                "scraped_at": created,
+                "section": "sociedad",
+                "author": "Reporter 4",
+                "summary": "Resumen social",
+                "article_text": "Texto articulo cuatro con contexto suficiente.",
+                "tags": "sociedad,analisis",
+            },
+            {
+                "id": 5,
+                "source": "larazon",
+                "title": "Cobertura deportiva ambigua",
+                "url": "https://example.com/a5",
+                "published_at": created,
+                "scraped_at": created,
+                "section": "deportes",
+                "author": "Reporter 5",
+                "summary": "Resumen deportivo",
+                "article_text": "Texto articulo cinco con contexto suficiente.",
+                "tags": "deportes",
+            },
+            {
+                "id": 6,
+                "source": "publico",
+                "title": "Editorial cultural fuera de dominio",
+                "url": "https://example.com/a6",
+                "published_at": created,
+                "scraped_at": created,
+                "section": "cultura",
+                "author": "Reporter 6",
+                "summary": "Resumen cultural",
+                "article_text": "Texto articulo seis con contexto suficiente.",
+                "tags": "cultura,editorial",
+            },
         ]:
             conn.execute(
                 text("""
@@ -128,26 +180,12 @@ def _build_client() -> TestClient:
                 article,
             )
         for embedding in [
-            {
-                "id": 11,
-                "article_id": 1,
-                "embedding_model": "text-embedding-3-small",
-                "embedding_dim": 3,
-                "embedding": "[0.1,0.2,0.3]",
-                "content_hash": "hash-1",
-                "source_text_chars": 120,
-                "summary_snippet": "Resumen del gobierno",
-            },
-            {
-                "id": 12,
-                "article_id": 2,
-                "embedding_model": "text-embedding-3-small",
-                "embedding_dim": 3,
-                "embedding": "[0.2,0.1,0.4]",
-                "content_hash": "hash-2",
-                "source_text_chars": 140,
-                "summary_snippet": "Resumen del mercado",
-            },
+            {"id": 11, "article_id": 1, "embedding_model": "text-embedding-3-small", "embedding_dim": 3, "embedding": "[0.1,0.2,0.3]", "content_hash": "hash-1", "source_text_chars": 120, "summary_snippet": "Resumen del gobierno"},
+            {"id": 12, "article_id": 2, "embedding_model": "text-embedding-3-small", "embedding_dim": 3, "embedding": "[0.2,0.1,0.4]", "content_hash": "hash-2", "source_text_chars": 140, "summary_snippet": "Resumen del mercado"},
+            {"id": 13, "article_id": 3, "embedding_model": "text-embedding-3-small", "embedding_dim": 3, "embedding": "[0.3,0.1,0.2]", "content_hash": "hash-3", "source_text_chars": 150, "summary_snippet": "Resumen fiscal duro"},
+            {"id": 14, "article_id": 4, "embedding_model": "text-embedding-3-small", "embedding_dim": 3, "embedding": "[0.4,0.2,0.1]", "content_hash": "hash-4", "source_text_chars": 150, "summary_snippet": "Resumen social"},
+            {"id": 15, "article_id": 5, "embedding_model": "text-embedding-3-small", "embedding_dim": 3, "embedding": "[0.5,0.2,0.2]", "content_hash": "hash-5", "source_text_chars": 150, "summary_snippet": "Resumen deportivo"},
+            {"id": 16, "article_id": 6, "embedding_model": "text-embedding-3-small", "embedding_dim": 3, "embedding": "[0.6,0.2,0.2]", "content_hash": "hash-6", "source_text_chars": 150, "summary_snippet": "Resumen cultural"},
         ]:
             conn.execute(
                 text("""
@@ -157,28 +195,12 @@ def _build_client() -> TestClient:
                 embedding,
             )
         for projection in [
-            {
-                "id": 21,
-                "article_id": 1,
-                "embedding_id": 11,
-                "projection_set": DEFAULT_PROJECTION_SET,
-                "projection_kind": DEFAULT_PROJECTION_KIND,
-                "projection_version": "v1",
-                "x": 0.25,
-                "y": 0.75,
-                "z": 0.4,
-            },
-            {
-                "id": 22,
-                "article_id": 2,
-                "embedding_id": 12,
-                "projection_set": DEFAULT_PROJECTION_SET,
-                "projection_kind": DEFAULT_PROJECTION_KIND,
-                "projection_version": "v1",
-                "x": -0.4,
-                "y": 0.15,
-                "z": -0.2,
-            },
+            {"id": 21, "article_id": 1, "embedding_id": 11, "projection_set": DEFAULT_PROJECTION_SET, "projection_kind": DEFAULT_PROJECTION_KIND, "projection_version": "v1", "x": 0.25, "y": 0.75, "z": 0.4},
+            {"id": 22, "article_id": 2, "embedding_id": 12, "projection_set": DEFAULT_PROJECTION_SET, "projection_kind": DEFAULT_PROJECTION_KIND, "projection_version": "v1", "x": -0.4, "y": 0.15, "z": -0.2},
+            {"id": 23, "article_id": 3, "embedding_id": 13, "projection_set": DEFAULT_PROJECTION_SET, "projection_kind": DEFAULT_PROJECTION_KIND, "projection_version": "v1", "x": 0.5, "y": -0.25, "z": 0.1},
+            {"id": 24, "article_id": 4, "embedding_id": 14, "projection_set": DEFAULT_PROJECTION_SET, "projection_kind": DEFAULT_PROJECTION_KIND, "projection_version": "v1", "x": -0.55, "y": -0.15, "z": 0.2},
+            {"id": 25, "article_id": 5, "embedding_id": 15, "projection_set": DEFAULT_PROJECTION_SET, "projection_kind": DEFAULT_PROJECTION_KIND, "projection_version": "v1", "x": 0.15, "y": -0.6, "z": -0.1},
+            {"id": 26, "article_id": 6, "embedding_id": 16, "projection_set": DEFAULT_PROJECTION_SET, "projection_kind": DEFAULT_PROJECTION_KIND, "projection_version": "v1", "x": -0.15, "y": -0.7, "z": -0.3},
         ]:
             conn.execute(
                 text("""
@@ -188,28 +210,12 @@ def _build_client() -> TestClient:
                 projection,
             )
         for row in [
-            {
-                "id": 31,
-                "article_id": 1,
-                "projection_set": DEFAULT_PROJECTION_SET,
-                "cluster_id": 1,
-                "cluster_size": 1,
-                "is_outlier": False,
-                "local_density_distance": 0.111,
-                "source_neighbor_diversity": 2,
-                "nearby_sources_json": '["elpais","elmundo"]',
-            },
-            {
-                "id": 32,
-                "article_id": 2,
-                "projection_set": DEFAULT_PROJECTION_SET,
-                "cluster_id": None,
-                "cluster_size": 0,
-                "is_outlier": True,
-                "local_density_distance": 0.444,
-                "source_neighbor_diversity": 1,
-                "nearby_sources_json": '["elmundo"]',
-            },
+            {"id": 31, "article_id": 1, "projection_set": DEFAULT_PROJECTION_SET, "cluster_id": 1, "cluster_size": 1, "is_outlier": False, "local_density_distance": 0.111, "source_neighbor_diversity": 2, "nearby_sources_json": '["elpais","elmundo"]'},
+            {"id": 32, "article_id": 2, "projection_set": DEFAULT_PROJECTION_SET, "cluster_id": None, "cluster_size": 0, "is_outlier": True, "local_density_distance": 0.444, "source_neighbor_diversity": 1, "nearby_sources_json": '["elmundo"]'},
+            {"id": 33, "article_id": 3, "projection_set": DEFAULT_PROJECTION_SET, "cluster_id": 2, "cluster_size": 1, "is_outlier": False, "local_density_distance": 0.222, "source_neighbor_diversity": 2, "nearby_sources_json": '["abc","elpais"]'},
+            {"id": 34, "article_id": 4, "projection_set": DEFAULT_PROJECTION_SET, "cluster_id": 3, "cluster_size": 1, "is_outlier": False, "local_density_distance": 0.333, "source_neighbor_diversity": 2, "nearby_sources_json": '["eldiario","abc"]'},
+            {"id": 35, "article_id": 5, "projection_set": DEFAULT_PROJECTION_SET, "cluster_id": 4, "cluster_size": 1, "is_outlier": False, "local_density_distance": 0.555, "source_neighbor_diversity": 1, "nearby_sources_json": '["larazon"]'},
+            {"id": 36, "article_id": 6, "projection_set": DEFAULT_PROJECTION_SET, "cluster_id": 5, "cluster_size": 1, "is_outlier": False, "local_density_distance": 0.666, "source_neighbor_diversity": 1, "nearby_sources_json": '["publico"]'},
         ]:
             conn.execute(
                 text("""
@@ -225,8 +231,7 @@ def _build_client() -> TestClient:
         """),
             {"projection_set": DEFAULT_PROJECTION_SET},
         )
-        conn.execute(
-            text("""
+        editorial_insert_sql = text("""
             INSERT INTO article_editorial_analysis (
                 article_id, article_type, article_type_confidence, bias_label, bias_score, bias_confidence,
                 tone_emotional, tone_target, opinionatedness, sensationalism, rhetorical_certainty,
@@ -237,21 +242,126 @@ def _build_client() -> TestClient:
                 failure_reason, model_provider, model_name, model_version, prompt_version, schema_version,
                 content_hash, source_text_version, analyzed_at
             ) VALUES (
-                1, 'news', 0.91, 'center_left', -0.18, 0.62,
-                'measured', 'government', 'low', 'low', 'moderate',
-                'full', 'general_editorial_content', '',
-                'strict_success', '["weak_signal"]', 'resolved', 'resolved', 'resolved', 'resolved',
+                :article_id, :article_type, :article_type_confidence, :bias_label, :bias_score, :bias_confidence,
+                :tone_emotional, :tone_target, :opinionatedness, :sensationalism, :rhetorical_certainty,
+                :editorial_applicability, :editorial_applicability_reason, '',
+                'strict_success', :unclear_reasons_json, 'resolved', 'resolved', 'resolved', 'resolved',
                 'resolved', 'resolved', 'resolved', 'resolved',
-                '["institutional_conflict","accountability_frame"]',
-                '[{"type":"quote","text":"Texto articulo uno","note":"Lead framing"}]',
+                '[]', :evidence_spans_json,
                 '{"dimension_status":{"bias":"resolved","framing":"resolved"}}',
-                'Cobertura principalmente informativa con algo de encuadre institucional.', 'completed',
+                :rationale, :analysis_status,
                 '', 'openrouter', 'gpt-test', '', 'v1', 'editorial-analysis-v1',
-                'hash-1', 'title_summary_body_v1', :analyzed_at
+                :content_hash, 'title_summary_body_v1', :analyzed_at
             )
-        """),
-            {"analyzed_at": created},
-        )
+        """)
+        for editorial in [
+            {
+                "article_id": 1,
+                "article_type": "news",
+                "article_type_confidence": 0.91,
+                "bias_label": "center_left",
+                "bias_score": -0.18,
+                "bias_confidence": 0.62,
+                "tone_emotional": "measured",
+                "tone_target": "government",
+                "opinionatedness": "low",
+                "sensationalism": "low",
+                "rhetorical_certainty": "moderate",
+                "editorial_applicability": "full",
+                "editorial_applicability_reason": "general_editorial_content",
+                "unclear_reasons_json": '["weak_signal"]',
+                "evidence_spans_json": '[{"type":"quote","text":"Texto articulo uno","note":"Lead framing"}]',
+                "rationale": "Cobertura principalmente informativa con algo de encuadre institucional.",
+                "analysis_status": "completed",
+                "content_hash": "hash-1",
+                "analyzed_at": created,
+            },
+            {
+                "article_id": 3,
+                "article_type": "opinion",
+                "article_type_confidence": 0.88,
+                "bias_label": "center_left",
+                "bias_score": -0.22,
+                "bias_confidence": 0.30,
+                "tone_emotional": "heated",
+                "tone_target": "government",
+                "opinionatedness": "high",
+                "sensationalism": "low",
+                "rhetorical_certainty": "high",
+                "editorial_applicability": "full",
+                "editorial_applicability_reason": "general_editorial_content",
+                "unclear_reasons_json": '[]',
+                "evidence_spans_json": '[{"type":"quote","text":"Texto articulo tres","note":"Argumento"}]',
+                "rationale": "Tiene etiqueta, pero la confianza es floja.",
+                "analysis_status": "completed",
+                "content_hash": "hash-3",
+                "analyzed_at": created,
+            },
+            {
+                "article_id": 4,
+                "article_type": "analysis",
+                "article_type_confidence": 0.80,
+                "bias_label": "center_left",
+                "bias_score": -0.10,
+                "bias_confidence": 0.82,
+                "tone_emotional": "measured",
+                "tone_target": "society",
+                "opinionatedness": "medium",
+                "sensationalism": "low",
+                "rhetorical_certainty": "moderate",
+                "editorial_applicability": "limited",
+                "editorial_applicability_reason": "partial_editorial_signal",
+                "unclear_reasons_json": '[]',
+                "evidence_spans_json": '[{"type":"quote","text":"Texto articulo cuatro","note":"Contexto"}]',
+                "rationale": "La señal existe pero es limitada.",
+                "analysis_status": "completed",
+                "content_hash": "hash-4",
+                "analyzed_at": created,
+            },
+            {
+                "article_id": 5,
+                "article_type": "news",
+                "article_type_confidence": 0.70,
+                "bias_label": "unclear",
+                "bias_score": 0.0,
+                "bias_confidence": 0.78,
+                "tone_emotional": "measured",
+                "tone_target": "sports",
+                "opinionatedness": "low",
+                "sensationalism": "low",
+                "rhetorical_certainty": "low",
+                "editorial_applicability": "full",
+                "editorial_applicability_reason": "general_editorial_content",
+                "unclear_reasons_json": '["weak_signal"]',
+                "evidence_spans_json": '[{"type":"quote","text":"Texto articulo cinco","note":"Ambiguo"}]',
+                "rationale": "Sesgo poco claro.",
+                "analysis_status": "completed",
+                "content_hash": "hash-5",
+                "analyzed_at": created,
+            },
+            {
+                "article_id": 6,
+                "article_type": "editorial",
+                "article_type_confidence": 0.92,
+                "bias_label": "center_left",
+                "bias_score": -0.15,
+                "bias_confidence": 0.90,
+                "tone_emotional": "measured",
+                "tone_target": "culture",
+                "opinionatedness": "medium",
+                "sensationalism": "low",
+                "rhetorical_certainty": "moderate",
+                "editorial_applicability": "out_of_domain",
+                "editorial_applicability_reason": "out_of_domain",
+                "unclear_reasons_json": '[]',
+                "evidence_spans_json": '[{"type":"quote","text":"Texto articulo seis","note":"No comparable"}]',
+                "rationale": "Fuera de dominio.",
+                "analysis_status": "completed",
+                "content_hash": "hash-6",
+                "analyzed_at": created,
+            },
+        ]:
+            conn.execute(editorial_insert_sql, editorial)
 
     session_factory = sessionmaker(bind=engine, expire_on_commit=False)
     with session_factory() as seed_session:
@@ -310,20 +420,30 @@ def test_explorer_points_returns_cluster_metadata() -> None:
     preview_by_article = {item["article_id"]: item["editorial_preview"] for item in payload["items"]}
     assert preview_by_article[1]["article_type"] == "news"
     assert preview_by_article[1]["analysis_status"] == "completed"
+    assert preview_by_article[1]["bias_label"] == "center_left"
+    assert preview_by_article[1]["bias_confidence"] == 0.62
     assert set(preview_by_article[1].keys()) == {
         "analysis_status",
         "editorial_applicability",
         "article_type",
         "article_type_confidence",
+        "bias_label",
+        "bias_confidence",
         "review_flags",
     }
     assert preview_by_article[2]["analysis_status"] == "pending"
     assert payload["meta"]["editorial"]["coverage"]["pending"] == 1
-    assert any(option == {"value": "news", "count": 1} for option in payload["meta"]["editorial"]["article_type"])
+    assert payload["meta"]["editorial"]["coverage"]["bias_total_completed"] == 5
+    assert payload["meta"]["editorial"]["coverage"]["bias_low_confidence"] == 1
+    assert payload["meta"]["editorial"]["coverage"]["bias_unknown"] == 1
+    assert payload["meta"]["editorial"]["coverage"]["bias_limited"] == 1
+    assert payload["meta"]["editorial"]["coverage"]["bias_out_of_domain"] == 1
+    assert any(option == {"value": "news", "count": 2} for option in payload["meta"]["editorial"]["article_type"])
+    assert payload["meta"]["editorial"]["bias_label"] == [{"value": "center_left", "count": 1}]
     membership_by_article = {
         item["article_id"]: item["analysis"]["story_cluster_ids"] for item in payload["items"]
     }
-    assert membership_by_article == {1: [501], 2: [502]}
+    assert membership_by_article == {1: [501], 2: [502], 3: [], 4: [], 5: [], 6: []}
 
 
 def test_explorer_points_supports_cluster_and_outlier_filters() -> None:
@@ -364,11 +484,11 @@ def test_explorer_points_supports_story_cluster_highlight_mode() -> None:
     assert response.status_code == 200
     payload = response.json()
     assert payload["meta"]["story_cluster_metadata_available"] is True
-    assert sorted(item["article_id"] for item in payload["items"]) == [1, 2]
+    assert sorted(item["article_id"] for item in payload["items"]) == [1, 2, 3, 4, 5, 6]
     membership_by_article = {
         item["article_id"]: item["analysis"]["story_cluster_ids"] for item in payload["items"]
     }
-    assert membership_by_article == {1: [501], 2: [502]}
+    assert membership_by_article == {1: [501], 2: [502], 3: [], 4: [], 5: [], 6: []}
 
 
 def test_explorer_points_search_highlight_mode_keeps_broad_dataset() -> None:
@@ -381,7 +501,7 @@ def test_explorer_points_search_highlight_mode_keeps_broad_dataset() -> None:
 
     assert response.status_code == 200
     payload = response.json()
-    assert sorted(item["article_id"] for item in payload["items"]) == [1, 2]
+    assert sorted(item["article_id"] for item in payload["items"]) == [1, 2, 3, 4, 5, 6]
 
 
 def test_explorer_points_search_filter_mode_still_filters_dataset() -> None:
@@ -411,8 +531,8 @@ def test_explorer_points_article_type_filter_mode_narrows_dataset() -> None:
 
     assert response.status_code == 200
     payload = response.json()
-    assert [item["article_id"] for item in payload["items"]] == [1]
-    assert payload["items"][0]["editorial_preview"]["article_type"] == "news"
+    assert [item["article_id"] for item in payload["items"]] == [5, 1]
+    assert all(item["editorial_preview"]["article_type"] == "news" for item in payload["items"])
 
 
 def test_explorer_points_article_type_highlight_mode_keeps_broad_dataset() -> None:
@@ -429,10 +549,52 @@ def test_explorer_points_article_type_highlight_mode_keeps_broad_dataset() -> No
 
     assert response.status_code == 200
     payload = response.json()
-    assert sorted(item["article_id"] for item in payload["items"]) == [1, 2]
+    assert sorted(item["article_id"] for item in payload["items"]) == [1, 2, 3, 4, 5, 6]
     preview_by_article = {item["article_id"]: item["editorial_preview"] for item in payload["items"]}
     assert preview_by_article[1]["article_type"] == "news"
     assert preview_by_article[2]["analysis_status"] == "pending"
+
+
+def test_explorer_points_bias_filter_mode_is_strict_confident_full_match_only() -> None:
+    client = _build_client()
+
+    response = client.get(
+        "/api/v1/semantic/explorer/points",
+        params={
+            "sem_editorial_dim": "bias_label",
+            "sem_editorial_value": "center_left",
+            "sem_mode": "filter",
+        },
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert [item["article_id"] for item in payload["items"]] == [1]
+    assert payload["items"][0]["editorial_preview"]["bias_label"] == "center_left"
+    assert payload["items"][0]["editorial_preview"]["bias_confidence"] == 0.62
+
+
+def test_explorer_points_bias_highlight_mode_keeps_broad_dataset_and_previews_all_points() -> None:
+    client = _build_client()
+
+    response = client.get(
+        "/api/v1/semantic/explorer/points",
+        params={
+            "sem_editorial_dim": "bias_label",
+            "sem_editorial_value": "center_left",
+            "sem_mode": "highlight",
+        },
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert sorted(item["article_id"] for item in payload["items"]) == [1, 2, 3, 4, 5, 6]
+    preview_by_article = {item["article_id"]: item["editorial_preview"] for item in payload["items"]}
+    assert preview_by_article[1]["bias_label"] == "center_left"
+    assert preview_by_article[3]["review_flags"]["low_confidence"] is True
+    assert preview_by_article[4]["editorial_applicability"] == "limited"
+    assert preview_by_article[5]["review_flags"]["unclear_bias"] is True
+    assert preview_by_article[6]["review_flags"]["out_of_domain"] is True
 
 
 def test_explorer_filters_returns_available_options() -> None:
@@ -444,7 +606,10 @@ def test_explorer_filters_returns_available_options() -> None:
     assert payload["available_clusters"] == [1]
     assert payload["cluster_summaries"][0]["cluster_id"] == 1
     assert payload["editorial"]["coverage"]["pending"] == 1
-    assert any(option == {"value": "news", "count": 1} for option in payload["editorial"]["article_type"])
+    assert payload["editorial"]["coverage"]["bias_low_confidence"] == 1
+    assert payload["editorial"]["coverage"]["bias_unknown"] == 1
+    assert any(option == {"value": "news", "count": 2} for option in payload["editorial"]["article_type"])
+    assert payload["editorial"]["bias_label"] == [{"value": "center_left", "count": 1}]
 
 
 def test_explorer_article_detail_returns_analysis_fields(monkeypatch) -> None:

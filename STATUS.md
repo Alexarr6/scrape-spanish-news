@@ -1,6 +1,43 @@
 - State: DONE
-- Current phase: iter/008 frontend UX correction landed for the article-type lens control; repo ready for final review
+- Current phase: iter/009 backend bias-lens slice landed for Explorer; repo ready for frontend handoff
 - Last update: 2026-03-24 UTC
+
+## iter/009 backend bias-lens slice summary
+- added `bias_label` and `bias_confidence` to `ExplorerPointEditorialPreview` so Explorer points can carry real bias state instead of dropping it on the floor
+- added bounded Explorer backend support for `sem_editorial_dim=bias_label` + `sem_editorial_value=<label>`
+- locked strict bias filter semantics for positive matches:
+  - `analysis_status=completed`
+  - `editorial_applicability=full`
+  - exact `bias_label` match
+  - exclude `low_confidence`
+  - exclude `unclear`
+  - exclude `limited`
+  - exclude `out_of_domain`
+- preserved broad highlight behavior by continuing to return previews for all points in highlight mode
+- expanded Explorer editorial metadata with:
+  - strict bias option counts via `editorial.bias_label`
+  - bias diagnostic coverage counts (`bias_total_completed`, `bias_low_confidence`, `bias_unknown`, `bias_pending`, `bias_failed`, `bias_limited`, `bias_out_of_domain`)
+- kept the endpoint architecture bounded:
+  - no tone work
+  - no generic multi-lens builder
+  - no article-type regression work beyond keeping existing behavior intact
+
+## verification status
+- passed: `/home/node/.local/bin/uv run --group dev python -m pytest tests/test_api_semantic_explorer.py` (`14 passed`)
+
+## backend handoff notes
+- frontend can now rely on point previews exposing `bias_label` + `bias_confidence`
+- strict backend filter support is live for `sem_editorial_dim=bias_label`
+- metadata bias options are intentionally strict: only confident, completed, full-applicability labels appear in `editorial.bias_label`
+- diagnostic coverage lives in the shared `editorial.coverage` block; frontend should use those counts for muted legend rows instead of reverse-engineering from visible points
+
+## files changed in this pass
+- `src/api/contracts/semantic.py`
+- `src/semantic/dbstore.py`
+- `tests/test_api_semantic_explorer.py`
+- `STATUS.md`
+- `RESULTS.md`
+
 
 ## iter/008 bounded slice summary
 - backend/data slice landed lightweight `editorial_preview`, article-type query support, and bounded editorial meta/counts for Explorer
