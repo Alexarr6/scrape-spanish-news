@@ -32,6 +32,13 @@ export const POINT_REGULAR_ALPHA_UNDER_SELECTION = 65
 export const POINT_OUTLIER_ALPHA_NO_SELECTION = 230
 export const POINT_OUTLIER_ALPHA_UNDER_SELECTION = 100
 
+// ─── Highlight mode: non-matching points stay visible as context ──────────────
+// These are intentionally higher than UNDER_SELECTION values so the map reads
+// as "contextual dimming" rather than filtering. Matches remain at full alpha.
+// Target: non-matches ~40-45% opacity (clearly de-emphasised, not hidden).
+export const POINT_NON_MATCH_ALPHA_HIGHLIGHT = 110         // ~43% — context visible
+export const POINT_NON_MATCH_RADIUS_SCALE_HIGHLIGHT = 0.75  // shrink non-matches slightly to draw eye to matches
+
 export const POINT_REGULAR_RADIUS_2D = 4
 export const POINT_REGULAR_RADIUS_3D = 4.5
 export const POINT_OUTLIER_RADIUS_2D = 5.5
@@ -40,6 +47,11 @@ export const POINT_OUTLIER_RADIUS_3D = 6
 // ─── Stroke for receding (under-selection) points — effectively invisible ────
 export const POINT_RECEDING_STROKE: [number, number, number, number] = [226, 232, 240, 0]  // transparent
 export const POINT_RECEDING_STROKE_WIDTH = 0
+
+// ─── Stroke for highlight-mode non-match context points ──────────────────────
+// Softened stroke keeps points readable without drawing attention away from matches.
+export const POINT_NON_MATCH_STROKE: [number, number, number, number] = [148, 163, 184, 50]  // slate-400 very faint
+export const POINT_NON_MATCH_STROKE_WIDTH = 0.4
 
 // ─── Stroke for visible regular points (no selection active) ─────────────────
 export const POINT_DEFAULT_STROKE: [number, number, number, number] = [248, 250, 252, 190] // slate-50 semi

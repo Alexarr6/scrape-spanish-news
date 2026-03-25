@@ -11,12 +11,19 @@ from sqlalchemy.pool import StaticPool
 from src.analysis.llm_client import EditorialAnalysisAttempt, EditorialAnalysisResult
 from src.analysis.orm_models import ArticleEditorialAnalysisORM
 from src.analysis.pipeline import EditorialAnalysisPipeline, EditorialSelectionFilters
-from src.persistence.orm_models import ArticleORM, Base
+from src.persistence.orm import ArticleORM, Base
 
 
 class _Settings:
     model = "openrouter/test-model"
     prompt_version = "v1"
+    provider_label = "openrouter"
+
+
+class _CustomSettings:
+    model = "custom/test-model"
+    prompt_version = "v1"
+    provider_label = "custom"
 
 
 VALID_PAYLOAD = {
@@ -46,15 +53,14 @@ VALID_PAYLOAD = {
 
 
 class _FakeLLM:
-    settings = _Settings()
-
-    def __init__(self, result: EditorialAnalysisResult) -> None:
+    def __init__(self, result: EditorialAnalysisResult, *, settings=None) -> None:
         self.result = result
+        self.settings = settings or _Settings()
 
     def analyze_editorial(self, *, article_prompt: str, schema: dict[str, object]):
         assert "ARTICLE_METADATA:" in article_prompt
         assert "bias_label" in schema["properties"]
-        assert "ideological_bias_framing" in schema["properties"]
+        assert "ideological_bias_framing" not in schema["properties"]
         return self.result
 
 
@@ -147,7 +153,10 @@ def test_editorial_pipeline_persists_completed_analysis_and_skips_unchanged() ->
     assert stored.article_id == article.id
     assert stored.analysis_status == "completed"
     assert stored.bias_label == "center"
+    assert stored.model_provider == "openrouter"
     assert stored.model_name == "openrouter/test-model"
+    assert stored.bias_status == "resolved"
+    assert json.loads(stored.unclear_reasons_json) == ["limited_applicability"]
     assert "institutional_stability" in stored.framing_devices_json
     assert metrics.strict_success_count == 1
 
@@ -189,6 +198,7 @@ def test_editorial_pipeline_counts_request_and_writes_artifact_on_parse_failure(
     assert metrics.failed_count == 1
     assert metrics.parse_failed_count == 1
     assert stored.analysis_status == "failed"
+    assert stored.provider_failure_class == "json_parse_failed"
     assert stored.failure_reason.startswith("json_parse_failed:")
     assert "artifact=" in stored.failure_reason
     assert len(artifacts) == 1
@@ -199,7 +209,7 @@ def test_editorial_pipeline_counts_request_and_writes_artifact_on_parse_failure(
     assert artifact_payload["attempts"][0]["final_unclear_reasons"] == []
 
 
-def test_editorial_pipeline_retries_schema_rejection_with_fallback_success() -> None:
+def test_editorial_pipeline_marks_failed_rows_for_incompatible_provider() -> None:
     session = _make_session()
     _make_article(session, source="eldiario")
     pipeline = EditorialAnalysisPipeline(session)
@@ -208,73 +218,62 @@ def test_editorial_pipeline_retries_schema_rejection_with_fallback_success() -> 
             attempts=(
                 _attempt(
                     request_accepted=False,
-                    failure_class="provider_schema_rejected",
+                    failure_class="provider_incompatible_schema",
                     failure_message=(
-                        "400 invalid schema for response_format article_editorial_analysis"
+                        "provider 'custom' does not support editorial strict schema"
                     ),
-                ),
-                _attempt(
-                    mode="fallback_json_text",
-                    payload=VALID_PAYLOAD,
-                    raw_content=json.dumps(VALID_PAYLOAD),
-                    repair_warnings=(
-                        "repair_confidence_label_mapped: confidence='moderate' -> 0.5",
-                    ),
-                    normalization_warnings=("mapped bias_label='neutral' -> 'unclear'",),
-                    truncated_fields=("evidence_spans",),
-                    unclear_reasons=("repair_data_loss", "mapping_loss"),
-                    diagnostics={
-                        "provider_path": "fallback_success",
-                        "editorial_applicability": "limited",
-                        "editorial_applicability_reason": "procedural_hard_news",
-                        "dimension_status": {
-                            "bias": {
-                                "value": "unclear",
-                                "status": "mapping_loss",
-                                "reason": "repair_or_mapping_loss_visible",
-                                "notes": [],
-                                "raw_hints": ["neutral"],
-                            },
-                            "framing": {
-                                "value": "unclear",
-                                "status": "mapping_loss",
-                                "reason": "framing_taxonomy_dropped_signal",
-                                "notes": [],
-                                "raw_hints": ["official_source_attribution"],
-                            },
-                        },
-                        "repair_warnings": [],
-                        "normalization_warnings": [],
-                        "dropped_fields": [],
-                        "truncated_fields": ["evidence_spans"],
-                        "preserved_signals": {
-                            "framing_candidates": ["official_source_attribution"]
-                        },
-                        "provider_failures": [],
-                        "unclear_reasons": ["repair_data_loss", "mapping_loss"],
-                    },
                 ),
             )
-        )
+        ),
+        settings=_CustomSettings(),
     )
 
     metrics = pipeline.analyze_articles(days_back=10, limit=10)
     stored = session.execute(select(ArticleEditorialAnalysisORM)).scalar_one()
 
-    assert metrics.request_count == 1
-    assert metrics.provider_rejected_count == 1
+    assert metrics.request_count == 0
+    assert metrics.provider_rejected_count == 0
+    assert metrics.analyzed_count == 0
+    assert metrics.fallback_success_count == 0
+    assert metrics.fallback_after_strict_reject_count == 0
+    assert stored.analysis_status == "failed"
+    assert stored.provider_failure_class == "provider_incompatible_schema"
+    assert stored.failure_reason.startswith("provider_incompatible_schema:")
+
+
+def test_editorial_pipeline_default_diagnostics_treat_unclear_as_abstention() -> None:
+    session = _make_session()
+    _make_article(session, source="elpais")
+    payload = dict(VALID_PAYLOAD)
+    payload.update(
+        {
+            "bias_label": "unclear",
+            "bias_score": 0.0,
+            "bias_confidence": 0.3,
+            "tone_target": "unclear",
+            "rhetorical_certainty": "unclear",
+            "framing_devices": [],
+            "rationale": "Agenda cultural descriptiva con tono neutro y señal editorial débil.",
+        }
+    )
+    pipeline = EditorialAnalysisPipeline(session)
+    pipeline.llm = _FakeLLM(EditorialAnalysisResult(attempts=(_attempt(payload=payload),)))
+
+    metrics = pipeline.analyze_articles(days_back=10, limit=10)
+    stored = session.execute(select(ArticleEditorialAnalysisORM)).scalar_one()
+
     assert metrics.analyzed_count == 1
-    assert metrics.fallback_success_count == 1
-    assert metrics.rows_with_warnings_count == 1
-    assert metrics.rows_with_truncated_evidence_count == 1
-    assert metrics.unclear_due_to_mapping_count == 1
-    assert metrics.fallback_after_strict_reject_count == 1
-    assert metrics.limited_applicability_count == 1
-    assert metrics.bias_mapping_loss_count == 1
-    assert stored.analysis_status == "completed"
-    assert stored.editorial_applicability == "limited"
-    assert "official_source_attribution" in stored.diagnostics_json
-    assert stored.failure_reason == ""
+    assert metrics.fallback_success_count == 0
+    assert metrics.bias_mapping_loss_count == 0
+    assert metrics.rows_with_unmapped_signals_count == 0
+    assert json.loads(stored.unclear_reasons_json) == [
+        "limited_applicability",
+        "weak_signal_abstain",
+    ]
+    assert stored.bias_status == "weak_signal_abstain"
+    assert stored.tone_target_status == "weak_signal_abstain"
+    assert stored.rhetorical_certainty_status == "weak_signal_abstain"
+    assert stored.framing_status == "weak_signal_abstain"
 
 
 def test_editorial_pipeline_marks_failed_rows_when_validation_blows_up() -> None:

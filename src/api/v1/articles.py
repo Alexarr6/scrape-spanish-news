@@ -3,7 +3,7 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
-from src.persistence.contracts import ArticleCreate, ArticleRead, IngestResult
+from src.persistence.core import ArticleCreate, ArticleRead, IngestResult
 from src.persistence.crud import ArticleCRUD
 
 router = APIRouter(prefix="/api/v1/articles", tags=["articles"])

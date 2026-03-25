@@ -58,6 +58,45 @@ class GenericRSSAdapter(BaseSourceAdapter):
             tags=_read_tags(page),
         )
 
+    def _discover_links_from_feeds(self, feeds: list[str]) -> tuple[list[str], int]:
+        links: list[str] = []
+        errors = 0
+        for feed in feeds:
+            try:
+                xml = self.http.get_text(feed)
+            except Exception:
+                errors += 1
+                continue
+            for item in self._parse_feed(xml):
+                link = item.get("link", "")
+                if link:
+                    links.append(link)
+        return links, errors
+
+    def _discover_links_from_sitemaps(self, sitemaps: list[str]) -> tuple[list[str], int]:
+        links: list[str] = []
+        errors = 0
+        for sitemap in sitemaps:
+            try:
+                xml = self.http.get_text(sitemap)
+            except Exception:
+                errors += 1
+                continue
+            links.extend(self._parse_sitemap(xml))
+        return links, errors
+
+    def _discover_links_from_html_pages(self, pages: list[str]) -> tuple[list[str], int]:
+        links: list[str] = []
+        errors = 0
+        for page in pages:
+            try:
+                html = self.http.get_text(page)
+            except Exception:
+                errors += 1
+                continue
+            links.extend(self._extract_links(html))
+        return links, errors
+
     def _parse_feed(self, xml_text: str) -> list[dict]:
         root = ET.fromstring(xml_text)
         out: list[dict] = []
@@ -70,6 +109,12 @@ class GenericRSSAdapter(BaseSourceAdapter):
                 }
             )
         return out
+
+    def _parse_sitemap(self, xml_text: str) -> list[str]:
+        return _parse_sitemap(xml_text)
+
+    def _extract_links(self, html: str) -> list[str]:
+        return _extract_links(html)
 
 
 def _xml_text(node) -> str:
@@ -171,3 +216,35 @@ def _read_all_meta(page: str, key: str) -> list[str]:
             continue
         out.append(html.unescape(content.group(1)))
     return out
+
+
+def _parse_sitemap(xml_text: str) -> list[str]:
+    try:
+        root = ET.fromstring(xml_text)
+    except Exception:
+        return []
+    links = []
+    for loc in root.findall(".//{*}loc"):
+        if loc.text:
+            links.append(loc.text.strip())
+    return links
+
+
+def _extract_links(html: str) -> list[str]:
+    return re.findall(r'href=["\'](https?://[^"\']+)["\']', html)
+
+
+def _parse_sitemap(xml_text: str) -> list[str]:
+    try:
+        root = ET.fromstring(xml_text)
+    except Exception:
+        return []
+    links = []
+    for loc in root.findall(".//{*}loc"):
+        if loc.text:
+            links.append(loc.text.strip())
+    return links
+
+
+def _extract_links(html: str) -> list[str]:
+    return re.findall(r'href=["\'](https?://[^"\']+)["\']', html)

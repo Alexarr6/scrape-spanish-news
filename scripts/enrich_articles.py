@@ -11,7 +11,7 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
-from src.analysis.llm_client import OpenRouterSettings  # noqa: E402
+from src.analysis.llm_client import LLMSettings  # noqa: E402
 from src.analysis.pipeline import AnalysisPipeline  # noqa: E402
 from src.persistence.db import (  # noqa: E402
     create_postgres_engine,
@@ -37,7 +37,7 @@ def main() -> int:
     init_schema(engine)
     session = make_session(engine)
     try:
-        pipeline = AnalysisPipeline(session, llm_settings=OpenRouterSettings.from_env())
+        pipeline = AnalysisPipeline(session, llm_settings=LLMSettings.from_env())
         metrics = pipeline.enrich_articles(days_back=args.days_back, limit=args.limit)
         print(json.dumps(metrics.model_dump(mode="json"), ensure_ascii=False, indent=2))
         return 0

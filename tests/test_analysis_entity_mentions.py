@@ -8,8 +8,8 @@ from sqlalchemy.orm import Session
 from src.analysis.contracts import ArticleAnalysisExtractedEntity, ArticleEnrichmentPayload
 from src.analysis.orm_models import ArticleAnalysisORM, EntityMentionORM
 from src.analysis.pipeline import AnalysisPipeline
-from src.persistence.contracts import ArticleRead
-from src.persistence.orm_models import ArticleORM, Base
+from src.persistence.core import ArticleRead
+from src.persistence.orm import ArticleORM, Base
 
 
 def _session() -> Session:

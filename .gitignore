@@ -17,3 +17,5 @@ STATUS.md
 TODO.md
 frontend/node_modules/
 frontend/dist/
+.artifacts/
+site/

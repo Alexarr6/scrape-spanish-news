@@ -36,6 +36,35 @@ def _status_for(snapshot: SourceSnapshot) -> str:
     return "ok"
 
 
+def _derived_warnings_for(snapshot: SourceSnapshot) -> list[str]:
+    warnings: list[str] = []
+    discovered = _metric_as_int(snapshot.metrics.get("discovered"))
+    processed = _metric_as_int(snapshot.metrics.get("processed"))
+    kept = _metric_as_int(snapshot.metrics.get("kept"))
+
+    if discovered >= 20 and kept == 0:
+        warnings.append("zero_keep_after_discovery")
+    elif processed >= 20 and kept / max(processed, 1) < 0.2:
+        warnings.append("low_keep_ratio")
+
+    strategy_metrics = snapshot.metrics.get("strategy_metrics")
+    if isinstance(strategy_metrics, dict):
+        rejected_noise = 0
+        for row in strategy_metrics.get("strategies", []):
+            if isinstance(row, dict):
+                rejected_noise += _metric_as_int(row.get("rejected_noise"))
+        if rejected_noise >= 10:
+            warnings.append(f"high_noise_rejection:{rejected_noise}")
+
+    return warnings
+
+
+def _metric_as_int(value: Any) -> int:
+    if isinstance(value, bool) or not isinstance(value, int):
+        return 0
+    return value
+
+
 def build_comparison_summary(
     *,
     date: str,
@@ -55,6 +84,7 @@ def build_comparison_summary(
         metrics = {k: snap.metrics.get(k) for k in REQUIRED_METRIC_KEYS}
         missing = [k for k, v in metrics.items() if v is None]
         warnings = list(snap.warnings)
+        warnings.extend(_derived_warnings_for(snap))
         if missing:
             warnings.append(f"missing_metrics:{','.join(missing)}")
 

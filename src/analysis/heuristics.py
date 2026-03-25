@@ -8,7 +8,7 @@ from difflib import SequenceMatcher
 
 from src.analysis.contracts import ArticleAnalysisExtractedEntity, ArticleEnrichmentPayload
 from src.analysis.taxonomy import SOURCE_TAG_MAP
-from src.persistence.contracts import ArticleRead
+from src.persistence.core import ArticleRead
 
 ARTICLE_TYPE_HINTS = {
     "opinion": ("opinión", "opinion", "tribuna", "columna", "editorial"),
@@ -61,6 +61,93 @@ ENTITY_PATTERNS = (
 )
 
 PERSON_PATTERN = re.compile(r"\b([A-ZÁÉÍÓÚÑ][a-záéíóúñ]+(?:\s+[A-ZÁÉÍÓÚÑ][a-záéíóúñ]+)+)\b")
+
+MATCH_STOPWORDS = {
+    "a",
+    "al",
+    "ante",
+    "asi",
+    "como",
+    "con",
+    "contra",
+    "de",
+    "del",
+    "despues",
+    "dos",
+    "el",
+    "en",
+    "entre",
+    "esta",
+    "este",
+    "ha",
+    "hoy",
+    "la",
+    "las",
+    "lo",
+    "los",
+    "mas",
+    "por",
+    "que",
+    "se",
+    "sin",
+    "sobre",
+    "su",
+    "sus",
+    "tras",
+    "un",
+    "una",
+    "uno",
+    "varios",
+    "varias",
+    "ya",
+}
+
+EVENT_TERMS = {
+    "acuerdo",
+    "ajustes",
+    "anuncia",
+    "anuncian",
+    "anuncio",
+    "cierra",
+    "cierre",
+    "condiciones",
+    "conversaciones",
+    "cuentas",
+    "exige",
+    "exigen",
+    "firma",
+    "negocia",
+    "negociacion",
+    "negociaciones",
+    "pacto",
+    "presupuestario",
+    "presupuestaria",
+    "presupuestos",
+    "reclama",
+    "sella",
+}
+
+FOLLOWUP_MARKERS = {
+    "ajustes",
+    "condiciones",
+    "despues",
+    "exige",
+    "exigen",
+    "reclama",
+    "reaccion",
+    "responde",
+    "siguen",
+}
+
+HEADLINE_NOISE = {
+    "ultima",
+    "hora",
+    "claves",
+    "asi",
+    "asi queda",
+    "directo",
+    "en directo",
+}
 
 
 def infer_article_type(article: ArticleRead) -> tuple[str, float]:
@@ -147,5 +234,55 @@ def heuristic_enrichment(article: ArticleRead) -> ArticleEnrichmentPayload:
     )
 
 
+def _normalized_words(text: str) -> list[str]:
+    words = re.findall(r"\w+", text.lower())
+    normalized: list[str] = []
+    for word in words:
+        word = word.strip()
+        if not word or word in MATCH_STOPWORDS:
+            continue
+        normalized.append(word)
+    return normalized
+
+
+def lexical_signature(title: str, summary: str = "") -> set[str]:
+    text = " ".join(bit for bit in [title, summary] if bit)
+    tokens = [token for token in _normalized_words(text) if token not in HEADLINE_NOISE]
+    signature = set(tokens)
+    signature.update(
+        " ".join(tokens[idx : idx + 2]) for idx in range(len(tokens) - 1)
+    )
+    return {item for item in signature if item}
+
+
+def event_terms(text: str) -> set[str]:
+    return {token for token in _normalized_words(text) if token in EVENT_TERMS}
+
+
+def followup_markers(text: str) -> set[str]:
+    return {token for token in _normalized_words(text) if token in FOLLOWUP_MARKERS}
+
+
+def token_set_similarity(left: str, right: str) -> float:
+    left_tokens = _normalized_words(left)
+    right_tokens = _normalized_words(right)
+    if not left_tokens and not right_tokens:
+        return 0.0
+    common = sorted(set(left_tokens) & set(right_tokens))
+    if not common:
+        return 0.0
+    common_text = " ".join(common)
+    left_text = " ".join(sorted(set(left_tokens)))
+    right_text = " ".join(sorted(set(right_tokens)))
+    ratios = [
+        SequenceMatcher(None, left_text, right_text).ratio(),
+        SequenceMatcher(None, common_text, left_text).ratio(),
+        SequenceMatcher(None, common_text, right_text).ratio(),
+    ]
+    return max(ratios)
+
+
 def title_similarity(left: str, right: str) -> float:
-    return SequenceMatcher(None, left.lower(), right.lower()).ratio()
+    char_ratio = SequenceMatcher(None, left.lower(), right.lower()).ratio()
+    token_ratio = token_set_similarity(left, right)
+    return round((char_ratio * 0.35) + (token_ratio * 0.65), 4)

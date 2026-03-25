@@ -5,6 +5,7 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
+from src.analysis.readside import load_article_editorial_summary
 from src.api.contracts.semantic import (
     ExplorerArticleDetail,
     ExplorerFiltersResponse,
@@ -37,10 +38,14 @@ def get_explorer_points(
     source: str | None = None,
     section: str | None = None,
     cluster_id: int | None = None,
+    story_cluster_id: int | None = Query(default=None, alias="sem_story_cluster"),
+    visual_mode: str | None = Query(default=None, alias="sem_mode"),
     outlier_only: bool = False,
     date_from: str | None = None,
     date_to: str | None = None,
     search: str | None = None,
+    editorial_dimension: str | None = Query(default=None, alias="sem_editorial_dim"),
+    editorial_value: str | None = Query(default=None, alias="sem_editorial_value"),
 ) -> ExplorerPointsResponse:
     """Return explorer points plus the metadata needed to drive the UI shell."""
 
@@ -50,10 +55,14 @@ def get_explorer_points(
         source=source,
         section=section,
         cluster_id=cluster_id,
+        story_cluster_id=story_cluster_id,
+        visual_mode=visual_mode,
         outlier_only=outlier_only,
         date_from=date_from,
         date_to=date_to,
         search=search,
+        editorial_dimension=editorial_dimension,
+        editorial_value=editorial_value,
     )
     page = load_explorer_points_page(session, filters=filters)
     return _to_points_response(page)
@@ -85,7 +94,8 @@ def get_explorer_article_detail(
     )
     if detail is None:
         raise HTTPException(status_code=404, detail="Semantic explorer article not found")
-    return _to_article_detail_response(detail)
+    editorial = load_article_editorial_summary(session, article_id=article_id)
+    return _to_article_detail_response(detail, editorial=editorial)
 
 
 def _to_points_response(page: ExplorerPointsPage) -> ExplorerPointsResponse:
@@ -106,11 +116,15 @@ def _to_points_response(page: ExplorerPointsPage) -> ExplorerPointsResponse:
             available_sections=page.available_sections,
             available_clusters=page.available_clusters,
             cluster_summaries=page.cluster_summaries,
+            story_cluster_metadata_available=page.story_cluster_metadata_available,
+            editorial=page.editorial,
         ),
     )
 
 
-def _to_article_detail_response(detail: ExplorerArticleDetailRecord) -> ExplorerArticleDetail:
+def _to_article_detail_response(
+    detail: ExplorerArticleDetailRecord, *, editorial: dict | None = None
+) -> ExplorerArticleDetail:
     point_model = (
         _to_point_model(detail.point, neighbor_count=len(detail.neighbors))
         if detail.point is not None
@@ -124,6 +138,7 @@ def _to_article_detail_response(detail: ExplorerArticleDetailRecord) -> Explorer
         projection_set=detail.projection_set,
         point=point_model,
         semantic_summary=semantic_summary,
+        editorial=editorial,
         neighbors=[ExplorerNeighbor(**neighbor.model_dump()) for neighbor in detail.neighbors],
     )
 
@@ -131,5 +146,10 @@ def _to_article_detail_response(detail: ExplorerArticleDetailRecord) -> Explorer
 def _to_point_model(item, *, neighbor_count: int = 0) -> ExplorerPoint:
     payload = item.model_dump()
     analysis = payload.pop("analysis", {}) or {}
+    editorial_preview = payload.pop("editorial_preview", None)
     analysis.setdefault("neighbor_count", neighbor_count)
-    return ExplorerPoint(**payload, analysis=ExplorerSemanticSummary(**analysis))
+    return ExplorerPoint(
+        **payload,
+        analysis=ExplorerSemanticSummary(**analysis),
+        editorial_preview=editorial_preview,
+    )

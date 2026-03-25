@@ -6,9 +6,9 @@ from sqlalchemy import create_engine, select
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
-from src.persistence.contracts import ArticleCreate
+from src.persistence.core import ArticleCreate
 from src.persistence.crud import ArticleCRUD
-from src.persistence.orm_models import ArticleORM, Base
+from src.persistence.orm import ArticleORM, Base
 
 
 class FlushExplodesOnce(Session):

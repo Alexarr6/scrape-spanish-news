@@ -371,7 +371,6 @@
     "editorial_applicability_reason": "general_editorial_content",
     "unclear_reasons": [
       "mapping_loss",
-      "provider_missing",
       "repair_data_loss",
       "semantic_weak_signal"
     ],
@@ -410,10 +409,10 @@
       "article_type": "mapping_loss",
       "bias": "mapping_loss",
       "tone_emotional": "mapping_loss",
-      "tone_target": "provider_missing",
-      "opinionatedness": "provider_missing",
+      "tone_target": "mapping_loss",
+      "opinionatedness": "mapping_loss",
       "sensationalism": "resolved",
-      "rhetorical_certainty": "provider_missing",
+      "rhetorical_certainty": "mapping_loss",
       "framing": "mapping_loss"
     },
     "preserved_signal_groups": {

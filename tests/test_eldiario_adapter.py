@@ -3,6 +3,7 @@ from __future__ import annotations
 import unittest
 
 from src.adapters.eldiario import ElDiarioAdapter
+from src.adapters.layered_discovery import DiscoveryLayer, run_layered_discovery
 from src.core.adapter import RunConfig
 
 
@@ -83,6 +84,36 @@ class ElDiarioTests(unittest.TestCase):
             "discovery_strategy_metrics.v1",
         )
         self.assertIsInstance(metrics["strategy_metrics"]["strategies"], list)
+
+    def test_usable_candidate_thresholds_do_not_skip_on_raw_stale_volume(self):
+        adapter = ElDiarioAdapter(http_client=_FakeHttp({}))
+        stale_urls = [
+            f"https://www.eldiario.es/politica/2026/03/10/stale-{idx}.html" for idx in range(12)
+        ]
+        fresh_html = ["https://www.eldiario.es/nacional/2026/03/13/fresh.html"]
+
+        urls, metrics = run_layered_discovery(
+            cfg=RunConfig(max_discovery_urls=50),
+            accept=adapter._accept,
+            reject_noise=adapter._reject_noise,
+            layers=[
+                DiscoveryLayer(
+                    strategy_name="rss_discovery",
+                    load_candidates=lambda: (stale_urls, 0),
+                ),
+                DiscoveryLayer(
+                    strategy_name="html_fallback_discovery",
+                    load_candidates=lambda: (fresh_html, 0),
+                    should_skip=lambda urls: adapter._has_enough_usable_candidates(
+                        urls, target_date="2026-03-13", minimum=10
+                    ),
+                ),
+            ],
+        )
+
+        self.assertIn(fresh_html[0], urls)
+        html_metrics = next(item for item in metrics if item["strategy_name"] == "html_fallback_discovery")
+        self.assertEqual(html_metrics["accepted"], 1)
 
 
 if __name__ == "__main__":

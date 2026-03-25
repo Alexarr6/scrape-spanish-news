@@ -14,6 +14,9 @@ class EditorialReviewFlags(BaseModel):
     low_confidence: bool = False
     failed_analysis: bool = False
     unclear_bias: bool = False
+    provider_missing: bool = False
+    mapping_loss: bool = False
+    out_of_domain: bool = False
     pending_analysis: bool = False
     needs_review: bool = False
 
@@ -43,7 +46,14 @@ class ArticleEditorialAnalysisListItem(BaseModel):
     article_type: str = "unclear"
     article_type_confidence: float = 0.0
     editorial_applicability: str = "full"
+    provider_failure_class: str = ""
     analysis_path: str = ""
+    unclear_reasons: list[str] = Field(default_factory=list)
+    article_type_status: str = ""
+    bias_status: str = ""
+    tone_emotional_status: str = ""
+    opinionatedness_status: str = ""
+    framing_status: str = ""
     bias_label: str = "unclear"
     bias_score: float = 0.0
     bias_confidence: float = 0.0
@@ -86,7 +96,17 @@ class ArticleEditorialAnalysisResponse(BaseModel):
     rhetorical_certainty: str
     editorial_applicability: str = "full"
     editorial_applicability_reason: str = "general_editorial_content"
+    provider_failure_class: str = ""
     analysis_path: str = ""
+    unclear_reasons: list[str] = Field(default_factory=list)
+    article_type_status: str = ""
+    bias_status: str = ""
+    tone_emotional_status: str = ""
+    tone_target_status: str = ""
+    opinionatedness_status: str = ""
+    sensationalism_status: str = ""
+    rhetorical_certainty_status: str = ""
+    framing_status: str = ""
     framing_devices: list[str] = Field(default_factory=list)
     evidence_spans: list[EditorialEvidenceSpan] = Field(default_factory=list)
     diagnostics: EditorialDiagnostics = Field(default_factory=EditorialDiagnostics)

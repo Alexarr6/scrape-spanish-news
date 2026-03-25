@@ -7,41 +7,52 @@ from pathlib import Path
 from typing import Any, Literal
 
 from openai import BadRequestError, OpenAI
+from pydantic import ValidationError
 
 from src.analysis.contracts import (
+    ArticleEditorialAnalysisPayload,
     ArticleEnrichmentPayload,
     EditorialAnalysisDiagnostics,
     OpenRouterUsage,
 )
 from src.analysis.editorial_normalization import (
     EditorialNormalizationError,
+    build_editorial_diagnostics_from_payload,
     normalize_editorial_payload,
 )
+from src.analysis.schemas import (
+    editorial_analysis_json_schema as build_editorial_analysis_json_schema,
+)
+from src.analysis.schemas import (
+    editorial_analysis_raw_json_schema as build_editorial_analysis_raw_json_schema,
+)
+from src.analysis.schemas import (
+    enrichment_json_schema as build_enrichment_json_schema,
+)
 
-DEFAULT_BASE_URL = "https://openrouter.ai/api/v1"
+OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1"
 EDITORIAL_ANALYSIS_SYSTEM_PROMPT = """You are classifying a Spanish news article.
 Perform editorial analysis conservatively.
 
-Your task is to produce a conservative, evidence-backed JSON object that classifies:
-- article type
-- ideological bias framing
-- tone dimensions
-- framing devices
-- rationale
-- evidence spans
+Your task is to produce one conservative, evidence-backed canonical JSON object using exactly
+the schema provided by the API response_format.
 
 Rules:
 1. Return strict JSON only.
-2. Classify the article itself, not the outlet's reputation.
-3. Be conservative. If evidence is weak or mixed, use `unclear` and lower confidence.
-4. Do not infer ideology solely from topic. Use framing, wording, emphasis, and source treatment.
-5. Distinguish between the article's own framing and quotations from sources.
-6. Evidence spans must quote real text from the provided article content.
-7. Keep rationale concise and specific."""
+2. Use only the canonical field names and canonical taxonomy values from the schema.
+3. Classify the article itself, not the outlet's reputation.
+4. Be conservative. If evidence is weak or mixed, use `unclear` and lower confidence.
+5. Do not infer ideology solely from topic. Use framing, wording, emphasis, and source treatment.
+6. Distinguish between the article's own framing and quotations from sources.
+7. Evidence spans must quote real text from the provided article content.
+8. Do not invent helper keys, alternate taxonomies, nested diagnostic objects, or free-form hints.
+9. `framing_devices` must be an array of canonical string codes.
+10. Keep rationale concise and specific."""
 EDITORIAL_ANALYSIS_SCHEMA_VERSION = "editorial-analysis-v1-normalized"
 EDITORIAL_ANALYSIS_SOURCE_TEXT_VERSION = "title_summary_body_v1"
 
 FailureClass = Literal[
+    "provider_incompatible_schema",
     "provider_schema_rejected",
     "provider_request_failed",
     "empty_content",
@@ -52,30 +63,84 @@ FailureClass = Literal[
     "unknown_response_shape",
 ]
 SchemaMode = Literal["strict_json_schema", "fallback_json_text"]
+EditorialAPIMode = Literal[
+    "chat_completions_parse",
+    "chat_completions_json_schema",
+    "unsupported",
+]
 
 
 @dataclass(frozen=True)
-class OpenRouterSettings:
+class LLMProviderProfile:
+    provider_id: Literal["openai", "openrouter", "custom"]
+    supports_editorial_strict_schema: bool
+    editorial_api_mode: EditorialAPIMode
+
+
+@dataclass(frozen=True)
+class LLMSettings:
     api_key: str
     model: str
-    base_url: str = DEFAULT_BASE_URL
+    base_url: str | None = None
     timeout_seconds: int = 60
     max_retries: int = 2
     prompt_version: str = "v1"
 
     @classmethod
-    def from_env(cls) -> "OpenRouterSettings | None":
-        api_key = os.getenv("OPENROUTER_API_KEY", "").strip()
-        model = os.getenv("OPENROUTER_MODEL", "").strip()
+    def from_env(cls) -> "LLMSettings | None":
+        model = _first_env("LLM_MODEL", "OPENAI_MODEL", "OPENROUTER_MODEL")
+        base_url = _resolve_base_url()
+        api_key = _resolve_api_key(base_url=base_url)
         if not api_key or not model:
             return None
         return cls(
             api_key=api_key,
             model=model,
-            base_url=os.getenv("OPENROUTER_BASE_URL", DEFAULT_BASE_URL).strip() or DEFAULT_BASE_URL,
-            timeout_seconds=int(os.getenv("OPENROUTER_TIMEOUT_SECONDS", "60")),
-            max_retries=int(os.getenv("OPENROUTER_MAX_RETRIES", "2")),
-            prompt_version=os.getenv("OPENROUTER_PROMPT_VERSION", "v1"),
+            base_url=base_url,
+            timeout_seconds=_parse_int_env(
+                "60",
+                "LLM_TIMEOUT_SECONDS",
+                "OPENAI_TIMEOUT_SECONDS",
+                "OPENROUTER_TIMEOUT_SECONDS",
+            ),
+            max_retries=_parse_int_env(
+                "2",
+                "LLM_MAX_RETRIES",
+                "OPENAI_MAX_RETRIES",
+                "OPENROUTER_MAX_RETRIES",
+            ),
+            prompt_version=(
+                _first_env(
+                    "LLM_PROMPT_VERSION",
+                    "OPENAI_PROMPT_VERSION",
+                    "OPENROUTER_PROMPT_VERSION",
+                )
+                or "v1"
+            ),
+        )
+
+    @property
+    def provider_label(self) -> str:
+        return self.provider_profile.provider_id
+
+    @property
+    def provider_profile(self) -> LLMProviderProfile:
+        if not self.base_url:
+            return LLMProviderProfile(
+                provider_id="openai",
+                supports_editorial_strict_schema=True,
+                editorial_api_mode="chat_completions_parse",
+            )
+        if "openrouter.ai" in self.base_url.lower():
+            return LLMProviderProfile(
+                provider_id="openrouter",
+                supports_editorial_strict_schema=True,
+                editorial_api_mode="chat_completions_json_schema",
+            )
+        return LLMProviderProfile(
+            provider_id="custom",
+            supports_editorial_strict_schema=False,
+            editorial_api_mode="unsupported",
         )
 
 
@@ -116,15 +181,17 @@ class EditorialAnalysisResult:
         return next((attempt for attempt in self.attempts if attempt.payload is not None), None)
 
 
-class OpenRouterClient:
-    def __init__(self, settings: OpenRouterSettings) -> None:
+class LLMClient:
+    def __init__(self, settings: LLMSettings) -> None:
         self.settings = settings
-        self._client = OpenAI(
-            base_url=settings.base_url,
-            api_key=settings.api_key,
-            timeout=settings.timeout_seconds,
-            max_retries=settings.max_retries,
-        )
+        client_kwargs: dict[str, Any] = {
+            "api_key": settings.api_key,
+            "timeout": settings.timeout_seconds,
+            "max_retries": settings.max_retries,
+        }
+        if settings.base_url:
+            client_kwargs["base_url"] = settings.base_url
+        self._client = OpenAI(**client_kwargs)
 
     def enrich_article(
         self, *, article_prompt: str, schema: dict[str, Any]
@@ -157,23 +224,276 @@ class OpenRouterClient:
     def analyze_editorial(
         self, *, article_prompt: str, schema: dict[str, Any]
     ) -> EditorialAnalysisResult:
-        strict_attempt = self._run_editorial_attempt(
-            article_prompt=article_prompt,
-            schema=schema,
-            mode="strict_json_schema",
-        )
-        attempts = [strict_attempt]
-        if strict_attempt.payload is not None:
-            return EditorialAnalysisResult(attempts=tuple(attempts))
-        if self._should_retry_with_fallback(strict_attempt):
-            attempts.append(
-                self._run_editorial_attempt(
-                    article_prompt=article_prompt,
-                    schema=schema,
-                    mode="fallback_json_text",
+        profile = self.settings.provider_profile
+        if not profile.supports_editorial_strict_schema:
+            return EditorialAnalysisResult(
+                attempts=(
+                    EditorialAnalysisAttempt(
+                        mode="strict_json_schema",
+                        request_accepted=False,
+                        failure_class="provider_incompatible_schema",
+                        failure_message=(
+                            f"provider {profile.provider_id!r} does not support "
+                            "editorial strict schema"
+                        ),
+                    ),
                 )
             )
-        return EditorialAnalysisResult(attempts=tuple(attempts))
+        if profile.editorial_api_mode == "chat_completions_parse":
+            return EditorialAnalysisResult(
+                attempts=(self._run_editorial_strict_attempt(article_prompt=article_prompt),)
+            )
+        if profile.editorial_api_mode == "chat_completions_json_schema":
+            return EditorialAnalysisResult(
+                attempts=(
+                    self._run_editorial_openrouter_attempt(
+                        article_prompt=article_prompt,
+                        schema=schema,
+                    ),
+                )
+            )
+        return EditorialAnalysisResult(
+            attempts=(
+                EditorialAnalysisAttempt(
+                    mode="strict_json_schema",
+                    request_accepted=False,
+                    failure_class="provider_incompatible_schema",
+                    failure_message=(
+                        f"provider {profile.provider_id!r} does not support "
+                        "editorial strict schema"
+                    ),
+                ),
+            )
+        )
+
+    def _run_editorial_strict_attempt(self, *, article_prompt: str) -> EditorialAnalysisAttempt:
+        messages = [
+            {"role": "system", "content": self._editorial_system_prompt("strict_json_schema")},
+            {"role": "user", "content": article_prompt},
+        ]
+        try:
+            response = self._client.chat.completions.parse(
+                model=self.settings.model,
+                messages=messages,
+                response_format=ArticleEditorialAnalysisPayload,
+            )
+        except BadRequestError as exc:
+            failure_class = (
+                "provider_schema_rejected"
+                if "schema" in str(exc).lower() or "response_format" in str(exc).lower()
+                else "provider_request_failed"
+            )
+            return EditorialAnalysisAttempt(
+                mode="strict_json_schema",
+                request_accepted=False,
+                failure_class=failure_class,
+                failure_message=str(exc),
+            )
+        except Exception as exc:
+            return EditorialAnalysisAttempt(
+                mode="strict_json_schema",
+                request_accepted=False,
+                failure_class="provider_request_failed",
+                failure_message=str(exc),
+            )
+
+        usage = self._normalize_usage(getattr(response, "usage", None))
+        raw_response = self._safe_dump_model(response)
+        choice = response.choices[0] if getattr(response, "choices", None) else None
+        message = getattr(choice, "message", None)
+        raw_message = self._safe_dump_model(message)
+        refusal = getattr(message, "refusal", None) if message is not None else None
+        if refusal:
+            return EditorialAnalysisAttempt(
+                mode="strict_json_schema",
+                request_accepted=True,
+                usage=usage,
+                failure_class="refusal_or_blocked",
+                failure_message=str(refusal),
+                raw_response=raw_response,
+                raw_message=raw_message,
+            )
+
+        parsed = getattr(message, "parsed", None) if message is not None else None
+        if parsed is None:
+            extracted_content, content_error = self._extract_message_content(message)
+            return EditorialAnalysisAttempt(
+                mode="strict_json_schema",
+                request_accepted=True,
+                usage=usage,
+                failure_class=content_error or "unknown_response_shape",
+                failure_message="assistant parsed payload missing",
+                raw_response=raw_response,
+                raw_message=raw_message,
+                raw_content=extracted_content,
+            )
+
+        try:
+            payload = ArticleEditorialAnalysisPayload.model_validate(
+                parsed.model_dump(mode="json") if hasattr(parsed, "model_dump") else parsed
+            )
+        except ValidationError as exc:
+            extracted_content, _ = self._extract_message_content(message)
+            return EditorialAnalysisAttempt(
+                mode="strict_json_schema",
+                request_accepted=True,
+                usage=usage,
+                failure_class="payload_validation_failed",
+                failure_message=str(exc),
+                raw_response=raw_response,
+                raw_message=raw_message,
+                raw_content=extracted_content,
+            )
+
+        parsed_json = payload.model_dump(mode="json")
+        diagnostics = build_editorial_diagnostics_from_payload(
+            payload,
+            provider_path="strict_success",
+        )
+        return EditorialAnalysisAttempt(
+            mode="strict_json_schema",
+            request_accepted=True,
+            payload=payload,
+            usage=usage,
+            raw_response=raw_response,
+            raw_message=raw_message,
+            raw_content=json.dumps(parsed_json, ensure_ascii=False),
+            parsed_json=parsed_json,
+            diagnostics=diagnostics,
+        )
+
+    def _run_editorial_openrouter_attempt(
+        self,
+        *,
+        article_prompt: str,
+        schema: dict[str, Any],
+    ) -> EditorialAnalysisAttempt:
+        messages = [
+            {"role": "system", "content": self._editorial_system_prompt("strict_json_schema")},
+            {"role": "user", "content": article_prompt},
+        ]
+        request_kwargs: dict[str, Any] = {
+            "model": self.settings.model,
+            "messages": messages,
+            "response_format": {
+                "type": "json_schema",
+                "json_schema": {
+                    "name": "article_editorial_analysis",
+                    "strict": True,
+                    "schema": schema,
+                },
+            },
+            "extra_body": {"provider": self._openrouter_provider_preferences()},
+        }
+        try:
+            response = self._client.chat.completions.create(**request_kwargs)
+        except BadRequestError as exc:
+            failure_class = (
+                "provider_schema_rejected"
+                if "schema" in str(exc).lower() or "response_format" in str(exc).lower()
+                else "provider_request_failed"
+            )
+            return EditorialAnalysisAttempt(
+                mode="strict_json_schema",
+                request_accepted=False,
+                failure_class=failure_class,
+                failure_message=str(exc),
+            )
+        except Exception as exc:
+            return EditorialAnalysisAttempt(
+                mode="strict_json_schema",
+                request_accepted=False,
+                failure_class="provider_request_failed",
+                failure_message=str(exc),
+            )
+
+        usage = self._normalize_usage(getattr(response, "usage", None))
+        raw_response = self._safe_dump_model(response)
+        choice = response.choices[0] if getattr(response, "choices", None) else None
+        message = getattr(choice, "message", None)
+        raw_message = self._safe_dump_model(message)
+        refusal = getattr(message, "refusal", None) if message is not None else None
+        if refusal:
+            return EditorialAnalysisAttempt(
+                mode="strict_json_schema",
+                request_accepted=True,
+                usage=usage,
+                failure_class="refusal_or_blocked",
+                failure_message=str(refusal),
+                raw_response=raw_response,
+                raw_message=raw_message,
+            )
+
+        extracted_content, content_error = self._extract_message_content(message)
+        if content_error is not None or extracted_content is None:
+            return EditorialAnalysisAttempt(
+                mode="strict_json_schema",
+                request_accepted=True,
+                usage=usage,
+                failure_class=content_error or "unknown_response_shape",
+                failure_message="assistant content missing or unusable",
+                raw_response=raw_response,
+                raw_message=raw_message,
+            )
+        try:
+            parsed_json = json.loads(extracted_content)
+        except json.JSONDecodeError as exc:
+            cleaned = self._extract_json_block(extracted_content)
+            if cleaned is None:
+                return EditorialAnalysisAttempt(
+                    mode="strict_json_schema",
+                    request_accepted=True,
+                    usage=usage,
+                    failure_class="non_json_content",
+                    failure_message=str(exc),
+                    raw_response=raw_response,
+                    raw_message=raw_message,
+                    raw_content=extracted_content,
+                )
+            try:
+                parsed_json = json.loads(cleaned)
+                extracted_content = cleaned
+            except json.JSONDecodeError as retry_exc:
+                return EditorialAnalysisAttempt(
+                    mode="strict_json_schema",
+                    request_accepted=True,
+                    usage=usage,
+                    failure_class="json_parse_failed",
+                    failure_message=str(retry_exc),
+                    raw_response=raw_response,
+                    raw_message=raw_message,
+                    raw_content=extracted_content,
+                )
+        try:
+            payload = ArticleEditorialAnalysisPayload.model_validate(parsed_json)
+        except ValidationError as exc:
+            return EditorialAnalysisAttempt(
+                mode="strict_json_schema",
+                request_accepted=True,
+                usage=usage,
+                failure_class="payload_validation_failed",
+                failure_message=str(exc),
+                raw_response=raw_response,
+                raw_message=raw_message,
+                raw_content=extracted_content,
+                parsed_json=parsed_json,
+            )
+
+        diagnostics = build_editorial_diagnostics_from_payload(
+            payload,
+            provider_path="strict_success",
+        )
+        return EditorialAnalysisAttempt(
+            mode="strict_json_schema",
+            request_accepted=True,
+            payload=payload,
+            usage=usage,
+            raw_response=raw_response,
+            raw_message=raw_message,
+            raw_content=extracted_content,
+            parsed_json=parsed_json,
+            diagnostics=diagnostics,
+        )
 
     def _run_editorial_attempt(
         self,
@@ -419,6 +739,15 @@ class OpenRouterClient:
             return value.model_dump(mode="json")
         return value
 
+    def _openrouter_provider_preferences(self) -> dict[str, Any]:
+        preferences: dict[str, Any] = {
+            "require_parameters": True,
+            "allow_fallbacks": False,
+        }
+        if self.settings.model.startswith("openai/"):
+            preferences["only"] = ["openai"]
+        return preferences
+
 
 def build_prompt(
     *,
@@ -457,11 +786,10 @@ def build_editorial_analysis_prompt(
 ) -> str:
     article_body = body[:6000]
     return (
-        "Analyze the following article and return one portable raw JSON object "
+        "Analyze the following article and return one canonical JSON object "
         "for editorial analysis.\n"
-        "Use the preferred keys when possible, but if the article is straightforward "
-        "or the exact taxonomy feels forced, stay conservative and still return "
-        "valid JSON.\n\n"
+        "Use only the canonical schema fields. Do not return helper fields such as "
+        "`ideological_bias_framing`, `tone_dimensions`, `notes`, or `uncertainty_reason`.\n\n"
         "ARTICLE_METADATA:\n"
         f"- source: {source}\n"
         f"- section: {section}\n"
@@ -480,168 +808,57 @@ def editorial_debug_artifact_dir() -> Path:
 
 
 def enrichment_json_schema() -> dict[str, Any]:
-    return {
-        "type": "object",
-        "additionalProperties": False,
-        "properties": {
-            "article_type": {"type": "string"},
-            "article_type_confidence": {"type": "number"},
-            "is_event_coverage": {"type": "boolean"},
-            "language": {"type": "string"},
-            "primary_tag_code": {"type": ["string", "null"]},
-            "secondary_tag_codes": {"type": "array", "items": {"type": "string"}},
-            "entities": {
-                "type": "array",
-                "items": {
-                    "type": "object",
-                    "additionalProperties": False,
-                    "properties": {
-                        "entity_type": {"type": "string"},
-                        "canonical_name": {"type": "string"},
-                        "aliases": {"type": "array", "items": {"type": "string"}},
-                        "relevance_score": {"type": "number"},
-                        "role_hint": {"type": ["string", "null"]},
-                    },
-                    "required": [
-                        "entity_type",
-                        "canonical_name",
-                        "aliases",
-                        "relevance_score",
-                        "role_hint",
-                    ],
-                },
-            },
-            "key_phrases": {"type": "array", "items": {"type": "string"}},
-            "claims": {"type": "array", "items": {"type": "string"}},
-        },
-        "required": [
-            "article_type",
-            "article_type_confidence",
-            "is_event_coverage",
-            "language",
-            "primary_tag_code",
-            "secondary_tag_codes",
-            "entities",
-            "key_phrases",
-            "claims",
-        ],
-    }
+    return build_enrichment_json_schema()
 
 
 def editorial_analysis_json_schema() -> dict[str, Any]:
-    def bounded_string(max_length: int = 1200) -> dict[str, Any]:
-        return {"type": "string", "maxLength": max_length}
+    return build_editorial_analysis_json_schema()
 
-    return {
-        "type": "object",
-        "additionalProperties": True,
-        "properties": {
-            "article_type": bounded_string(120),
-            "article_type_confidence": {
-                "anyOf": [
-                    {"type": "number", "minimum": 0.0, "maximum": 1.0},
-                    bounded_string(40),
-                    {"type": "object", "additionalProperties": True},
-                    {"type": "null"},
-                ]
-            },
-            "bias_label": bounded_string(80),
-            "ideological_bias_framing": {
-                "anyOf": [
-                    bounded_string(240),
-                    {"type": "object", "additionalProperties": True},
-                    {"type": "null"},
-                ]
-            },
-            "bias_score": {
-                "anyOf": [{"type": "number", "minimum": -1.0, "maximum": 1.0}, bounded_string(40)]
-            },
-            "bias_confidence": {
-                "anyOf": [
-                    {"type": "number", "minimum": 0.0, "maximum": 1.0},
-                    bounded_string(40),
-                    {"type": "object", "additionalProperties": True},
-                    {"type": "null"},
-                ]
-            },
-            "confidence": {
-                "anyOf": [
-                    {"type": "number", "minimum": 0.0, "maximum": 1.0},
-                    bounded_string(40),
-                    {"type": "object", "additionalProperties": True},
-                    {"type": "null"},
-                ]
-            },
-            "tone_emotional": bounded_string(80),
-            "tone_target": bounded_string(80),
-            "opinionatedness": bounded_string(80),
-            "sensationalism": bounded_string(80),
-            "rhetorical_certainty": bounded_string(80),
-            "tone_dimensions": {
-                "type": "object",
-                "additionalProperties": True,
-                "properties": {
-                    "emotionality": bounded_string(80),
-                    "target": bounded_string(80),
-                    "polarity": bounded_string(80),
-                    "opinionatedness": bounded_string(80),
-                    "style": bounded_string(80),
-                    "sensationalism": bounded_string(80),
-                    "rhetorical_certainty": bounded_string(80),
-                    "certainty": bounded_string(80),
-                },
-            },
-            "framing_devices": {
-                "type": "array",
-                "maxItems": 20,
-                "items": {
-                    "anyOf": [
-                        {"type": "string", "maxLength": 240},
-                        {"type": "object", "additionalProperties": True},
-                    ]
-                },
-            },
-            "evidence_spans": {
-                "type": "array",
-                "maxItems": 20,
-                "items": {
-                    "anyOf": [
-                        bounded_string(400),
-                        {
-                            "type": "object",
-                            "additionalProperties": True,
-                            "properties": {
-                                "type": bounded_string(40),
-                                "location": bounded_string(40),
-                                "text": bounded_string(400),
-                                "note": bounded_string(240),
-                                "explanation": bounded_string(240),
-                            },
-                        },
-                    ]
-                },
-            },
-            "rationale": {
-                "anyOf": [
-                    bounded_string(1200),
-                    {"type": "object", "additionalProperties": True},
-                    {"type": "null"},
-                ]
-            },
-            "notes": {
-                "anyOf": [
-                    bounded_string(500),
-                    {"type": "object", "additionalProperties": True},
-                    {"type": "null"},
-                ]
-            },
-            "uncertainty_reason": {
-                "anyOf": [
-                    bounded_string(500),
-                    {"type": "object", "additionalProperties": True},
-                    {"type": "null"},
-                ]
-            },
-        },
-        "required": ["article_type", "framing_devices", "evidence_spans", "rationale"],
-    }
+
+def editorial_analysis_raw_json_schema() -> dict[str, Any]:
+    return build_editorial_analysis_raw_json_schema()
+
+
+def _first_env(*names: str) -> str:
+    for name in names:
+        value = os.getenv(name, "").strip()
+        if value:
+            return value
+    return ""
+
+
+def _normalized_base_url(value: str) -> str | None:
+    cleaned = value.strip()
+    if not cleaned or cleaned.lower() in {"none", "null", "default", "openai"}:
+        return None
+    return cleaned
+
+
+def _resolve_base_url() -> str | None:
+    for name in ("LLM_BASE_URL", "OPENAI_BASE_URL", "OPENROUTER_BASE_URL"):
+        if name in os.environ:
+            return _normalized_base_url(os.environ.get(name, ""))
+    return None
+
+
+def _parse_int_env(default: str, *names: str) -> int:
+    raw = _first_env(*names)
+    if not raw:
+        return int(default)
+    try:
+        return int(raw)
+    except ValueError:
+        return int(default)
+
+
+def _resolve_api_key(*, base_url: str | None) -> str:
+    generic_key = _first_env("LLM_API_KEY")
+    if generic_key:
+        return generic_key
+    if base_url and "openrouter.ai" in base_url.lower():
+        return _first_env("OPENROUTER_API_KEY", "OPENAI_API_KEY")
+    return _first_env("OPENAI_API_KEY", "OPENROUTER_API_KEY")
+
+
+OpenRouterSettings = LLMSettings
+OpenRouterClient = LLMClient

@@ -21,7 +21,7 @@ def test_editorial_replay_corpus_matches_current_expectations() -> None:
     assert by_id["travel-price-roundup-limited"].summary_bucket == "limited"
     assert by_id["procedural-politics-mapping-loss"].summary_bucket == "mapping_loss"
     assert by_id["provider-missing-political-news"].summary_bucket == "mapping_loss"
-    assert by_id["dict-framing-normalization-error"].mode == "normalization_error"
+    assert by_id["dict-framing-normalization-error"].editorial_applicability == "out_of_domain"
 
 
 def test_editorial_replay_report_includes_operator_facing_buckets() -> None:

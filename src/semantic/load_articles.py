@@ -4,7 +4,7 @@ from sqlalchemy import Select, select
 from sqlalchemy.orm import Session
 
 from src.persistence.db import create_postgres_engine, make_session
-from src.persistence.orm_models import ArticleORM
+from src.persistence.orm import ArticleORM
 from src.semantic.contracts import SemanticArticle
 
 

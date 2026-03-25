@@ -13,7 +13,7 @@ UV_RUN := $(UV) run --project $(REPO_ROOT)
 RUFF := $(UV_RUN) ruff
 PRE_COMMIT := $(UV_RUN) pre-commit
 PYTHON := $(UV_RUN) python
-LOCAL_TZ ?= Europe/Madrid
+LOCAL_TZ ?= UTC
 DATE ?= $(if $(RUN_DATE),$(RUN_DATE),$(shell TZ=$(LOCAL_TZ) date +%F))
 SOURCES ?= 20minutos abc eldiario elmundo elpais lavanguardia
 SOURCE ?=
@@ -36,7 +36,7 @@ LOCAL_DB_USER ?= spain_news
 LOCAL_DB_PASSWORD ?= spain_news_dev
 LOCAL_DATABASE_URL := postgresql+psycopg://$(LOCAL_DB_USER):$(LOCAL_DB_PASSWORD)@$(LOCAL_DB_HOST):$(LOCAL_DB_PORT)/$(LOCAL_DB_NAME)
 
-.PHONY: help print-app-root preflight sync pre-commit lint check test docs-build docs-serve smoke run-source run-source-persist run-all run-all-persist api analysis-db-init enrich-articles analyze-editorial build-story-clusters story-cluster-report semantic-db-init semantic-sync semantic-project semantic-neighbors semantic-build semantic-smoke scheduler-once scheduler-dry-run stories-refresh-once explorer-refresh-once status tail-log verify-output verify-db db-url db-up db-down db-logs db-psql db-check clean-state
+.PHONY: help print-app-root preflight sync pre-commit lint check test docs-build docs-serve smoke run-source run-source-persist run-all run-all-persist api analysis-db-init enrich-articles analyze-editorial analyze-editorial-failed build-story-clusters story-cluster-report semantic-db-init semantic-sync semantic-project semantic-neighbors semantic-build semantic-smoke scheduler-once scheduler-dry-run stories-refresh-once explorer-refresh-once full-refresh-once status tail-log verify-output verify-db db-url db-up db-down db-logs db-psql db-check clean-state
 
 help:
 	@printf '%s\n' \
@@ -62,6 +62,7 @@ help:
 	  '  make analysis-db-init DATABASE_URL=...           Create analysis/enrichment tables + seed taxonomy' \
 	  '  make enrich-articles DATABASE_URL=...            Enrich recent persisted articles (OpenRouter optional)' \
 	  '  make analyze-editorial DATABASE_URL=...          Run dedicated LLM editorial analysis for recent articles' \
+	  '  make analyze-editorial-failed DATABASE_URL=...   Re-run failed editorial analysis for recent articles' \
 	  '  make build-story-clusters DATABASE_URL=...       Rebuild bounded same-story clusters' \
 	  '  make story-cluster-report DATABASE_URL=...       Print recent cluster summaries' \
 	  '  make semantic-db-init DATABASE_URL=...           Create pgvector extension + semantic tables' \
@@ -76,6 +77,7 @@ help:
 	  '  make scheduler-once           Run the LEGACY scrape-only wrapper once (prefer stories-refresh-once)' \
 	  '  make stories-refresh-once     Run scrape + analysis + clustering refresh once' \
 	  '  make explorer-refresh-once    Run semantic explorer refresh once' \
+	  '  make full-refresh-once        Run stories refresh, then explorer refresh' \
 	  '  make status                   Show LEGACY scheduler state files' \
 	  '  make tail-log                 Tail LEGACY scheduler log' \
 	  '  make verify-output            Check expected JSON/metrics files for DATE' \
@@ -105,10 +107,10 @@ preflight:
 	mkdir -p "$(LOCK_DIR)" "$(LOG_DIR)" "$(STATE_DIR)" "data"; \
 	printf 'app_root=%s\n' "$(APP_ROOT)"; \
 	command -v "$(UV)" >/dev/null || { echo 'uv missing'; exit 1; }; \
-	command -v flock >/dev/null || { echo 'flock missing'; exit 1; }; \
 	[[ -f "$(APP_ROOT)/src/main.py" ]] || { echo 'src/main.py missing under repo root'; exit 1; }; \
 	if [[ -z "$(DATABASE_URL)" ]]; then echo 'warning: DATABASE_URL not set; persist/api targets will fail until you provide it'; fi; \
 	if ! command -v docker >/dev/null 2>&1; then echo 'warning: docker not found; host-based mode is the intended default'; fi; \
+	if ! command -v flock >/dev/null 2>&1; then echo 'warning: flock not found; scheduler wrappers that rely on file locks may not work on this host'; fi; \
 	PYTHONPATH="$(APP_ROOT):$${PYTHONPATH:-}" $(PYTHON) -m src.main --help >/dev/null; \
 	echo 'python entrypoint ok'
 
@@ -189,6 +191,11 @@ analyze-editorial: preflight
 	[[ -n "$(DATABASE_URL)" ]] || { echo 'DATABASE_URL is required for analyze-editorial'; exit 1; }; \
 	cd "$(APP_ROOT)" && PYTHONPATH="$(APP_ROOT):$${PYTHONPATH:-}" $(PYTHON) scripts/analyze_editorial.py --db-url "$(DATABASE_URL)" --days-back "$${DAYS_BACK:-2}" --limit "$${LIMIT:-100}" $${REPROCESS:+--reprocess}
 
+analyze-editorial-failed: preflight
+	@set -euo pipefail; \
+	[[ -n "$(DATABASE_URL)" ]] || { echo 'DATABASE_URL is required for analyze-editorial-failed'; exit 1; }; \
+	cd "$(APP_ROOT)" && PYTHONPATH="$(APP_ROOT):$${PYTHONPATH:-}" $(PYTHON) scripts/analyze_editorial.py --db-url "$(DATABASE_URL)" --days-back "$${DAYS_BACK:-3}" --limit "$${LIMIT:-50}" --failed-only
+
 build-story-clusters: preflight
 	@set -euo pipefail; \
 	[[ -n "$(DATABASE_URL)" ]] || { echo 'DATABASE_URL is required for build-story-clusters'; exit 1; }; \
@@ -242,6 +249,10 @@ stories-refresh-once:
 
 explorer-refresh-once:
 	@DATABASE_URL="$(DATABASE_URL)" OPENAI_API_KEY="$(OPENAI_API_KEY)" UV="$(UV)" bash scripts/run_explorer_refresh.sh
+
+full-refresh-once:
+	@$(MAKE) --no-print-directory stories-refresh-once DATABASE_URL="$(DATABASE_URL)" UV="$(UV)"
+	@$(MAKE) --no-print-directory explorer-refresh-once DATABASE_URL="$(DATABASE_URL)" OPENAI_API_KEY="$(OPENAI_API_KEY)" UV="$(UV)"
 
 status:
 	@set -euo pipefail; \

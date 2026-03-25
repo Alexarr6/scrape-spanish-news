@@ -347,7 +347,6 @@
     "unclear_reasons": [
       "limited_applicability",
       "mapping_loss",
-      "provider_missing",
       "weak_signal_abstain"
     ],
     "final_payload": {
@@ -385,10 +384,10 @@
       "article_type": "weak_signal_abstain",
       "bias": "mapping_loss",
       "tone_emotional": "resolved",
-      "tone_target": "provider_missing",
-      "opinionatedness": "provider_missing",
+      "tone_target": "mapping_loss",
+      "opinionatedness": "mapping_loss",
       "sensationalism": "resolved",
-      "rhetorical_certainty": "provider_missing",
+      "rhetorical_certainty": "mapping_loss",
       "framing": "mapping_loss"
     },
     "preserved_signal_groups": {

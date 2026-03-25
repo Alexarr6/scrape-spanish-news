@@ -1,10 +1,10 @@
 {
   "canonical_run_id": "20260314-1212-8ff9",
-  "canonical_fixture_root": "/home/node/.openclaw/workspace/repos/spain-news-bias-scraper/tests/fixtures/evidence/20260314-1212-8ff9",
-  "repository_root": "/home/node/.openclaw/workspace/repos/spain-news-bias-scraper",
+  "canonical_fixture_root": "/workspace/scrape-spanish-news/tests/fixtures/evidence/20260314-1212-8ff9",
+  "repository_root": "/workspace/scrape-spanish-news",
   "companion_docs_review": {
     "run_id": "20260314-1250-edr1",
-    "fixture_root": "/home/node/.openclaw/workspace/repos/spain-news-bias-scraper/tests/fixtures/evidence/20260314-1212-8ff9",
+    "fixture_root": "/workspace/scrape-spanish-news/tests/fixtures/evidence/20260314-1212-8ff9",
     "policy": "docs-review-only"
   },
   "verify_commands": [

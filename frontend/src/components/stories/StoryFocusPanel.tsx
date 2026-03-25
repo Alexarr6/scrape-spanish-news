@@ -1,10 +1,13 @@
 import { clampText, formatDate, formatSimilarity } from '../../lib/format'
 import { buildSemanticExplorerHref } from '../../lib/navigation'
 import type { ExplorerArticleDetail, StoryClusterDetail, StoryClusterMemberItem } from '../../lib/types'
+import { EditorialAnalysisCard } from '../editorial/EditorialAnalysisCard'
+import { EditorialStatusBadge } from '../editorial/EditorialStatusBadge'
 import { SectionDivider } from '../layout/SectionDivider'
 import { ErrorState } from '../system/ErrorState'
 import { LoadingState } from '../system/LoadingState'
 import { CoverageBar } from './CoverageBar'
+import { EditorialLensSection } from './EditorialLensSection'
 
 type Props = {
   detail: StoryClusterDetail | null
@@ -98,6 +101,12 @@ export function StoryFocusPanel({
         <CoverageBar members={detail.members} />
       </section>
 
+      <SectionDivider label="Editorial lens" />
+
+      <section className="focus-section">
+        <EditorialLensSection editorialSummary={detail.editorial_summary} onSelectArticle={(articleId) => onSelectArticle(articleId)} />
+      </section>
+
       <SectionDivider label="Articles by source" />
 
       {/* Section 3 or 4: Article list or article detail */}
@@ -109,6 +118,7 @@ export function StoryFocusPanel({
             error={articleError}
             detail={detail}
             onBack={() => onSelectArticle(null)}
+            onSelectArticle={onSelectArticle}
           />
         ) : (
           <SourceGroupList
@@ -162,6 +172,20 @@ function SourceGroupList({
                     {clampText(member.summary, '')}
                   </p>
                 )}
+                {member.editorial_preview && (
+                  <div className="member-card-badges">
+                    <span className="badge">{member.editorial_preview.article_type.replace(/_/g, ' ')}</span>
+                    {member.editorial_preview.editorial_applicability !== 'full' && (
+                      <EditorialStatusBadge kind={member.editorial_preview.editorial_applicability} compact />
+                    )}
+                    {member.editorial_preview.review_flags.low_confidence && (
+                      <EditorialStatusBadge kind="low_confidence" compact />
+                    )}
+                    {!member.editorial_preview.review_flags.low_confidence && member.editorial_preview.review_flags.needs_review && (
+                      <EditorialStatusBadge kind="needs_review" compact />
+                    )}
+                  </div>
+                )}
               </button>
             ))}
           </div>
@@ -178,12 +202,14 @@ function ArticleDetailSection({
   error,
   detail,
   onBack,
+  onSelectArticle,
 }: {
   article: ExplorerArticleDetail | null
   loading: boolean
   error: string | null
   detail: StoryClusterDetail
   onBack: () => void
+  onSelectArticle: (articleId: number | null) => void
 }) {
   return (
     <div className="article-detail">
@@ -233,6 +259,22 @@ function ArticleDetailSection({
           </div>
 
           <div style={{ marginTop: 'var(--space-2)' }}>
+            <EditorialAnalysisCard
+              editorial={article.editorial}
+              variant="full"
+              clusterId={article.semantic_summary.cluster_id}
+            />
+          </div>
+
+          <div style={{ marginTop: 'var(--space-2)' }}>
+            <div className="section-divider-label">Cluster membership</div>
+            <ClusterMembershipDiagnostics
+              member={detail.members.find((item) => item.article_id === article.article.article_id) ?? null}
+              onSelectArticle={onSelectArticle}
+            />
+          </div>
+
+          <div style={{ marginTop: 'var(--space-2)' }}>
             <div className="section-divider-label">Semantic context</div>
             <div className="article-detail-metrics">
               <MetricItem label="Cluster" value={article.semantic_summary.cluster_id == null ? '—' : `#${article.semantic_summary.cluster_id}`} />
@@ -263,6 +305,55 @@ function ArticleDetailSection({
             </div>
           )}
         </>
+      )}
+    </div>
+  )
+}
+
+function ClusterMembershipDiagnostics({
+  member,
+  onSelectArticle,
+}: {
+  member: StoryClusterMemberItem | null
+  onSelectArticle: (articleId: number | null) => void
+}) {
+  const diagnostics = member?.membership_diagnostics
+  if (!member || !diagnostics) {
+    return (
+      <p className="editorial-empty-copy">
+        Cluster membership diagnostics are not available for this article.
+      </p>
+    )
+  }
+
+  return (
+    <div className="context-cluster">
+      <p className="context-cluster-meta">
+        Why this belongs here: {diagnostics.support_edge_count} supporting edge
+        {diagnostics.support_edge_count === 1 ? '' : 's'} with best score {diagnostics.best_support_score.toFixed(2)}
+        {diagnostics.mean_support_score > 0 ? ` and mean support ${diagnostics.mean_support_score.toFixed(2)}` : ''}.
+      </p>
+      <div className="context-metrics">
+        <MetricItem label="Membership" value={formatSimilarity(member.membership_score)} />
+        <MetricItem label="Support edges" value={String(diagnostics.support_edge_count)} />
+        <MetricItem label="Best support" value={diagnostics.best_support_score.toFixed(2)} />
+        <MetricItem label="Risky bridge" value={diagnostics.risky_bridge_support ? 'Yes' : 'No'} />
+      </div>
+      <div className="editorial-badge-row editorial-badge-row-wrap">
+        {diagnostics.accepted_via_guarded_merge && <span className="badge muted">Guarded merge</span>}
+        {diagnostics.risky_bridge_support && <EditorialStatusBadge kind="needs_review" compact>bridge risk</EditorialStatusBadge>}
+        {diagnostics.penalties.map((penalty) => (
+          <span key={penalty} className="badge muted">{penalty.replace(/_/g, ' ')}</span>
+        ))}
+      </div>
+      {diagnostics.supporting_article_ids.length > 0 && (
+        <div className="editorial-badge-row editorial-badge-row-wrap" style={{ marginTop: 'var(--space-2)' }}>
+          {diagnostics.supporting_article_ids.slice(0, 4).map((articleId) => (
+            <button key={articleId} type="button" className="btn-text" onClick={() => onSelectArticle(articleId)}>
+              Support article {articleId}
+            </button>
+          ))}
+        </div>
       )}
     </div>
   )

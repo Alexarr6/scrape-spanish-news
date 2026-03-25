@@ -20,7 +20,7 @@ Required by semantic embedding sync.
 Override the `uv` binary path for scheduler runs.
 
 ### `LOCAL_TZ`
-Controls the local run date used by scheduler output naming. Defaults to `Europe/Madrid`.
+Controls the default scrape date timezone used by Makefile date expansion. Defaults to `UTC` so it matches the CLI date contract.
 
 ### `SCHEDULER_RETRY_DELAY_SECONDS`
 Delay between retries in `scripts/run_scheduled.sh`.

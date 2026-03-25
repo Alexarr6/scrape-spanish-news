@@ -4,8 +4,8 @@ from sqlalchemy import Select, select
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
-from src.persistence.contracts import ArticleCreate, ArticleRead, ArticleUpdate, IngestResult
-from src.persistence.orm_models import ArticleORM
+from src.persistence.core import ArticleCreate, ArticleRead, ArticleUpdate, IngestResult
+from src.persistence.orm import ArticleORM
 
 
 class ArticleCRUD:

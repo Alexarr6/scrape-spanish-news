@@ -10,7 +10,7 @@ from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.pool import StaticPool
 
 from src.api.v1.articles import get_session, router
-from src.persistence.orm_models import Base
+from src.persistence.orm import Base
 
 
 class TrackingSession(Session):

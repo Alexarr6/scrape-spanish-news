@@ -32,8 +32,10 @@ That design keeps the heuristic path as the boring fallback instead of making th
 2. compares candidate pairs within a bounded publication-distance window
 3. computes a weighted story similarity score
 4. rejects pairs via hard blocks or threshold failure
-5. converts accepted edges into connected components
+5. computes the raw accepted-edge graph and then applies a more conservative guarded closure step
 6. rewrites persisted story-cluster, member, and cluster-entity tables
+
+Important nuance: `accepted_pair_count` is **not** the same thing as “pairs that will necessarily reduce final cluster count”. The guarded closure logic first builds base components from `strong` accepted edges and only uses `medium` accepted edges for bounded singleton attachment. That means lower thresholds can increase accepted pairs materially while final `cluster_count` barely moves.
 
 ## Pair scoring
 

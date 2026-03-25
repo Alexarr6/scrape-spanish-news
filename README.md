@@ -17,6 +17,24 @@ This README is the operator front door. It covers the commands you actually run 
 
 The canonical workflow is `uv` from repo root.
 
+### Python environment with `uv`
+
+If you want the explicit environment flow instead of going through `make`, use:
+
+```bash
+uv sync --dev
+uv run python -m src.main --help
+uv run pytest
+```
+
+Notes:
+
+- `uv sync --dev` creates or updates the project-managed virtual environment from `pyproject.toml` and `uv.lock`
+- you do **not** need to activate `.venv` manually for normal repo work; prefer `uv run ...`
+- `make sync`, `make test`, `make lint`, and the other repo targets are thin wrappers around this `uv` workflow
+
+The shortest repo bootstrap remains:
+
 ```bash
 make sync
 make preflight
@@ -98,8 +116,8 @@ make docs-build
 
 ```bash
 make smoke SOURCE=elpais
-make run-source SOURCE=elpais DATE=$(date +%F)
-make run-all DATE=$(date +%F)
+make run-source SOURCE=elpais DATE=$(TZ=UTC date +%F)
+make run-all DATE=$(TZ=UTC date +%F)
 ```
 
 Use these when you want JSON output only, with no database writes.
@@ -108,8 +126,8 @@ Use these when you want JSON output only, with no database writes.
 
 ```bash
 export DATABASE_URL='postgresql+psycopg://user:pass@host:5432/dbname'
-make run-source-persist SOURCE=elpais OUT_PREFIX=manual DATE=$(date +%F)
-make run-all-persist DATE=$(date +%F)
+make run-source-persist SOURCE=elpais OUT_PREFIX=manual DATE=$(TZ=UTC date +%F)
+make run-all-persist DATE=$(TZ=UTC date +%F)
 make verify-db
 ```
 
@@ -187,7 +205,8 @@ export DATABASE_URL='postgresql+psycopg://user:pass@host:5432/dbname'
 export OPENAI_API_KEY='sk-...'
 make stories-refresh-once
 make explorer-refresh-once
-make verify-output DATE=$(date +%F) OUT_PREFIX=sched
+make full-refresh-once
+make verify-output DATE=$(TZ=UTC date +%F) OUT_PREFIX=sched
 make verify-db
 ```
 
@@ -195,19 +214,36 @@ Entrypoints:
 - `bash scripts/run_scheduled.sh` — deprecated legacy scrape + verify wrapper; does **not** run analysis or clustering
 - `bash scripts/run_stories_refresh.sh` — scrape + persist + analysis + clustering
 - `bash scripts/run_explorer_refresh.sh` — semantic sync + projection + explorer export
+- `make full-refresh-once` — one-shot operator command that runs the stories refresh first, then the explorer refresh
+
+Stories and Explorer are intentionally separate pipelines. That split is fine, but it means fresh story-cluster members can briefly exist in Stories before Explorer catches up. The explorer refresh now compensates more aggressively: it prioritizes embeddable members of qualifying story clusters (`story_clusters.article_count >= 2`) during semantic sync, completes those clusters before plain-recency backlog rows, and keeps complete qualifying clusters together in bounded Explorer exports. Rows with too little text still cannot embed, so non-embeddable members remain uncovered by design.
 
 The new wrappers keep separate lock, log, and state files under `var/` and are the right surface for recurring 6-hour jobs. If you want fresh story clusters, using `run_scheduled.sh` is the wrong hammer.
 
-Default stories wrapper tuning:
-- `DAYS_BACK=3`
-- `ENRICH_LIMIT=300`
-- `CLUSTER_LIMIT=1000`
+Shared wrapper defaults:
+- `REFRESH_DAYS_BACK=3` — shared recency window for both Stories and Explorer
+- `SURFACE_LIMIT=500` — shared surfaced product budget
+
+Stories wrapper defaults:
+- `DAYS_BACK=${REFRESH_DAYS_BACK:-3}`
+- `CLUSTER_LIMIT=${SURFACE_LIMIT:-500}`
+- `ENRICH_LIMIT=max(CLUSTER_LIMIT * 2, SURFACE_LIMIT)`
 - `SCORE_THRESHOLD=0.45`
+
+Explorer wrapper defaults:
+- `DAYS_BACK=${REFRESH_DAYS_BACK:-3}`
+- `SEMANTIC_BUILD_LIMIT=${SURFACE_LIMIT:-500}`
+- `SEMANTIC_LIMIT=250`
+
+That lower Explorer `SEMANTIC_LIMIT` is intentional. Semantic sync burns embedding calls, so the recent semantic catch-up cap stays lower than the broader surfaced product budget instead of pretending both pipelines should spend the same.
+
+There is still a separate score-threshold mismatch worth knowing about: the stories wrapper defaults `SCORE_THRESHOLD=0.45`, while raw `make build-story-clusters` still defaults to `0.68`. That is documented here on purpose; this change does not widen scope by rewriting clustering policy.
 
 You can override these per run, for example:
 
 ```bash
-ENRICH_LIMIT=400 CLUSTER_LIMIT=1200 bash scripts/run_stories_refresh.sh
+REFRESH_DAYS_BACK=2 SURFACE_LIMIT=400 bash scripts/run_stories_refresh.sh
+SEMANTIC_LIMIT=200 SURFACE_LIMIT=400 bash scripts/run_explorer_refresh.sh
 ```
 
 ### Optional local Postgres via Docker
@@ -239,7 +275,7 @@ Use this if you just want to prove the repo is alive.
 
 ```bash
 export DATABASE_URL='postgresql+psycopg://user:pass@host:5432/dbname'
-make run-all-persist DATE=$(date +%F)
+make run-all-persist DATE=$(TZ=UTC date +%F)
 make verify-db
 ```
 
@@ -298,6 +334,18 @@ export DATABASE_URL='postgresql+psycopg://user:pass@host:5432/dbname'
 export OPENAI_API_KEY='sk-...'
 make explorer-refresh-once
 ```
+
+This wrapper now passes cluster-aware semantic priority flags into `scripts/semantic_sync.py`, so embeddable members of qualifying story clusters (`story_clusters.article_count >= 2`) are covered ahead of plain-recency backlog rows.
+
+### 8) Run the full stories + explorer chain once
+
+```bash
+export DATABASE_URL='postgresql+psycopg://user:pass@host:5432/dbname'
+export OPENAI_API_KEY='sk-...'
+make full-refresh-once
+```
+
+Use this when you want the obvious do-the-whole-thing command instead of remembering that Stories and Explorer are separate jobs.
 
 ## Where outputs go
 

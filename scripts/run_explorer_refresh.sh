@@ -4,11 +4,11 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 UV="${UV:-${HOME}/.local/bin/uv}"
-DAYS_BACK="${DAYS_BACK:-3}"
+DAYS_BACK="${DAYS_BACK:-${REFRESH_DAYS_BACK:-3}}"
 EMBEDDING_MODEL="${EMBEDDING_MODEL:-text-embedding-3-large}"
 PROJECTION_SET="${PROJECTION_SET:-pca_3d_latest}"
-SEMANTIC_LIMIT="${SEMANTIC_LIMIT:-100}"
-SEMANTIC_BUILD_LIMIT="${SEMANTIC_BUILD_LIMIT:-500}"
+SEMANTIC_LIMIT="${SEMANTIC_LIMIT:-250}"
+SEMANTIC_BUILD_LIMIT="${SEMANTIC_BUILD_LIMIT:-${SURFACE_LIMIT:-500}}"
 VAR_ROOT="$REPO_ROOT/var"
 LOCK_DIR="$VAR_ROOT/lock"
 LOG_DIR="$VAR_ROOT/log"
@@ -97,7 +97,7 @@ run_step semantic-sync \
     UV="$UV" \
     LIMIT="$SEMANTIC_LIMIT" \
     OPENAI_API_KEY="$OPENAI_API_KEY" \
-    SEMANTIC_ARGS="--embedding-model $EMBEDDING_MODEL --days-back $DAYS_BACK"
+    SEMANTIC_ARGS="--embedding-model $EMBEDDING_MODEL --days-back $DAYS_BACK --prioritize-story-members --priority-story-cluster-min-size 2"
 
 run_step semantic-project \
   make --no-print-directory -C "$REPO_ROOT" semantic-project \

@@ -10,11 +10,13 @@ import type {
   ExplorerPoint,
   ExplorerPointsResponse,
   ExplorerQuery,
+  ExplorerVisualMode,
   LoadState,
 } from '../lib/types'
 
 export function useExplorerData(
   query: ExplorerQuery,
+  visualMode: ExplorerVisualMode,
   selectedArticleId: number | null,
   setSelectedArticleId: (articleId: number | null) => void,
 ) {
@@ -59,7 +61,7 @@ export function useExplorerData(
   useEffect(() => {
     let cancelled = false
     setPointsState((current) => ({ ...current, loading: true, error: null }))
-    fetchExplorerPoints(query)
+    fetchExplorerPoints(query, visualMode)
       .then((data) => {
         if (cancelled) return
         setPointsState({ data, loading: false, error: null })
@@ -83,7 +85,7 @@ export function useExplorerData(
     return () => {
       cancelled = true
     }
-  }, [query, selectedArticleId])
+  }, [query, visualMode, selectedArticleId, setSelectedArticleId])
 
   useEffect(() => {
     if (selectedArticleId == null) {
