@@ -1188,12 +1188,15 @@ class ClusterPipeline:
     ) -> tuple[list[list[int]], dict[int, dict[str, object]]]:
         strong_adjacency: dict[int, dict[int, StoryClusterMemberReason]] = defaultdict(dict)
         medium_adjacency: dict[int, dict[int, StoryClusterMemberReason]] = defaultdict(dict)
+        raw_adjacency: dict[int, dict[int, StoryClusterMemberReason]] = defaultdict(dict)
         for left, right, reason in sorted(
             accepted_edges, key=lambda item: item[2].score, reverse=True
         ):
             edge_class = self._classify_closure_edge(reason)
             if edge_class == "discard":
                 continue
+            raw_adjacency[left][right] = reason
+            raw_adjacency[right][left] = reason
             target = strong_adjacency if edge_class == "strong" else medium_adjacency
             target[left][right] = reason
             target[right][left] = reason
@@ -1242,6 +1245,13 @@ class ClusterPipeline:
                     )
             components.append(cluster)
 
+        self._preserve_medium_components(
+            components=components,
+            member_meta=member_meta,
+            raw_adjacency=raw_adjacency,
+            strong_adjacency=strong_adjacency,
+        )
+
         singleton_cluster_by_id = {
             next(iter(component)): component for component in components if len(component) == 1
         }
@@ -1289,6 +1299,122 @@ class ClusterPipeline:
         final_components = [component for component in components if component]
         normalized = [sorted(component) for component in final_components]
         return sorted(normalized, key=len, reverse=True), member_meta
+
+    def _preserve_medium_components(
+        self,
+        *,
+        components: list[set[int]],
+        member_meta: dict[int, dict[str, object]],
+        raw_adjacency: dict[int, dict[int, StoryClusterMemberReason]],
+        strong_adjacency: dict[int, dict[int, StoryClusterMemberReason]],
+    ) -> None:
+        singleton_cluster_by_id = {
+            next(iter(component)): component for component in components if len(component) == 1
+        }
+        visited: set[int] = set()
+        for article_id in sorted(raw_adjacency):
+            if article_id in visited or article_id not in singleton_cluster_by_id:
+                continue
+            raw_component = []
+            queue = deque([article_id])
+            visited.add(article_id)
+            while queue:
+                node = queue.popleft()
+                raw_component.append(node)
+                for neighbor in sorted(raw_adjacency.get(node, {})):
+                    if neighbor in visited:
+                        continue
+                    visited.add(neighbor)
+                    queue.append(neighbor)
+            raw_component = sorted(raw_component)
+            if not all(node in singleton_cluster_by_id for node in raw_component):
+                continue
+            audit = self._audit_medium_component(
+                raw_component=raw_component,
+                raw_adjacency=raw_adjacency,
+                strong_adjacency=strong_adjacency,
+            )
+            if not audit["preserve"]:
+                continue
+            new_cluster = {node for node in raw_component}
+            for node in raw_component:
+                singleton_cluster_by_id[node].clear()
+                singleton_cluster_by_id.pop(node, None)
+                member_meta[node] = self._closure_attach_meta(
+                    cluster_size=len(new_cluster),
+                    support=audit["support_by_node"].get(node, []),
+                    decision="preserved_medium_component",
+                    stage="medium_component",
+                )
+            components.append(new_cluster)
+
+    def _audit_medium_component(
+        self,
+        *,
+        raw_component: list[int],
+        raw_adjacency: dict[int, dict[int, StoryClusterMemberReason]],
+        strong_adjacency: dict[int, dict[int, StoryClusterMemberReason]],
+    ) -> dict[str, object]:
+        if len(raw_component) < 2 or len(raw_component) > 3:
+            return {"preserve": False}
+        if any(strong_adjacency.get(node, {}) for node in raw_component):
+            return {"preserve": False}
+
+        support_by_node: dict[int, list[StoryClusterMemberReason]] = defaultdict(list)
+        edges: list[StoryClusterMemberReason] = []
+        compatible_edge_count = 0
+        non_entity_signal_count = 0
+        max_days_delta = 0
+        for index, left in enumerate(raw_component):
+            for right in raw_component[index + 1 :]:
+                reason = raw_adjacency.get(left, {}).get(right)
+                if reason is None:
+                    continue
+                edges.append(reason)
+                support_by_node[left].append(reason)
+                support_by_node[right].append(reason)
+                max_days_delta = max(max_days_delta, reason.days_delta)
+                if reason.shared_tag_count >= 1 or reason.shared_keyphrase_count >= 1:
+                    non_entity_signal_count += 1
+                if self._is_medium_component_edge_compatible(reason):
+                    compatible_edge_count += 1
+        minimum_edges = 1 if len(raw_component) == 2 else 2
+        if len(edges) < minimum_edges:
+            return {"preserve": False}
+        if compatible_edge_count != len(edges):
+            return {"preserve": False}
+        if non_entity_signal_count < 1:
+            return {"preserve": False}
+        if max_days_delta > 3:
+            return {"preserve": False}
+        mean_score = sum(reason.score for reason in edges) / len(edges)
+        best_score = max(reason.score for reason in edges)
+        if mean_score < 0.72 or best_score < 0.74:
+            return {"preserve": False}
+        return {
+            "preserve": True,
+            "support_by_node": dict(support_by_node),
+        }
+
+    def _is_medium_component_edge_compatible(self, reason: StoryClusterMemberReason) -> bool:
+        if reason.risky_bridge_pair:
+            return False
+        if reason.article_type_pair_class == "secondary_form_pair":
+            return False
+        forbidden_penalties = {
+            "entity_glue_penalty",
+            "late_story_drift_penalty",
+            "secondary_form_penalty",
+        }
+        if any(penalty in forbidden_penalties for penalty in reason.penalties):
+            return False
+        if reason.days_delta > 3:
+            return False
+        if reason.shared_entity_count < 2 and reason.shared_tag_count < 1 and reason.shared_keyphrase_count < 1:
+            return False
+        if reason.shared_tag_count < 1 and reason.shared_keyphrase_count < 1:
+            return False
+        return reason.score >= 0.72
 
     def _classify_closure_edge(self, reason: StoryClusterMemberReason) -> str:
         if reason.risky_bridge_pair and reason.score < 0.78:
@@ -1339,8 +1465,23 @@ class ClusterPipeline:
         support_count = len(support)
         mean_score = sum(reason.score for reason in support) / support_count
         risky_support = any(reason.risky_bridge_pair for reason in support)
+        has_guardrail_penalty = any(
+            penalty in {"entity_glue_penalty", "late_story_drift_penalty", "secondary_form_penalty"}
+            for reason in support
+            for penalty in reason.penalties
+        )
+        has_secondary_form = any(
+            reason.article_type_pair_class == "secondary_form_pair" for reason in support
+        )
         if len(cluster) == 1:
-            return "seed_pair" if best_score >= 0.68 and not risky_support else None
+            return (
+                "seed_pair"
+                if best_score >= 0.68
+                and not risky_support
+                and not has_guardrail_penalty
+                and not has_secondary_form
+                else None
+            )
         if support_count >= 2 and mean_score >= 0.72 and best_score >= 0.74 and not risky_support:
             return "multi_support"
         pivot_compatible = (
