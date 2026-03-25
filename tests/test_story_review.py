@@ -7,7 +7,6 @@ from src.analysis.story_review import (
     sweep_thresholds_against_review_labels,
 )
 
-
 FIXTURE_PATH = "tests/fixtures/story_matching_eval_fixture.json"
 
 
@@ -19,14 +18,19 @@ def test_threshold_sweep_shows_recall_tradeoff_on_fixture() -> None:
         pipeline,
         dataset.articles,
         dataset.pair_labels,
+        dataset.gold_clusters,
         thresholds=[0.68, 0.55],
     )
 
     assert [row.threshold for row in rows] == [0.68, 0.55]
     assert rows[0].pair_summary is not None
     assert rows[1].pair_summary is not None
+    assert rows[0].cluster_summary is not None
+    assert rows[1].cluster_summary is not None
     assert rows[1].accepted_pair_count >= rows[0].accepted_pair_count
     assert rows[1].pair_summary.recall >= rows[0].pair_summary.recall
+    assert rows[1].cluster_summary.recall >= rows[0].cluster_summary.recall
+    assert rows[1].predicted_cluster_count <= rows[0].predicted_cluster_count
 
 
 def test_review_batch_is_small_and_auditable() -> None:

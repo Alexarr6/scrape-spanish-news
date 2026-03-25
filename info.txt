@@ -1,0 +1,212 @@
+Sí. Te hago el mapa limpio de lo que estamos haciendo / acabamos de encadenar para que se vea la película completa y no solo commits sueltos.
+
+Resumen general
+Estamos convirtiendo el proyecto desde:
+
+scraper + análisis LLM guardado en tabla
+hacia:
+
+herramienta de inteligencia editorial comparativa
+O dicho menos fino: ya no queremos que article_editorial_analysis sea un cementerio de JSON con sentimientos, sino una capa útil en producto.
+
+Lo que ya se hizo en la fase anterior (iter/005)
+1) Integración real del análisis editorial en backend
+Se añadieron payloads de producto para que la UI no dependa de la API raw de operador:
+
+ExplorerArticleDetail.editorial
+StoryClusterDetail.editorial_summary
+StoryClusterMemberItem.editorial_preview
+Qué incluyen
+applicability + reason
+article type + confidence
+bias label / bias score / confidence
+tone emotional
+tone target
+opinionatedness
+sensationalism
+rhetorical certainty
+framing devices
+evidence spans
+rationale
+unclear reasons
+review flags
+resumen diagnóstico compacto
+Importante
+Si no hay análisis aún:
+
+el estado sale como pending
+no desaparece mágicamente la capa editorial
+2) Integración real en UI
+Stories
+Se convirtió en la superficie principal, que es donde tiene más sentido.
+
+Se añadió:
+
+bloque Editorial lens en StoryFocusPanel
+card editorial en el detalle del artículo
+previews editoriales compactas en miembros del cluster
+Explorer
+Se añadió:
+
+card editorial compacta en ExplorerContextRail
+Componentes compartidos nuevos
+EditorialStatusBadge
+EditorialDimensionGrid
+EditorialEvidenceList
+EditorialAnalysisCard
+EditorialLensSection
+helpers de formato editorial
+Filosofía visual
+sobrio
+analítico
+sin convertirlo en una máquina tragaperras ideológica
+Lo que estamos haciendo ahora (iter/006)
+Aquí damos el paso bueno: pasar de “ver el análisis” a comparar coberturas de verdad.
+
+Decisión principal
+La fase elegida no es:
+
+un ranking global de medios
+ni un dashboard simplón de “este medio es +0.12”
+La fase elegida es:
+
+comparativa por fuente dentro del cluster + señales de divergencia
+Eso significa:
+
+comparar cómo distintos medios cubren la misma historia
+detectar si hay diferencias reales en:
+sesgo
+framing
+tono
+applicability
+confianza / evidencia
+y solo mostrar señal cuando hay soporte suficiente
+Esto es importante porque evita hacer afirmaciones grandilocuentes y cutres sobre una fuente basadas en cuatro artículos mal contados.
+
+La ruta por fases
+Fase 1 — la que estamos implementando ahora
+Cluster-scoped comparative metrics + divergence signals
+Dentro del Editorial lens vamos a añadir una capa comparativa más potente.
+
+Qué cambios implica
+Backend / contratos
+Añadir bajo StoryClusterEditorialSummary algo tipo:
+
+comparative_metrics
+Con cosas como:
+
+recuento usable por fuente
+notas de elegibilidad
+caveats por limited / out_of_domain
+índices conservadores por dimensión
+señales de divergencia solo si pasan umbral
+UI
+Mejorar el Editorial lens para mostrar:
+
+cuántos artículos por fuente entran de verdad en la comparación
+cuándo una comparación es débil o no concluyente
+en qué dimensiones sí hay divergencia clara
+qué señales conviene suprimir por falta de muestra
+Reglas fuertes
+cluster-scoped, no branding universal de medios
+si no hay suficiente soporte:
+se suprime
+se degrada
+o se marca como débil
+nada de bluff estadístico
+Tests
+Se van a añadir/regresar tests para:
+
+divergencia real
+supresión por poca muestra
+caveats por limited / out_of_domain
+nuleado de dimensiones débiles o mezcladas
+Fase 2 — siguiente después de esta
+Resúmenes comparativos por fuente, pero acotados por contexto
+Aquí ya no sería “esta historia concreta”, sino conjuntos de clusters o filtros.
+
+Ejemplos:
+
+últimos 7 días
+política nacional
+elecciones
+economía
+Qué produciría
+medias / medianas / distribuciones
+sample size visible
+confidence media
+% unclear / limited / out_of_domain
+quizá agregados de tone / tone target / framing
+Pero con una condición
+Siempre con:
+
+ventana temporal
+filtro temático
+tamaño de muestra visible
+O sea: nada de “ADN eterno del medio”, que eso sería una mierda metodológica.
+
+Fase 3 — base para síntesis multi-fuente
+Esto sería ya el paso más ambicioso y útil a nivel producto.
+
+Objetivo
+Construir una síntesis neutral apoyada en:
+
+cluster
+entidades
+análisis editorial
+divergencias entre fuentes
+Posibles outputs
+qué comparten los medios
+dónde divergen
+qué framing usa cada uno
+qué omisiones o énfasis aparecen
+resumen neutral de la historia
+Pero esta fase tiene sentido después de las fases 1 y 2, no antes.
+
+Cadena de ejecución que estamos usando
+En iter/005
+planner
+frontend architect
+implementer
+frontend.react
+En iter/006
+planner ✅
+implementer ⏳ en marcha
+architect review ⏳ irá después automáticamente
+Y además esta última architect review no es para aplaudir por compromiso, sino para revisar:
+
+si el resultado realmente añade valor comparativo
+si la UI sigue siendo sobria
+si no estamos vendiendo más de lo que los datos soportan
+y cuál debe ser la siguiente iteración
+En términos de producto, qué estamos construyendo realmente
+Antes
+veías artículos
+quizá clusters
+quizá análisis editorial aislado
+Ahora
+estamos construyendo una app que pueda responder preguntas como:
+
+¿Cómo cubrieron esta misma historia distintos medios?
+¿Dónde hay divergencia editorial real y dónde no?
+¿Qué framing aparece en unos y no en otros?
+¿Qué diferencias son sólidas y cuáles son ruido?
+¿Cómo se puede resumir esto sin vender humo?
+Eso ya se parece bastante más a un comparador de cobertura mediática serio.
+
+Mi resumen brutalmente corto
+Ya hicimos:
+integrar análisis editorial en backend y UI
+Ahora hacemos:
+comparación por fuente dentro de cada cluster
+divergencia con soporte real
+UI comparativa útil, no decorativa
+Después haremos:
+comparativas agregadas por fuente/filtro
+y más adelante síntesis neutral multi-fuente
+Si quieres, cuando termine el implementer te hago otro resumen pero ya en formato:
+
+hecho
+en progreso
+pendiente
+siguiente mejor iteración.

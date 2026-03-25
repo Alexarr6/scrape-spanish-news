@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime
+from types import SimpleNamespace
 
 from src.analysis.contracts import ArticleAnalysisRead
 from src.analysis.pipeline import ClusterPipeline, EnrichedArticle
@@ -85,7 +86,11 @@ def test_candidate_generation_emits_auditable_origins_for_followup_pair() -> Non
         ),
     ]
 
-    pairs, summaries = pipeline._generate_candidate_pairs(articles, per_seed_limit=5, per_origin_limit=5)  # noqa: SLF001
+    pairs, summaries = pipeline._generate_candidate_pairs(  # noqa: SLF001
+        articles,
+        per_seed_limit=5,
+        per_origin_limit=5,
+    )
 
     pair = next(pair for pair in pairs if {pair.left_article_id, pair.right_article_id} == {1, 2})
     assert {"temporal_window", "shared_tag", "shared_entity"} <= pair.origins
@@ -95,6 +100,94 @@ def test_candidate_generation_emits_auditable_origins_for_followup_pair() -> Non
     assert seed_one.origin_counts["shared_entity"] >= 1
     assert seed_one.origin_counts["shared_tag"] >= 1
     assert seed_one.candidate_count >= 1
+
+
+def test_candidate_generation_adds_semantic_neighbor_origin_when_available(monkeypatch) -> None:
+    from src.semantic import dbstore
+
+    pipeline = ClusterPipeline(session=object())  # type: ignore[arg-type]
+    now = datetime(2026, 3, 18, tzinfo=UTC)
+    articles = [
+        _enriched(
+            article_id=1,
+            title="Acuerdo presupuestario en Catalunya",
+            summary="Resumen A",
+            tags=["politics_regional"],
+            entities=["person-salvador-illa"],
+            key_phrases=["alpha"],
+            when=now,
+        ),
+        _enriched(
+            article_id=2,
+            title="Las cuentas catalanas siguen abiertas",
+            summary="Resumen B",
+            tags=["economy"],
+            entities=["organization-govern"],
+            key_phrases=["beta"],
+            when=now,
+        ),
+    ]
+
+    def _fake_neighbors(_session, *, article_id: int, limit: int):
+        assert limit >= 5
+        if article_id == 1:
+            return [SimpleNamespace(article_id=2, similarity=0.93)]
+        return []
+
+    monkeypatch.setattr(dbstore, "nearest_neighbors", _fake_neighbors)
+
+    pairs, summaries = pipeline._generate_candidate_pairs(  # noqa: SLF001
+        articles,
+        per_seed_limit=5,
+        per_origin_limit=5,
+    )
+
+    pair = next(pair for pair in pairs if {pair.left_article_id, pair.right_article_id} == {1, 2})
+    assert "semantic_neighbor" in pair.origins
+    seed_one = next(summary for summary in summaries if summary.seed_article_id == 1)
+    assert seed_one.origin_counts["semantic_neighbor"] == 1
+
+
+def test_candidate_generation_skips_semantic_neighbors_when_embeddings_missing(monkeypatch) -> None:
+    from src.semantic import dbstore
+
+    pipeline = ClusterPipeline(session=object())  # type: ignore[arg-type]
+    now = datetime(2026, 3, 18, tzinfo=UTC)
+    articles = [
+        _enriched(
+            article_id=1,
+            title="Acuerdo presupuestario en Catalunya",
+            summary="Resumen A",
+            tags=["politics_regional"],
+            entities=["person-salvador-illa"],
+            key_phrases=["alpha"],
+            when=now,
+        ),
+        _enriched(
+            article_id=2,
+            title="Las cuentas catalanas siguen abiertas",
+            summary="Resumen B",
+            tags=["economy"],
+            entities=["organization-govern"],
+            key_phrases=["beta"],
+            when=now,
+        ),
+    ]
+
+    def _missing_neighbors(_session, *, article_id: int, limit: int):
+        raise RuntimeError("article_embeddings table is missing; run semantic-db-init first")
+
+    monkeypatch.setattr(dbstore, "nearest_neighbors", _missing_neighbors)
+
+    pairs, summaries = pipeline._generate_candidate_pairs(  # noqa: SLF001
+        articles,
+        per_seed_limit=5,
+        per_origin_limit=5,
+    )
+
+    pair = next(pair for pair in pairs if {pair.left_article_id, pair.right_article_id} == {1, 2})
+    assert "semantic_neighbor" not in pair.origins
+    assert all("semantic_neighbor" not in summary.origin_counts for summary in summaries)
 
 
 def test_candidate_generation_recall_summary_counts_positive_pairs_covered_by_rank() -> None:

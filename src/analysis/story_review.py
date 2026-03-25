@@ -9,9 +9,11 @@ from typing import Iterable
 from src.analysis.contracts import PairScoreArtifact
 from src.analysis.pipeline import EnrichedArticle
 from src.analysis.story_eval import (
-    PairLabel,
+    ClusterEvalSummary,
     PairEvalSummary,
+    PairLabel,
     build_pair_artifacts,
+    evaluate_clusters,
     evaluate_pair_labels,
 )
 
@@ -40,12 +42,14 @@ class ThresholdSweepRow:
     singleton_count: int
     multi_article_cluster_count: int
     pair_summary: PairEvalSummary | None
+    cluster_summary: ClusterEvalSummary | None
 
 
 def build_threshold_sweep(
     pipeline,
     articles: list[EnrichedArticle],
     labels: list[PairLabel] | None = None,
+    gold_clusters: list[list[int]] | None = None,
     *,
     thresholds: Iterable[float],
     max_days_delta: int = 7,
@@ -59,14 +63,22 @@ def build_threshold_sweep(
             max_days_delta=max_days_delta,
         )
         pair_summary = evaluate_pair_labels(artifacts, labels or []) if labels is not None else None
+        cluster_summary = (
+            evaluate_clusters(components, gold_clusters or [])
+            if gold_clusters is not None
+            else None
+        )
         rows.append(
             ThresholdSweepRow(
                 threshold=round(threshold, 4),
                 accepted_pair_count=sum(1 for artifact in artifacts if artifact.accepted),
                 predicted_cluster_count=len(components),
                 singleton_count=sum(1 for component in components if len(component) == 1),
-                multi_article_cluster_count=sum(1 for component in components if len(component) > 1),
+                multi_article_cluster_count=sum(
+                    1 for component in components if len(component) > 1
+                ),
                 pair_summary=pair_summary,
+                cluster_summary=cluster_summary,
             )
         )
     return rows
@@ -160,13 +172,27 @@ def render_review_batch_markdown(rows: list[ReviewBatchRow]) -> str:
         "",
     ]
     for index, row in enumerate(rows, start=1):
+        penalty_text = (
+            ", ".join(row.reason.get("penalties", []))
+            if row.reason.get("penalties")
+            else "none"
+        )
         lines.extend(
             [
                 f"## Pair {index}: {row.left_article_id} ↔ {row.right_article_id}",
                 f"- bucket: `{row.bucket}`",
-                f"- predicted: `{row.predicted_label}` | score: `{row.score:.4f}` | candidate_rank: `{row.candidate_rank}`",
-                f"- candidate_origins: {', '.join(row.candidate_origins) if row.candidate_origins else 'n/a'}",
-                f"- penalties: {', '.join(row.reason.get('penalties', [])) if row.reason.get('penalties') else 'none'}",
+                (
+                    f"- predicted: `{row.predicted_label}` | score: `{row.score:.4f}` | "
+                    f"candidate_rank: `{row.candidate_rank}`"
+                ),
+                (
+                    "- candidate_origins: "
+                    f"{', '.join(row.candidate_origins) if row.candidate_origins else 'n/a'}"
+                ),
+                (
+                    "- penalties: "
+                    f"{penalty_text}"
+                ),
                 f"- risky_bridge_pair: `{row.reason.get('risky_bridge_pair', False)}`",
                 "- left:",
                 f"  - [{row.left['source']}] {row.left['published_at']}",
@@ -255,7 +281,10 @@ def sweep_thresholds_against_review_labels(
             if artifact is None:
                 continue
             rescored = artifact.model_copy(deep=True)
-            rescored.accepted = rescored.reason.score >= threshold and rescored.reason.hard_block is None
+            rescored.accepted = (
+                rescored.reason.score >= threshold
+                and rescored.reason.hard_block is None
+            )
             rescored_artifacts.append(rescored)
             labels.append(
                 PairLabel(

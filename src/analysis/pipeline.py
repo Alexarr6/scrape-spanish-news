@@ -9,6 +9,7 @@ from dataclasses import dataclass, field
 from datetime import UTC, date, datetime, timedelta
 
 from sqlalchemy import delete, or_, select
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
 from src.analysis.canonicalization import EntityCanonicalizer
@@ -65,8 +66,6 @@ from src.analysis.orm_models import (
 from src.analysis.taxonomy import CANONICAL_TAGS
 from src.persistence.core import ArticleRead
 from src.persistence.orm import ArticleORM
-
-
 
 
 @dataclass
@@ -807,7 +806,7 @@ class ClusterPipeline:
         self.session = session
 
     def build_clusters(
-        self, *, days_back: int = 3, limit: int = 200, score_threshold: float = 0.68
+        self, *, days_back: int = 3, limit: int = 200, score_threshold: float = 0.55
     ) -> tuple[ClusterRebuildMetrics, list[PairScoreArtifact]]:
         """Score candidate pairs, accept qualifying edges, and persist components.
 
@@ -825,9 +824,13 @@ class ClusterPipeline:
         candidate_pairs, candidate_summaries = self._generate_candidate_pairs(articles)
         for summary in candidate_summaries:
             for origin, count in summary.origin_counts.items():
-                metrics.candidate_origin_counts[origin] = metrics.candidate_origin_counts.get(origin, 0) + count
+                metrics.candidate_origin_counts[origin] = (
+                    metrics.candidate_origin_counts.get(origin, 0) + count
+                )
             for origin, count in summary.overflow_counts.items():
-                metrics.candidate_overflow_counts[origin] = metrics.candidate_overflow_counts.get(origin, 0) + count
+                metrics.candidate_overflow_counts[origin] = (
+                    metrics.candidate_overflow_counts.get(origin, 0) + count
+                )
         for candidate in candidate_pairs:
             left = article_by_id[candidate.left_article_id]
             right = article_by_id[candidate.right_article_id]
@@ -877,7 +880,9 @@ class ClusterPipeline:
             [component for component in components if len(component) > 1]
         )
         metrics.cluster_count = metrics.guarded_cluster_count
-        metrics.singleton_count = len([component for component in components if len(component) == 1])
+        metrics.singleton_count = len(
+            [component for component in components if len(component) == 1]
+        )
         metrics.attached_singleton_count = sum(
             1
             for meta in member_closure_meta.values()
@@ -952,6 +957,11 @@ class ClusterPipeline:
         ordered_articles = sorted(articles, key=lambda item: item.article.published_at)
         pair_map: dict[tuple[int, int], CandidatePair] = {}
         summaries: list[CandidateGenerationSummary] = []
+        semantic_neighbors_by_seed = self._load_semantic_neighbor_candidates(
+            ordered_articles,
+            max_days_delta=max_days_delta,
+            limit=max(per_origin_limit * 3, per_origin_limit),
+        )
 
         for seed in ordered_articles:
             summary = CandidateGenerationSummary(seed_article_id=seed.article.id)
@@ -959,7 +969,11 @@ class ClusterPipeline:
             seed_time = seed.article.published_at
             seed_tags = set(seed.tag_codes)
             seed_entities = set(seed.entity_slugs)
-            seed_keyphrases = {normalize_lookup(value) for value in seed.key_phrases if normalize_lookup(value)}
+            seed_keyphrases = {
+                normalize_lookup(value)
+                for value in seed.key_phrases
+                if normalize_lookup(value)
+            }
             for other in ordered_articles:
                 if other.article.id == seed.article.id:
                     continue
@@ -975,12 +989,22 @@ class ClusterPipeline:
 
                 shared_entities = seed_entities & set(other.entity_slugs)
                 if shared_entities:
-                    candidates['shared_entity'].append((other.article.id, len(shared_entities) + score))
+                    candidates["shared_entity"].append(
+                        (other.article.id, len(shared_entities) + score)
+                    )
 
-                other_keyphrases = {normalize_lookup(value) for value in other.key_phrases if normalize_lookup(value)}
+                other_keyphrases = {
+                    normalize_lookup(value)
+                    for value in other.key_phrases
+                    if normalize_lookup(value)
+                }
                 lexical_overlap = len(seed_keyphrases & other_keyphrases)
                 if lexical_overlap:
-                    candidates['lexical_neighbor'].append((other.article.id, lexical_overlap + score))
+                    candidates["lexical_neighbor"].append(
+                        (other.article.id, lexical_overlap + score)
+                    )
+            for article_id, similarity in semantic_neighbors_by_seed.get(seed.article.id, []):
+                candidates["semantic_neighbor"].append((article_id, similarity))
 
             chosen_for_seed: list[int] = []
             seen_ids: set[int] = set()
@@ -1014,25 +1038,88 @@ class ClusterPipeline:
                     pair.rank = rank
             summaries.append(summary)
 
-        pairs = sorted(pair_map.values(), key=lambda item: (item.rank or 999999, item.left_article_id, item.right_article_id))
+        pairs = sorted(
+            pair_map.values(),
+            key=lambda item: (
+                item.rank or 999999,
+                item.left_article_id,
+                item.right_article_id,
+            ),
+        )
         return pairs, summaries
+
+    def _load_semantic_neighbor_candidates(
+        self,
+        articles: list[EnrichedArticle],
+        *,
+        max_days_delta: int,
+        limit: int,
+    ) -> dict[int, list[tuple[int, float]]]:
+        if self.session is None or not articles or limit <= 0:
+            return {}
+        try:
+            from src.semantic.dbstore import nearest_neighbors
+        except Exception:
+            return {}
+
+        article_by_id = {article.article.id: article for article in articles}
+        article_ids = set(article_by_id)
+        candidates: dict[int, list[tuple[int, float]]] = {}
+        for article in articles:
+            try:
+                neighbor_rows = nearest_neighbors(
+                    self.session,
+                    article_id=article.article.id,
+                    limit=limit,
+                )
+            except (AttributeError, RuntimeError, TypeError, SQLAlchemyError):
+                return {}
+
+            seed_candidates: list[tuple[int, float]] = []
+            for neighbor in neighbor_rows:
+                neighbor_id = int(neighbor.article_id)
+                if neighbor_id == article.article.id or neighbor_id not in article_ids:
+                    continue
+                days_delta = abs(
+                    (
+                        article.article.published_at
+                        - article_by_id[neighbor_id].article.published_at
+                    ).days
+                )
+                if days_delta > max_days_delta:
+                    continue
+                seed_candidates.append((neighbor_id, max(0.0, float(neighbor.similarity))))
+            if seed_candidates:
+                candidates[article.article.id] = seed_candidates
+        return candidates
 
     def score_pair(self, left: EnrichedArticle, right: EnrichedArticle) -> StoryClusterMemberReason:
         """Score whether two enriched articles should belong to the same story cluster."""
 
-        left_keyphrases = [normalize_lookup(value) for value in left.key_phrases if normalize_lookup(value)]
-        right_keyphrases = [normalize_lookup(value) for value in right.key_phrases if normalize_lookup(value)]
+        left_keyphrases = [
+            normalize_lookup(value) for value in left.key_phrases if normalize_lookup(value)
+        ]
+        right_keyphrases = [
+            normalize_lookup(value) for value in right.key_phrases if normalize_lookup(value)
+        ]
         left_signature = lexical_signature(left.article.title, left.article.summary)
         right_signature = lexical_signature(right.article.title, right.article.summary)
         lexical_overlap_score = jaccard_similarity(left_signature, right_signature)
-        left_event_terms = event_terms(f"{left.article.title} {left.article.summary} {' '.join(left.key_phrases)}")
-        right_event_terms = event_terms(f"{right.article.title} {right.article.summary} {' '.join(right.key_phrases)}")
+        left_event_terms = event_terms(
+            f"{left.article.title} {left.article.summary} {' '.join(left.key_phrases)}"
+        )
+        right_event_terms = event_terms(
+            f"{right.article.title} {right.article.summary} {' '.join(right.key_phrases)}"
+        )
         event_overlap_score = jaccard_similarity(left_event_terms, right_event_terms)
         left_followup_terms = followup_markers(f"{left.article.title} {left.article.summary}")
         right_followup_terms = followup_markers(f"{right.article.title} {right.article.summary}")
         followup_marker_overlap = jaccard_similarity(left_followup_terms, right_followup_terms)
         semantic_similarity = max(
-            jaccard_similarity(left_keyphrases + left.entity_slugs, right_keyphrases + right.entity_slugs),
+            jaccard_similarity(
+                left_keyphrases + left.entity_slugs,
+                right_keyphrases + right.entity_slugs,
+            ),
             round((lexical_overlap_score * 0.6) + (event_overlap_score * 0.4), 4),
         )
         title_sim = title_similarity(left.article.title, right.article.title)
@@ -1043,10 +1130,14 @@ class ClusterPipeline:
         shared_entity_score = jaccard_similarity(left.entity_slugs, right.entity_slugs)
         entity_salience_score = min(
             1.0,
-            shared_entity_score * (1.0 if len(set(left.entity_slugs) & set(right.entity_slugs)) >= 2 else 0.72),
+            shared_entity_score
+            * (1.0 if len(set(left.entity_slugs) & set(right.entity_slugs)) >= 2 else 0.72),
         )
         tag_overlap_score = jaccard_similarity(left.tag_codes, right.tag_codes)
-        keyphrase_overlap_score = max(jaccard_similarity(left_keyphrases, right_keyphrases), lexical_overlap_score)
+        keyphrase_overlap_score = max(
+            jaccard_similarity(left_keyphrases, right_keyphrases),
+            lexical_overlap_score,
+        )
         shared_entities = sorted(set(left.entity_slugs) & set(right.entity_slugs))
         shared_keyphrases = sorted(set(left_keyphrases) & set(right_keyphrases))
         shared_tags = sorted(set(left.tag_codes) & set(right.tag_codes))
@@ -1070,6 +1161,16 @@ class ClusterPipeline:
                 or (len(shared_entities) >= 2 and tag_overlap_score >= 0.33)
             )
         )
+        clean_followup_continuity = (
+            days_delta <= 4
+            and len(shared_entities) >= 2
+            and (
+                len(shared_tags) >= 1
+                or len(shared_keyphrases) >= 1
+                or followup_marker_overlap > 0
+                or event_overlap_score >= 0.14
+            )
+        )
         event_continuity_score = min(
             1.0,
             (
@@ -1089,10 +1190,19 @@ class ClusterPipeline:
             lede_sim < 0.58 or keyphrase_overlap_score < 0.32
         ):
             penalties.append("secondary_form_penalty")
-            if shared_entity_score >= 0.5 and keyphrase_overlap_score < 0.24 and event_overlap_score < 0.2:
+            if (
+                shared_entity_score >= 0.5
+                and keyphrase_overlap_score < 0.24
+                and event_overlap_score < 0.2
+            ):
                 risky_bridge_pair = True
                 penalties.append("entity_glue_penalty")
-        if days_delta >= 2 and not has_followup_shape and lede_sim < 0.56 and keyphrase_overlap_score < 0.4:
+        if (
+            days_delta >= 2
+            and not has_followup_shape
+            and lede_sim < 0.56
+            and keyphrase_overlap_score < 0.4
+        ):
             penalties.append("followup_penalty")
         if (
             shared_entity_score >= 0.5
@@ -1104,7 +1214,12 @@ class ClusterPipeline:
         ):
             penalties.append("entity_glue_penalty")
             risky_bridge_pair = True
-        if days_delta >= 4 and semantic_similarity < 0.52 and lede_sim < 0.62 and event_overlap_score < 0.2:
+        if (
+            days_delta >= 4
+            and semantic_similarity < 0.52
+            and lede_sim < 0.62
+            and event_overlap_score < 0.2
+        ):
             penalties.append("late_story_drift_penalty")
             risky_bridge_pair = True
         score = (
@@ -1120,6 +1235,8 @@ class ClusterPipeline:
         )
         if has_followup_shape:
             score += 0.06
+        if clean_followup_continuity:
+            score += 0.04
         if "secondary_form_penalty" in penalties:
             score -= 0.14
         if "followup_penalty" in penalties:
@@ -1275,7 +1392,9 @@ class ClusterPipeline:
                 attach_decision = self._should_attach_candidate(cluster, support)
                 if attach_decision is None:
                     continue
-                if not best_support or max(reason.score for reason in support) > max(reason.score for reason in best_support):
+                if not best_support or max(
+                    reason.score for reason in support
+                ) > max(reason.score for reason in best_support):
                     best_target = cluster
                     best_support = support
                     best_decision = attach_decision
@@ -1410,7 +1529,11 @@ class ClusterPipeline:
             return False
         if reason.days_delta > 3:
             return False
-        if reason.shared_entity_count < 2 and reason.shared_tag_count < 1 and reason.shared_keyphrase_count < 1:
+        if (
+            reason.shared_entity_count < 2
+            and reason.shared_tag_count < 1
+            and reason.shared_keyphrase_count < 1
+        ):
             return False
         if reason.shared_tag_count < 1 and reason.shared_keyphrase_count < 1:
             return False
@@ -1473,6 +1596,18 @@ class ClusterPipeline:
         has_secondary_form = any(
             reason.article_type_pair_class == "secondary_form_pair" for reason in support
         )
+        clean_followup_attach = (
+            not risky_support
+            and not has_secondary_form
+            and not any(
+                penalty in {"entity_glue_penalty", "late_story_drift_penalty"}
+                for reason in support
+                for penalty in reason.penalties
+            )
+            and best.days_delta <= 4
+            and best.shared_entity_count >= 2
+            and (best.shared_tag_count >= 1 or best.shared_keyphrase_count >= 1)
+        )
         if len(cluster) == 1:
             return (
                 "seed_pair"
@@ -1482,6 +1617,10 @@ class ClusterPipeline:
                 and not has_secondary_form
                 else None
             )
+        if clean_followup_attach and best_score >= 0.58:
+            return "followup_single_support"
+        if clean_followup_attach and support_count >= 2 and mean_score >= 0.54:
+            return "followup_multi_support"
         if support_count >= 2 and mean_score >= 0.72 and best_score >= 0.74 and not risky_support:
             return "multi_support"
         pivot_compatible = (

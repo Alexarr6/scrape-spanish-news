@@ -149,6 +149,110 @@ def test_closure_v2_attaches_followup_via_strong_pivot():
     assert components == [[1, 2, 3]]
 
 
+def test_guarded_components_attach_clean_followup_with_single_support() -> None:
+    pipeline = ClusterPipeline(session=None)  # type: ignore[arg-type]
+    accepted_edges = [
+        (
+            1,
+            2,
+            StoryClusterMemberReason(
+                score=0.84,
+                semantic_similarity=0.8,
+                title_similarity=0.72,
+                shared_entity_score=1.0,
+                tag_overlap_score=1.0,
+                keyphrase_overlap_score=0.8,
+                temporal_proximity_score=1.0,
+                days_delta=0,
+                shared_entity_count=2,
+                shared_tag_count=2,
+                shared_keyphrase_count=2,
+            ),
+        ),
+        (
+            1,
+            3,
+            StoryClusterMemberReason(
+                score=0.59,
+                semantic_similarity=0.62,
+                title_similarity=0.55,
+                shared_entity_score=0.8,
+                tag_overlap_score=0.5,
+                keyphrase_overlap_score=0.34,
+                temporal_proximity_score=0.86,
+                days_delta=2,
+                shared_entity_count=2,
+                shared_tag_count=1,
+                shared_keyphrase_count=1,
+            ),
+        ),
+    ]
+
+    components = pipeline._connected_components([1, 2, 3], accepted_edges)
+
+    assert components == [[1, 2, 3]]
+
+
+def test_guarded_components_attach_clean_followup_with_multi_support() -> None:
+    pipeline = ClusterPipeline(session=None)  # type: ignore[arg-type]
+    accepted_edges = [
+        (
+            1,
+            2,
+            StoryClusterMemberReason(
+                score=0.84,
+                semantic_similarity=0.8,
+                title_similarity=0.72,
+                shared_entity_score=1.0,
+                tag_overlap_score=1.0,
+                keyphrase_overlap_score=0.8,
+                temporal_proximity_score=1.0,
+                days_delta=0,
+                shared_entity_count=2,
+                shared_tag_count=2,
+                shared_keyphrase_count=2,
+            ),
+        ),
+        (
+            1,
+            3,
+            StoryClusterMemberReason(
+                score=0.56,
+                semantic_similarity=0.6,
+                title_similarity=0.54,
+                shared_entity_score=0.8,
+                tag_overlap_score=0.5,
+                keyphrase_overlap_score=0.32,
+                temporal_proximity_score=0.86,
+                days_delta=2,
+                shared_entity_count=2,
+                shared_tag_count=1,
+                shared_keyphrase_count=1,
+            ),
+        ),
+        (
+            2,
+            3,
+            StoryClusterMemberReason(
+                score=0.54,
+                semantic_similarity=0.58,
+                title_similarity=0.53,
+                shared_entity_score=0.8,
+                tag_overlap_score=0.5,
+                keyphrase_overlap_score=0.31,
+                temporal_proximity_score=0.86,
+                days_delta=2,
+                shared_entity_count=2,
+                shared_tag_count=1,
+                shared_keyphrase_count=1,
+            ),
+        ),
+    ]
+
+    components = pipeline._connected_components([1, 2, 3], accepted_edges)
+
+    assert components == [[1, 2, 3]]
+
 
 def test_guarded_components_prevent_bridge_article_false_merge():
     pipeline = ClusterPipeline(session=None)  # type: ignore[arg-type]

@@ -25,7 +25,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--db-url", default="")
     parser.add_argument("--days-back", type=int, default=3)
     parser.add_argument("--limit", type=int, default=200)
-    parser.add_argument("--score-threshold", type=float, default=0.68)
+    parser.add_argument("--score-threshold", type=float, default=0.55)
     return parser.parse_args()
 
 

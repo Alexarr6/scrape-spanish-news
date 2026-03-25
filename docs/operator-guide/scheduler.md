@@ -42,7 +42,7 @@ Useful if you only want persistent scraping and verification.
 2. `make run-all-persist`
 3. `make analysis-db-init`
 4. `make enrich-articles DAYS_BACK=3 LIMIT=500`
-5. `make build-story-clusters DAYS_BACK=3 LIMIT=500 SCORE_THRESHOLD=0.45`
+5. `make build-story-clusters DAYS_BACK=3 LIMIT=500 SCORE_THRESHOLD=0.55`
 6. `make verify-output`
 7. `make verify-db`
 
@@ -50,11 +50,12 @@ Defaults:
 - `LOCAL_TZ=Europe/Madrid`
 - shared `REFRESH_DAYS_BACK=3`
 - shared `SURFACE_LIMIT=500`
-- `DAYS_BACK=${REFRESH_DAYS_BACK:-3}`
+- `ENRICH_DAYS_BACK=${ENRICH_DAYS_BACK:-${DAYS_BACK:-${REFRESH_DAYS_BACK:-3}}}`
+- `CLUSTER_DAYS_BACK=${CLUSTER_DAYS_BACK:-${DAYS_BACK:-${REFRESH_DAYS_BACK:-3}}}`
 - `CLUSTER_LIMIT=${SURFACE_LIMIT:-500}`
 - `ENRICH_LIMIT=max(CLUSTER_LIMIT * 2, SURFACE_LIMIT)`
 - scrape `DATE` is computed in local time to match the wrapper's `LOCAL_TZ`
-- `SCORE_THRESHOLD=0.45`
+- `SCORE_THRESHOLD=0.55`
 - `OUT_PREFIX=sched`
 
 Note the deliberate asymmetry: Stories and Explorer share the same recency window and surfaced product budget, but not every downstream cap.

@@ -71,7 +71,7 @@ Enrich recent persisted articles with article type, tags, entities, key phrases,
 
 The current code path can use OpenRouter if the expected env is present. If not, it falls back to heuristic enrichment.
 
-### `make build-story-clusters DATABASE_URL=... [DAYS_BACK=3] [LIMIT=200] [SCORE_THRESHOLD=0.68]`
+### `make build-story-clusters DATABASE_URL=... [DAYS_BACK=3] [LIMIT=200] [SCORE_THRESHOLD=0.55]`
 Rebuild same-story clusters from enriched article state.
 
 ### `make story-cluster-report DATABASE_URL=... [LIMIT=20]`

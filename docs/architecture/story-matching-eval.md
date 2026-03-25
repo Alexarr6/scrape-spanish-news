@@ -17,6 +17,7 @@ iter/009 ya no deja sólo una baseline. Deja el circuito entero mínimo para ite
 ### Threshold / calibration helpers
 - `src/analysis/story_review.py`
   - sweep de thresholds
+  - reporta métricas de pares y también métricas de cluster
   - selección de tandas revisables
   - render markdown para review humana
   - resumen de labels manuales
@@ -74,6 +75,10 @@ python3 scripts/compare_story_thresholds.py \
 Salida útil:
 - `summary.json`
 - `summary.md`
+
+Ambos incluyen ya:
+- métricas de pares
+- métricas de cluster
 
 ### 3) Preparar tanda humana de 5-10 pares
 

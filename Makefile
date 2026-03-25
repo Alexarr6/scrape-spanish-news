@@ -199,7 +199,7 @@ analyze-editorial-failed: preflight
 build-story-clusters: preflight
 	@set -euo pipefail; \
 	[[ -n "$(DATABASE_URL)" ]] || { echo 'DATABASE_URL is required for build-story-clusters'; exit 1; }; \
-	cd "$(APP_ROOT)" && PYTHONPATH="$(APP_ROOT):$${PYTHONPATH:-}" $(PYTHON) scripts/build_story_clusters.py --db-url "$(DATABASE_URL)" --days-back "$${DAYS_BACK:-3}" --limit "$${LIMIT:-200}" --score-threshold "$${SCORE_THRESHOLD:-0.68}"
+	cd "$(APP_ROOT)" && PYTHONPATH="$(APP_ROOT):$${PYTHONPATH:-}" $(PYTHON) scripts/build_story_clusters.py --db-url "$(DATABASE_URL)" --days-back "$${DAYS_BACK:-3}" --limit "$${LIMIT:-200}" --score-threshold "$${SCORE_THRESHOLD:-0.55}"
 
 story-cluster-report: preflight
 	@set -euo pipefail; \
