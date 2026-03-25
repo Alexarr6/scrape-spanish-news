@@ -239,6 +239,71 @@ def test_story_pair_scoring_blocks_same_source_question_utility_series() -> None
     assert reason.hard_block == "question_utility_series_excluded"
 
 
+def test_story_pair_scoring_blocks_same_source_schedule_series() -> None:
+    pipeline = ClusterPipeline(session=None)  # type: ignore[arg-type]
+    now = datetime(2026, 3, 24, tzinfo=UTC)
+    left = _enriched(
+        article_id=1,
+        title="Itinerarios y horarios del Martes Santo de la Semana Santa de Córdoba 2026",
+        summary="Horarios e itinerarios de las cofradías del Martes Santo en Córdoba.",
+        article_type="news_report",
+        tags=["local"],
+        entities=["region_city-cordoba"],
+        when=now,
+        key_phrases=["semana santa cordoba itinerarios"],
+        source="abc",
+    )
+    right = _enriched(
+        article_id=2,
+        title="Itinerarios y horarios del Viernes Santo de la Semana Santa de Córdoba 2026",
+        summary="Horarios e itinerarios de las cofradías del Viernes Santo en Córdoba.",
+        article_type="news_report",
+        tags=["local"],
+        entities=["region_city-cordoba"],
+        when=now,
+        key_phrases=["semana santa cordoba itinerarios"],
+        source="abc",
+    )
+
+    reason = pipeline.score_pair(left, right)
+
+    assert reason.hard_block == "schedule_series_excluded"
+
+
+def test_story_pair_scoring_blocks_same_source_live_blog_vs_standard_piece() -> None:
+    pipeline = ClusterPipeline(session=None)  # type: ignore[arg-type]
+    now = datetime(2026, 3, 25, tzinfo=UTC)
+    left = _enriched(
+        article_id=1,
+        title=(
+            "Última hora de la comparecencia de Sánchez en el Congreso "
+            "sobre la guerra, en directo"
+        ),
+        summary="Sigue en directo la comparecencia de Sánchez en el Congreso.",
+        article_type="news_report",
+        tags=["politics"],
+        entities=["person-pedro-sanchez", "institution-congreso"],
+        when=now,
+        key_phrases=["comparecencia congreso guerra"],
+        source="eldiario",
+    )
+    right = _enriched(
+        article_id=2,
+        title="Sánchez alerta de que los efectos de Irán serán mucho peores que los de Irak",
+        summary="Resumen de la comparecencia de Sánchez en el Congreso.",
+        article_type="news_report",
+        tags=["politics"],
+        entities=["person-pedro-sanchez", "institution-congreso"],
+        when=now,
+        key_phrases=["comparecencia congreso guerra"],
+        source="eldiario",
+    )
+
+    reason = pipeline.score_pair(left, right)
+
+    assert reason.hard_block == "live_blog_series_excluded"
+
+
 def test_story_pair_scoring_rewards_clean_rewrite_with_sparse_entity_support() -> None:
     pipeline = ClusterPipeline(session=None)  # type: ignore[arg-type]
     now = datetime(2026, 3, 23, tzinfo=UTC)
@@ -272,4 +337,4 @@ def test_story_pair_scoring_rewards_clean_rewrite_with_sparse_entity_support() -
 
     assert reason.hard_block is None
     assert reason.risky_bridge_pair is False
-    assert reason.score >= 0.56
+    assert reason.score >= 0.6

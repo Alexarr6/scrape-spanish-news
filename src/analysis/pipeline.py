@@ -1165,9 +1165,15 @@ class ClusterPipeline:
             left
         ) and self._is_recurring_results_article(right)
         same_results_game = self._results_game_key(left) == self._results_game_key(right)
+        is_schedule_series_pair = self._is_schedule_series_article(
+            left
+        ) and self._is_schedule_series_article(right)
         is_question_utility_pair = self._is_question_utility_article(
             left
         ) and self._is_question_utility_article(right)
+        is_live_blog_pair = self._is_live_blog_article(left) or self._is_live_blog_article(
+            right
+        )
         clean_followup_continuity = (
             days_delta <= 4
             and len(shared_entities) >= 2
@@ -1182,6 +1188,17 @@ class ClusterPipeline:
             days_delta <= 3
             and title_sim >= 0.74
             and lexical_overlap_score >= 0.22
+            and (
+                len(shared_entities) >= 1
+                or len(shared_tags) >= 1
+                or len(shared_keyphrases) >= 1
+            )
+        )
+        cross_source_clean_rewrite = (
+            left.article.source != right.article.source
+            and days_delta <= 3
+            and title_sim >= 0.7
+            and lexical_overlap_score >= 0.2
             and (
                 len(shared_entities) >= 1
                 or len(shared_tags) >= 1
@@ -1216,10 +1233,28 @@ class ClusterPipeline:
             hard_block is None
             and is_question_utility_pair
             and left.article.source == right.article.source
-            and max(title_sim, lede_sim) < 0.78
-            and keyphrase_overlap_score < 0.55
+            and max(title_sim, lede_sim) < 0.9
         ):
             hard_block = "question_utility_series_excluded"
+        if (
+            hard_block is None
+            and is_schedule_series_pair
+            and left.article.source == right.article.source
+            and (
+                self._schedule_series_key(left) == self._schedule_series_key(right)
+                and self._schedule_series_day_key(left)
+                != self._schedule_series_day_key(right)
+                or max(title_sim, lede_sim) < 0.96
+            )
+        ):
+            hard_block = "schedule_series_excluded"
+        if (
+            hard_block is None
+            and is_live_blog_pair
+            and left.article.source == right.article.source
+            and max(title_sim, lede_sim) < 0.9
+        ):
+            hard_block = "live_blog_series_excluded"
         if article_types & secondary_types and (
             lede_sim < 0.58 or keyphrase_overlap_score < 0.32
         ):
@@ -1273,6 +1308,8 @@ class ClusterPipeline:
             score += 0.04
         if clean_rewrite_shape:
             score += 0.06
+        if cross_source_clean_rewrite:
+            score += 0.04
         if "secondary_form_penalty" in penalties:
             score -= 0.14
         if "followup_penalty" in penalties:
@@ -1336,6 +1373,41 @@ class ClusterPipeline:
             or "local" in summary
         )
         return question_markers and utility_markers
+
+    def _is_schedule_series_article(self, article: EnrichedArticle) -> bool:
+        text = normalize_lookup(article.article.title)
+        return "itinerarios" in text and "horarios" in text and "semana santa" in text
+
+    def _is_live_blog_article(self, article: EnrichedArticle) -> bool:
+        text = normalize_lookup(article.article.title)
+        return (
+            "ultima hora" in text
+            or "última hora" in article.article.title.lower()
+            or "en directo" in text
+            or "minuto a minuto" in text
+        )
+
+    def _schedule_series_key(self, article: EnrichedArticle) -> str:
+        text = normalize_lookup(article.article.title)
+        if "semana santa de cordoba" in text:
+            return "semana_santa_cordoba"
+        return ""
+
+    def _schedule_series_day_key(self, article: EnrichedArticle) -> str:
+        text = normalize_lookup(article.article.title)
+        for day in (
+            "domingo de ramos",
+            "lunes santo",
+            "martes santo",
+            "miercoles santo",
+            "jueves santo",
+            "madrugada",
+            "viernes santo",
+            "domingo de resurreccion",
+        ):
+            if day in text:
+                return day
+        return ""
 
     def _connected_components(
         self,
@@ -1442,6 +1514,12 @@ class ClusterPipeline:
             raw_adjacency=raw_adjacency,
             strong_adjacency=strong_adjacency,
         )
+        self._merge_supported_components(
+            components=components,
+            member_meta=member_meta,
+            strong_adjacency=strong_adjacency,
+            medium_adjacency=medium_adjacency,
+        )
 
         singleton_cluster_by_id = {
             next(iter(component)): component for component in components if len(component) == 1
@@ -1541,6 +1619,100 @@ class ClusterPipeline:
                 )
             components.append(new_cluster)
 
+    def _merge_supported_components(
+        self,
+        *,
+        components: list[set[int]],
+        member_meta: dict[int, dict[str, object]],
+        strong_adjacency: dict[int, dict[int, StoryClusterMemberReason]],
+        medium_adjacency: dict[int, dict[int, StoryClusterMemberReason]],
+    ) -> None:
+        changed = True
+        while changed:
+            changed = False
+            best_pair: tuple[int, int, list[StoryClusterMemberReason], str] | None = None
+            for left_index, left_cluster in enumerate(components):
+                if not left_cluster:
+                    continue
+                for right_index in range(left_index + 1, len(components)):
+                    right_cluster = components[right_index]
+                    if not right_cluster:
+                        continue
+                    support = [
+                        adjacency[left_id][right_id]
+                        for adjacency in (strong_adjacency, medium_adjacency)
+                        for left_id in left_cluster
+                        for right_id in right_cluster
+                        if right_id in adjacency.get(left_id, {})
+                    ]
+                    decision = self._should_merge_components(
+                        left_cluster,
+                        right_cluster,
+                        support,
+                    )
+                    if decision is None:
+                        continue
+                    if best_pair is None or max(reason.score for reason in support) > max(
+                        reason.score for reason in best_pair[2]
+                    ):
+                        best_pair = (left_index, right_index, support, decision)
+            if best_pair is None:
+                break
+            left_index, right_index, support, decision = best_pair
+            left_cluster = components[left_index]
+            right_cluster = components[right_index]
+            left_cluster.update(right_cluster)
+            right_cluster.clear()
+            cluster_size = len(left_cluster)
+            for article_id in left_cluster:
+                member_meta[article_id] = self._closure_attach_meta(
+                    cluster_size=cluster_size,
+                    support=support,
+                    decision=decision,
+                    stage="merge",
+                )
+            changed = True
+
+    def _should_merge_components(
+        self,
+        left_cluster: set[int],
+        right_cluster: set[int],
+        support: list[StoryClusterMemberReason],
+    ) -> str | None:
+        if not support:
+            return None
+        best = max(support, key=lambda reason: reason.score)
+        mean_score = sum(reason.score for reason in support) / len(support)
+        if any(reason.risky_bridge_pair for reason in support):
+            return None
+        if any(reason.article_type_pair_class == "secondary_form_pair" for reason in support):
+            return None
+        if any(
+            penalty in {"entity_glue_penalty", "late_story_drift_penalty", "secondary_form_penalty"}
+            for reason in support
+            for penalty in reason.penalties
+        ):
+            return None
+        if best.days_delta > 3:
+            return None
+        if len(support) >= 2 and mean_score >= 0.52 and best.score >= 0.56:
+            return "component_multi_support"
+        if (
+            len(left_cluster) >= 2
+            and len(right_cluster) >= 2
+            and self._classify_closure_edge(best) == "strong"
+            and best.score >= 0.56
+        ):
+            return "component_strong_bridge"
+        clean_rewrite_bridge = (
+            best.title_similarity >= 0.78
+            and (best.shared_tag_count >= 1 or best.shared_keyphrase_count >= 1)
+            and best.score >= 0.54
+        )
+        if clean_rewrite_bridge:
+            return "component_rewrite_bridge"
+        return None
+
     def _audit_medium_component(
         self,
         *,
@@ -1618,9 +1790,10 @@ class ClusterPipeline:
             return "discard"
         clean_rewrite_edge = (
             not reason.risky_bridge_pair
-            and reason.title_similarity >= 0.82
+            and reason.title_similarity >= 0.78
             and reason.days_delta <= 3
             and (reason.shared_tag_count >= 1 or reason.shared_keyphrase_count >= 1)
+            and reason.score >= 0.58
             and not any(
                 penalty
                 in {"entity_glue_penalty", "late_story_drift_penalty", "secondary_form_penalty"}
@@ -1695,28 +1868,42 @@ class ClusterPipeline:
             and best.shared_entity_count >= 2
             and (best.shared_tag_count >= 1 or best.shared_keyphrase_count >= 1)
         )
+        clean_rewrite_attach = (
+            not risky_support
+            and not has_secondary_form
+            and not has_guardrail_penalty
+            and best.days_delta <= 3
+            and best.title_similarity >= 0.78
+            and (best.shared_tag_count >= 1 or best.shared_keyphrase_count >= 1)
+        )
         if len(cluster) == 1:
             return (
                 "seed_pair"
-                if best_score >= 0.56
-                and not risky_support
-                and not has_guardrail_penalty
-                and not has_secondary_form
-                and best.days_delta <= 3
-                and (best.shared_tag_count >= 1 or best.shared_keyphrase_count >= 1)
+                if (
+                    best_score >= 0.56
+                    and not risky_support
+                    and not has_guardrail_penalty
+                    and not has_secondary_form
+                    and best.days_delta <= 3
+                    and (best.shared_tag_count >= 1 or best.shared_keyphrase_count >= 1)
+                )
                 else None
             )
         if clean_followup_attach and best_score >= 0.56:
             return "followup_single_support"
         if clean_followup_attach and support_count >= 2 and mean_score >= 0.5:
             return "followup_multi_support"
-        if support_count >= 2 and mean_score >= 0.58 and best_score >= 0.6 and not risky_support:
+        if clean_rewrite_attach and best_score >= 0.54:
+            return "clean_rewrite_attach"
+        if clean_rewrite_attach and support_count >= 2 and mean_score >= 0.5:
+            return "rewrite_multi_support_attach"
+        if support_count >= 2 and mean_score >= 0.56 and best_score >= 0.58 and not risky_support:
             return "multi_support"
         pivot_compatible = (
             not best.risky_bridge_pair
             and best.days_delta <= 4
-            and best_score >= 0.6
-            and best.shared_entity_count >= 2
+            and best_score >= 0.58
+            and best.shared_entity_count >= 1
             and (best.shared_tag_count >= 1 or best.shared_keyphrase_count >= 1)
             and "entity_glue_penalty" not in best.penalties
             and "late_story_drift_penalty" not in best.penalties

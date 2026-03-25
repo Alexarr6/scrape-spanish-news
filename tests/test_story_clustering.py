@@ -459,6 +459,111 @@ def test_raw_connected_components_can_merge_more_than_guarded_closure():
     assert guarded_components == [[1, 2], [3, 4]]
 
 
+def test_guarded_components_merge_existing_clusters_via_clean_rewrite_bridge() -> None:
+    pipeline = ClusterPipeline(session=None)  # type: ignore[arg-type]
+    accepted_edges = [
+        (
+            1,
+            2,
+            StoryClusterMemberReason(
+                score=0.84,
+                semantic_similarity=0.82,
+                title_similarity=0.74,
+                shared_entity_score=0.8,
+                tag_overlap_score=1.0,
+                keyphrase_overlap_score=0.76,
+                temporal_proximity_score=1.0,
+                days_delta=0,
+                shared_entity_count=2,
+                shared_tag_count=2,
+                shared_keyphrase_count=2,
+            ),
+        ),
+        (
+            3,
+            4,
+            StoryClusterMemberReason(
+                score=0.83,
+                semantic_similarity=0.8,
+                title_similarity=0.72,
+                shared_entity_score=0.8,
+                tag_overlap_score=1.0,
+                keyphrase_overlap_score=0.74,
+                temporal_proximity_score=1.0,
+                days_delta=0,
+                shared_entity_count=2,
+                shared_tag_count=2,
+                shared_keyphrase_count=2,
+            ),
+        ),
+        (
+            2,
+            3,
+            StoryClusterMemberReason(
+                score=0.6,
+                semantic_similarity=0.64,
+                title_similarity=0.8,
+                shared_entity_score=0.66,
+                tag_overlap_score=0.5,
+                keyphrase_overlap_score=0.36,
+                temporal_proximity_score=0.95,
+                days_delta=1,
+                shared_entity_count=1,
+                shared_tag_count=1,
+                shared_keyphrase_count=1,
+            ),
+        ),
+    ]
+
+    guarded_components = pipeline._connected_components([1, 2, 3, 4], accepted_edges)
+
+    assert guarded_components == [[1, 2, 3, 4]]
+
+
+def test_guarded_components_attach_clean_rewrite_singleton_to_existing_cluster() -> None:
+    pipeline = ClusterPipeline(session=None)  # type: ignore[arg-type]
+    accepted_edges = [
+        (
+            1,
+            2,
+            StoryClusterMemberReason(
+                score=0.84,
+                semantic_similarity=0.82,
+                title_similarity=0.74,
+                shared_entity_score=0.8,
+                tag_overlap_score=1.0,
+                keyphrase_overlap_score=0.76,
+                temporal_proximity_score=1.0,
+                days_delta=0,
+                shared_entity_count=2,
+                shared_tag_count=2,
+                shared_keyphrase_count=2,
+            ),
+        ),
+        (
+            1,
+            3,
+            StoryClusterMemberReason(
+                score=0.55,
+                semantic_similarity=0.58,
+                title_similarity=0.79,
+                shared_entity_score=0.5,
+                tag_overlap_score=0.5,
+                keyphrase_overlap_score=0.33,
+                temporal_proximity_score=0.95,
+                days_delta=1,
+                shared_entity_count=1,
+                shared_tag_count=1,
+                shared_keyphrase_count=1,
+            ),
+        ),
+    ]
+
+    guarded_components = pipeline._connected_components([1, 2, 3], accepted_edges)
+
+    assert guarded_components == [[1, 2, 3]]
+
+
 def test_guarded_components_preserve_medium_only_pair_with_clean_support():
     pipeline = ClusterPipeline(session=None)  # type: ignore[arg-type]
     accepted_edges = [
