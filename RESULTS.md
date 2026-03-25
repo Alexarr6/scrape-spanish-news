@@ -309,7 +309,7 @@ Ahora sí queda montado el circuito útil para iterar matching quality con human
 Trabajo válido de iter/009 separado en commits atómicos:
 
 - `b286f1f` — `feat(iter/009): harden story matching scoring and closure`
-- `PENDING_COMMIT_HASH` — workflow de review humana + docs/estado final de iter/009
+- `246657b` — `docs(iter/009): add review workflow and sanitize pending work`
 
 Rollback/review rápido recomendado:
 

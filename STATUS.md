@@ -11,5 +11,5 @@
   - Se añadió test que fija el comportamiento clave: el grafo crudo puede colapsar a un solo componente mientras el cierre guardado conserva dos clusters separados.
   - Validación local ejecutada con `uv run pytest tests/test_story_clustering.py tests/test_story_matching_eval.py`.
   - El trabajo válido de iter/009 quedó separado en commits atómicos en `iter/009`; el ruido ajeno (`artifacts/`, docs viejas de explorer bias lens) quedó fuera.
-  - Commits útiles del saneamiento: `b286f1f` (matching/closure hardening) y el commit de workflow/docs que cierra este saneamiento.
+  - Commits útiles del saneamiento: `b286f1f` (matching/closure hardening) y `246657b` (workflow/docs + cierre documental).
   - Limitación honesta: no pude reproducir la DB local del usuario en este runtime (`127.0.0.1:5433` rechazando conexión), así que el diagnóstico fino sale del código/tests y no de una corrida DB-backed en esta sesión.
