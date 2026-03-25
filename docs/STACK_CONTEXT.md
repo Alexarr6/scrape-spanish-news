@@ -1,34 +1,35 @@
-# STACK_CONTEXT.md — Web App
+# STACK_CONTEXT.md — Data Pipeline
 
-## Objetivo funcional
+## Objetivo del pipeline
 
-## Frontend
-- Framework:
-- Estado:
-- Routing/UI kit:
+## Fuente(s) de datos
+- Tipo (API/DB/CSV/stream):
+- Frecuencia:
+- Volumen estimado:
 
-## Backend
-- Framework/API style:
-- Auth:
-- Integraciones:
+## Transformaciones
+- Limpieza:
+- Normalización:
+- Enriquecimiento:
 
-## Datos
-- DB:
-- Migraciones:
-- Seeds:
+## Destino
+- Sistema destino:
+- Contrato de salida (schema):
 
-## Calidad
-- Tests unitarios/integración/e2e:
-- Lint/format/typecheck:
+## Calidad y observabilidad
+- Validaciones de esquema:
+- Reglas de calidad:
+- Métricas/logs/alertas:
+
+## Operación
+- Scheduling:
+- Retries/backoff:
+- Gestión de fallos:
 
 ## Baseline Python (si aplica)
 - Gestor de entorno/dependencias: `uv`
 - Configuración canónica: `pyproject.toml`
 - Lint/format: `ruff`
 - Hooks de higiene: `pre-commit` con `ruff-check` y `ruff-format`
-- Ejecución/verificación: preferir `uv run ...` y evitar depender de paquetes globales del host
-
-## Deploy
-- Entornos:
-- Build/release:
-- Observabilidad:
+- Tests/linters/runs vía `uv run ...`
+- Evitar dependencia de paquetes Python globales del host
