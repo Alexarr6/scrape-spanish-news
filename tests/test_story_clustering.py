@@ -467,6 +467,33 @@ def test_guarded_components_preserve_medium_only_pair_with_clean_support():
     assert guarded_components == [[1, 2], [3]]
 
 
+def test_guarded_components_preserve_lower_medium_pair_with_clean_support() -> None:
+    pipeline = ClusterPipeline(session=None)  # type: ignore[arg-type]
+    accepted_edges = [
+        (
+            1,
+            2,
+            StoryClusterMemberReason(
+                score=0.6,
+                semantic_similarity=0.58,
+                title_similarity=0.52,
+                shared_entity_score=0.8,
+                tag_overlap_score=0.5,
+                keyphrase_overlap_score=0.3,
+                temporal_proximity_score=0.95,
+                days_delta=1,
+                shared_entity_count=2,
+                shared_tag_count=1,
+                shared_keyphrase_count=1,
+            ),
+        ),
+    ]
+
+    guarded_components = pipeline._connected_components([1, 2, 3], accepted_edges)
+
+    assert guarded_components == [[1, 2], [3]]
+
+
 
 def test_guarded_components_preserve_medium_only_chain_of_three_when_coherent():
     pipeline = ClusterPipeline(session=None)  # type: ignore[arg-type]

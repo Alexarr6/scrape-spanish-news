@@ -1508,7 +1508,7 @@ class ClusterPipeline:
             return {"preserve": False}
         mean_score = sum(reason.score for reason in edges) / len(edges)
         best_score = max(reason.score for reason in edges)
-        if mean_score < 0.72 or best_score < 0.74:
+        if mean_score < 0.58 or best_score < 0.6:
             return {"preserve": False}
         return {
             "preserve": True,
@@ -1537,7 +1537,7 @@ class ClusterPipeline:
             return False
         if reason.shared_tag_count < 1 and reason.shared_keyphrase_count < 1:
             return False
-        return reason.score >= 0.72
+        return reason.score >= 0.58
 
     def _classify_closure_edge(self, reason: StoryClusterMemberReason) -> str:
         if reason.risky_bridge_pair and reason.score < 0.78:
@@ -1611,22 +1611,24 @@ class ClusterPipeline:
         if len(cluster) == 1:
             return (
                 "seed_pair"
-                if best_score >= 0.68
+                if best_score >= 0.58
                 and not risky_support
                 and not has_guardrail_penalty
                 and not has_secondary_form
+                and best.days_delta <= 3
+                and (best.shared_tag_count >= 1 or best.shared_keyphrase_count >= 1)
                 else None
             )
         if clean_followup_attach and best_score >= 0.58:
             return "followup_single_support"
         if clean_followup_attach and support_count >= 2 and mean_score >= 0.54:
             return "followup_multi_support"
-        if support_count >= 2 and mean_score >= 0.72 and best_score >= 0.74 and not risky_support:
+        if support_count >= 2 and mean_score >= 0.62 and best_score >= 0.64 and not risky_support:
             return "multi_support"
         pivot_compatible = (
             not best.risky_bridge_pair
             and best.days_delta <= 4
-            and best_score >= 0.74
+            and best_score >= 0.64
             and best.shared_entity_count >= 2
             and (best.shared_tag_count >= 1 or best.shared_keyphrase_count >= 1)
             and "entity_glue_penalty" not in best.penalties
