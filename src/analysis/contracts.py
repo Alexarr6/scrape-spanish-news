@@ -295,8 +295,19 @@ class ClusterRebuildMetrics(BaseModel):
     article_count: int = 0
     candidate_pair_count: int = 0
     accepted_pair_count: int = 0
+    accepted_strong_pair_count: int = 0
+    accepted_medium_pair_count: int = 0
+    accepted_risky_pair_count: int = 0
     rejected_pair_count: int = 0
+    raw_component_count: int = 0
+    raw_multi_article_component_count: int = 0
+    guarded_cluster_count: int = 0
+    guarded_multi_article_cluster_count: int = 0
     cluster_count: int = 0
+    singleton_count: int = 0
+    attached_singleton_count: int = 0
+    unattached_singleton_count: int = 0
+    closure_decision_counts: dict[str, int] = Field(default_factory=dict)
     candidate_origin_counts: dict[str, int] = Field(default_factory=dict)
     candidate_overflow_counts: dict[str, int] = Field(default_factory=dict)
     started_at: datetime | None = None

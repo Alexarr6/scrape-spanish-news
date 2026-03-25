@@ -29,7 +29,13 @@ from src.analysis.contracts import (
 )
 from src.analysis.editorial.crud import EditorialAnalysisCRUD
 from src.analysis.editorial_normalization import build_editorial_diagnostics_from_payload
-from src.analysis.heuristics import heuristic_enrichment, title_similarity
+from src.analysis.heuristics import (
+    event_terms,
+    followup_markers,
+    heuristic_enrichment,
+    lexical_signature,
+    title_similarity,
+)
 from src.analysis.llm_client import (
     EDITORIAL_ANALYSIS_SCHEMA_VERSION,
     EDITORIAL_ANALYSIS_SOURCE_TEXT_VERSION,
@@ -840,19 +846,54 @@ class ClusterPipeline:
             )
             if accepted:
                 metrics.accepted_pair_count += 1
+                edge_class = self._classify_closure_edge(reason)
+                if edge_class == "strong":
+                    metrics.accepted_strong_pair_count += 1
+                else:
+                    metrics.accepted_medium_pair_count += 1
+                if reason.risky_bridge_pair:
+                    metrics.accepted_risky_pair_count += 1
                 accepted_edges.append((left.article.id, right.article.id, reason))
             else:
                 metrics.rejected_pair_count += 1
-        components = self._connected_components(
+        raw_components = self._raw_connected_components(
+            [article.article.id for article in articles], accepted_edges
+        )
+        metrics.raw_component_count = len(raw_components)
+        metrics.raw_multi_article_component_count = len(
+            [component for component in raw_components if len(component) > 1]
+        )
+        components, member_closure_meta = self._build_guarded_components(
             [article.article.id for article in articles], accepted_edges
         )
         try:
-            self._persist_clusters(articles, components, accepted_edges)
+            self._persist_clusters(articles, components, accepted_edges, member_closure_meta)
             self.session.commit()
         except Exception:
             self.session.rollback()
             raise
-        metrics.cluster_count = len(components)
+        metrics.guarded_cluster_count = len(components)
+        metrics.guarded_multi_article_cluster_count = len(
+            [component for component in components if len(component) > 1]
+        )
+        metrics.cluster_count = metrics.guarded_cluster_count
+        metrics.singleton_count = len([component for component in components if len(component) == 1])
+        metrics.attached_singleton_count = sum(
+            1
+            for meta in member_closure_meta.values()
+            if meta.get("closure_stage") == "attach"
+        )
+        metrics.unattached_singleton_count = sum(
+            1
+            for meta in member_closure_meta.values()
+            if meta.get("closure_decision") == "no_support"
+        )
+        metrics.closure_decision_counts = dict(
+            Counter(
+                str(meta.get("closure_decision", "unknown"))
+                for meta in member_closure_meta.values()
+            )
+        )
         metrics.finished_at = datetime.now(UTC)
         return metrics, artifacts
 
@@ -979,19 +1020,33 @@ class ClusterPipeline:
     def score_pair(self, left: EnrichedArticle, right: EnrichedArticle) -> StoryClusterMemberReason:
         """Score whether two enriched articles should belong to the same story cluster."""
 
-        left_keyphrases = [normalize_lookup(value) for value in left.key_phrases]
-        right_keyphrases = [normalize_lookup(value) for value in right.key_phrases]
-        semantic_similarity = (
-            1.0
-            if jaccard_similarity(left.key_phrases, right.key_phrases) > 0.8
-            else jaccard_similarity(
-                left.key_phrases + left.entity_slugs, right.key_phrases + right.entity_slugs
-            )
+        left_keyphrases = [normalize_lookup(value) for value in left.key_phrases if normalize_lookup(value)]
+        right_keyphrases = [normalize_lookup(value) for value in right.key_phrases if normalize_lookup(value)]
+        left_signature = lexical_signature(left.article.title, left.article.summary)
+        right_signature = lexical_signature(right.article.title, right.article.summary)
+        lexical_overlap_score = jaccard_similarity(left_signature, right_signature)
+        left_event_terms = event_terms(f"{left.article.title} {left.article.summary} {' '.join(left.key_phrases)}")
+        right_event_terms = event_terms(f"{right.article.title} {right.article.summary} {' '.join(right.key_phrases)}")
+        event_overlap_score = jaccard_similarity(left_event_terms, right_event_terms)
+        left_followup_terms = followup_markers(f"{left.article.title} {left.article.summary}")
+        right_followup_terms = followup_markers(f"{right.article.title} {right.article.summary}")
+        followup_marker_overlap = jaccard_similarity(left_followup_terms, right_followup_terms)
+        semantic_similarity = max(
+            jaccard_similarity(left_keyphrases + left.entity_slugs, right_keyphrases + right.entity_slugs),
+            round((lexical_overlap_score * 0.6) + (event_overlap_score * 0.4), 4),
         )
         title_sim = title_similarity(left.article.title, right.article.title)
+        lede_sim = title_similarity(
+            f"{left.article.title}. {left.article.summary}".strip(),
+            f"{right.article.title}. {right.article.summary}".strip(),
+        )
         shared_entity_score = jaccard_similarity(left.entity_slugs, right.entity_slugs)
+        entity_salience_score = min(
+            1.0,
+            shared_entity_score * (1.0 if len(set(left.entity_slugs) & set(right.entity_slugs)) >= 2 else 0.72),
+        )
         tag_overlap_score = jaccard_similarity(left.tag_codes, right.tag_codes)
-        keyphrase_overlap_score = jaccard_similarity(left_keyphrases, right_keyphrases)
+        keyphrase_overlap_score = max(jaccard_similarity(left_keyphrases, right_keyphrases), lexical_overlap_score)
         shared_entities = sorted(set(left.entity_slugs) & set(right.entity_slugs))
         shared_keyphrases = sorted(set(left_keyphrases) & set(right_keyphrases))
         shared_tags = sorted(set(left.tag_codes) & set(right.tag_codes))
@@ -1005,6 +1060,25 @@ class ClusterPipeline:
             "secondary_form_pair" if article_types & secondary_types else "primary_pair"
         )
         risky_bridge_pair = False
+        has_followup_shape = (
+            days_delta <= 4
+            and shared_entity_score >= 0.5
+            and (
+                event_overlap_score >= 0.14
+                or lexical_overlap_score >= 0.18
+                or followup_marker_overlap > 0
+                or (len(shared_entities) >= 2 and tag_overlap_score >= 0.33)
+            )
+        )
+        event_continuity_score = min(
+            1.0,
+            (
+                (0.45 if len(shared_entities) >= 2 else 0.0)
+                + (0.2 if tag_overlap_score >= 0.33 else 0.0)
+                + (0.2 if event_overlap_score >= 0.14 else 0.0)
+                + (0.15 if followup_marker_overlap > 0 else 0.0)
+            ),
+        )
         if article_types & {"opinion", "editorial"}:
             if (
                 left.analysis.article_type != right.analysis.article_type
@@ -1012,38 +1086,53 @@ class ClusterPipeline:
             ):
                 hard_block = "opinion_editorial_excluded_from_primary_clusters"
         if article_types & secondary_types and (
-            title_sim < 0.58 or keyphrase_overlap_score < 0.34
+            lede_sim < 0.58 or keyphrase_overlap_score < 0.32
         ):
             penalties.append("secondary_form_penalty")
-        if days_delta >= 2 and title_sim < 0.58 and keyphrase_overlap_score < 0.45:
+            if shared_entity_score >= 0.5 and keyphrase_overlap_score < 0.24 and event_overlap_score < 0.2:
+                risky_bridge_pair = True
+                penalties.append("entity_glue_penalty")
+        if days_delta >= 2 and not has_followup_shape and lede_sim < 0.56 and keyphrase_overlap_score < 0.4:
             penalties.append("followup_penalty")
-        if shared_entity_score >= 0.5 and title_sim < 0.52 and keyphrase_overlap_score < 0.34:
+        if (
+            shared_entity_score >= 0.5
+            and not has_followup_shape
+            and (lede_sim < 0.6 or article_types & secondary_types)
+            and keyphrase_overlap_score < 0.24
+            and event_overlap_score < 0.2
+            and tag_overlap_score < 0.75
+        ):
             penalties.append("entity_glue_penalty")
             risky_bridge_pair = True
-        if days_delta >= 3 and semantic_similarity < 0.78 and title_sim < 0.7:
+        if days_delta >= 4 and semantic_similarity < 0.52 and lede_sim < 0.62 and event_overlap_score < 0.2:
             penalties.append("late_story_drift_penalty")
             risky_bridge_pair = True
         score = (
-            semantic_similarity * 0.30
-            + title_sim * 0.20
-            + shared_entity_score * 0.25
-            + tag_overlap_score * 0.10
-            + keyphrase_overlap_score * 0.10
-            + temporal_proximity_score * 0.05
+            semantic_similarity * 0.22
+            + max(title_sim, lede_sim) * 0.16
+            + lede_sim * 0.14
+            + entity_salience_score * 0.16
+            + tag_overlap_score * 0.07
+            + keyphrase_overlap_score * 0.09
+            + event_overlap_score * 0.04
+            + event_continuity_score * 0.10
+            + temporal_proximity_score * 0.02
         )
+        if has_followup_shape:
+            score += 0.06
         if "secondary_form_penalty" in penalties:
             score -= 0.14
         if "followup_penalty" in penalties:
-            score -= 0.14
-        if "entity_glue_penalty" in penalties:
             score -= 0.12
+        if "entity_glue_penalty" in penalties:
+            score -= 0.14
         if "late_story_drift_penalty" in penalties:
-            score -= 0.10
+            score -= 0.12
         return StoryClusterMemberReason(
             score=max(0.0, round(score, 4)),
             semantic_similarity=round(semantic_similarity, 4),
-            title_similarity=round(title_sim, 4),
-            shared_entity_score=round(shared_entity_score, 4),
+            title_similarity=round(max(title_sim, lede_sim), 4),
+            shared_entity_score=round(entity_salience_score, 4),
             tag_overlap_score=round(tag_overlap_score, 4),
             keyphrase_overlap_score=round(keyphrase_overlap_score, 4),
             temporal_proximity_score=round(temporal_proximity_score, 4),
@@ -1062,65 +1151,219 @@ class ClusterPipeline:
         article_ids: list[int],
         accepted_edges: list[tuple[int, int, StoryClusterMemberReason]],
     ) -> list[list[int]]:
-        adjacency: dict[int, dict[int, StoryClusterMemberReason]] = defaultdict(dict)
+        components, _ = self._build_guarded_components(article_ids, accepted_edges)
+        return components
+
+    def _raw_connected_components(
+        self,
+        article_ids: list[int],
+        accepted_edges: list[tuple[int, int, StoryClusterMemberReason]],
+    ) -> list[list[int]]:
+        adjacency: dict[int, set[int]] = defaultdict(set)
+        for left, right, _ in accepted_edges:
+            adjacency[left].add(right)
+            adjacency[right].add(left)
+
+        remaining = set(article_ids)
+        components: list[list[int]] = []
+        while remaining:
+            seed = remaining.pop()
+            component = [seed]
+            queue = deque([seed])
+            while queue:
+                node = queue.popleft()
+                for neighbor in sorted(adjacency.get(node, set())):
+                    if neighbor not in remaining:
+                        continue
+                    remaining.remove(neighbor)
+                    component.append(neighbor)
+                    queue.append(neighbor)
+            components.append(sorted(component))
+        return sorted(components, key=len, reverse=True)
+
+    def _build_guarded_components(
+        self,
+        article_ids: list[int],
+        accepted_edges: list[tuple[int, int, StoryClusterMemberReason]],
+    ) -> tuple[list[list[int]], dict[int, dict[str, object]]]:
+        strong_adjacency: dict[int, dict[int, StoryClusterMemberReason]] = defaultdict(dict)
+        medium_adjacency: dict[int, dict[int, StoryClusterMemberReason]] = defaultdict(dict)
         for left, right, reason in sorted(
             accepted_edges, key=lambda item: item[2].score, reverse=True
         ):
-            if reason.risky_bridge_pair and reason.score < 0.78:
+            edge_class = self._classify_closure_edge(reason)
+            if edge_class == "discard":
                 continue
-            adjacency[left][right] = reason
-            adjacency[right][left] = reason
+            target = strong_adjacency if edge_class == "strong" else medium_adjacency
+            target[left][right] = reason
+            target[right][left] = reason
 
-        unassigned = set(article_ids)
-        components: list[list[int]] = []
-        while unassigned:
+        remaining = set(article_ids)
+        components: list[set[int]] = []
+        member_meta: dict[int, dict[str, object]] = {}
+        while remaining:
             seed = max(
-                unassigned,
+                remaining,
                 key=lambda article_id: max(
-                    (reason.score for reason in adjacency.get(article_id, {}).values()),
+                    (
+                        reason.score
+                        for adjacency in (strong_adjacency, medium_adjacency)
+                        for reason in adjacency.get(article_id, {}).values()
+                    ),
                     default=0.0,
                 ),
             )
             cluster = {seed}
-            unassigned.remove(seed)
-            added = True
-            while added:
-                added = False
-                for candidate in sorted(unassigned):
+            remaining.remove(seed)
+            member_meta[seed] = {
+                "closure_stage": "seed",
+                "closure_decision": "seed",
+                "closure_support_count": 0,
+            }
+            queue = deque([seed])
+            while queue:
+                node = queue.popleft()
+                for neighbor in sorted(strong_adjacency.get(node, {})):
+                    if neighbor not in remaining:
+                        continue
+                    remaining.remove(neighbor)
+                    cluster.add(neighbor)
+                    queue.append(neighbor)
                     support = [
-                        adjacency[candidate][member]
+                        strong_adjacency[neighbor][member]
                         for member in cluster
-                        if member in adjacency.get(candidate, {})
+                        if member != neighbor and member in strong_adjacency.get(neighbor, {})
                     ]
-                    if self._should_attach_candidate(cluster, support):
-                        cluster.add(candidate)
-                        unassigned.remove(candidate)
-                        added = True
-            components.append(sorted(cluster))
-        return sorted(components, key=len, reverse=True)
+                    member_meta[neighbor] = self._closure_attach_meta(
+                        cluster_size=len(cluster),
+                        support=support,
+                        decision="strong_component",
+                        stage="strong",
+                    )
+            components.append(cluster)
+
+        singleton_cluster_by_id = {
+            next(iter(component)): component for component in components if len(component) == 1
+        }
+        candidate_singletons = sorted(singleton_cluster_by_id)
+        for candidate in candidate_singletons:
+            own_cluster = singleton_cluster_by_id.get(candidate)
+            if own_cluster is None or len(own_cluster) != 1:
+                continue
+            best_target: set[int] | None = None
+            best_support: list[StoryClusterMemberReason] = []
+            best_decision: str | None = None
+            for cluster in components:
+                if cluster is own_cluster or not cluster:
+                    continue
+                support = [
+                    adjacency[candidate][member]
+                    for adjacency in (strong_adjacency, medium_adjacency)
+                    for member in cluster
+                    if member in adjacency.get(candidate, {})
+                ]
+                attach_decision = self._should_attach_candidate(cluster, support)
+                if attach_decision is None:
+                    continue
+                if not best_support or max(reason.score for reason in support) > max(reason.score for reason in best_support):
+                    best_target = cluster
+                    best_support = support
+                    best_decision = attach_decision
+            if best_target is None or best_decision is None:
+                member_meta[candidate] = {
+                    "closure_stage": "singleton",
+                    "closure_decision": "no_support",
+                    "closure_support_count": 0,
+                }
+                continue
+            best_target.add(candidate)
+            own_cluster.clear()
+            singleton_cluster_by_id.pop(candidate, None)
+            member_meta[candidate] = self._closure_attach_meta(
+                cluster_size=len(best_target),
+                support=best_support,
+                decision=best_decision,
+                stage="attach",
+            )
+
+        final_components = [component for component in components if component]
+        normalized = [sorted(component) for component in final_components]
+        return sorted(normalized, key=len, reverse=True), member_meta
+
+    def _classify_closure_edge(self, reason: StoryClusterMemberReason) -> str:
+        if reason.risky_bridge_pair and reason.score < 0.78:
+            return "discard"
+        if not reason.risky_bridge_pair and reason.score >= 0.78:
+            return "strong"
+        return "medium"
+
+    def _closure_attach_meta(
+        self,
+        *,
+        cluster_size: int,
+        support: list[StoryClusterMemberReason],
+        decision: str,
+        stage: str,
+    ) -> dict[str, object]:
+        if not support:
+            return {
+                "closure_stage": stage,
+                "closure_decision": decision,
+                "closure_support_count": 0,
+                "closure_cluster_size": cluster_size,
+            }
+        best = max(support, key=lambda reason: reason.score)
+        return {
+            "closure_stage": stage,
+            "closure_decision": decision,
+            "closure_support_count": len(support),
+            "closure_cluster_size": cluster_size,
+            "closure_best_score": round(best.score, 4),
+            "closure_mean_score": round(sum(reason.score for reason in support) / len(support), 4),
+            "closure_best_days_delta": best.days_delta,
+            "closure_best_shared_entities": best.shared_entity_count,
+            "closure_best_shared_tags": best.shared_tag_count,
+            "closure_best_shared_keyphrases": best.shared_keyphrase_count,
+            "closure_best_penalties": list(best.penalties),
+        }
 
     def _should_attach_candidate(
         self,
         cluster: set[int],
         support: list[StoryClusterMemberReason],
-    ) -> bool:
+    ) -> str | None:
         if not support:
-            return False
-        best_score = max(reason.score for reason in support)
+            return None
+        best = max(support, key=lambda reason: reason.score)
+        best_score = best.score
         support_count = len(support)
         mean_score = sum(reason.score for reason in support) / support_count
         risky_support = any(reason.risky_bridge_pair for reason in support)
         if len(cluster) == 1:
-            return best_score >= 0.68 and not risky_support
+            return "seed_pair" if best_score >= 0.68 and not risky_support else None
         if support_count >= 2 and mean_score >= 0.72 and best_score >= 0.74 and not risky_support:
-            return True
-        return best_score >= 0.82 and mean_score >= 0.76 and not risky_support
+            return "multi_support"
+        pivot_compatible = (
+            not best.risky_bridge_pair
+            and best.days_delta <= 4
+            and best_score >= 0.74
+            and best.shared_entity_count >= 2
+            and (best.shared_tag_count >= 1 or best.shared_keyphrase_count >= 1)
+            and "entity_glue_penalty" not in best.penalties
+            and "late_story_drift_penalty" not in best.penalties
+        )
+        if pivot_compatible:
+            return "strong_pivot_attach"
+        if best_score >= 0.82 and mean_score >= 0.76 and not risky_support:
+            return "high_confidence_attach"
+        return None
 
     def _persist_clusters(
         self,
         articles: list[EnrichedArticle],
         components: list[list[int]],
         accepted_edges: list[tuple[int, int, StoryClusterMemberReason]],
+        member_closure_meta: dict[int, dict[str, object]],
     ) -> None:
         edge_map = {
             (min(left, right), max(left, right)): reason for left, right, reason in accepted_edges
@@ -1208,6 +1451,14 @@ class ClusterPipeline:
                         }
                     ),
                     "edge_scores": pair_scores,
+                    "closure": member_closure_meta.get(
+                        article_id,
+                        {
+                            "closure_stage": "singleton",
+                            "closure_decision": "no_support",
+                            "closure_support_count": 0,
+                        },
+                    ),
                 }
                 self.session.add(
                     ClusterMemberORM(
