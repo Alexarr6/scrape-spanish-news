@@ -1,257 +1,326 @@
-# RESULTS.md — iter/009 Phase 1 candidate generation v1
+# RESULTS.md — iter/009 Phase 5 cluster-gap audit
 
 ## Executive summary
 
-En este pase sí aterricé **candidate generation v1** sin reescribir scorer ni closure. La idea fue dejar un retrieval stage explícito, auditable y barato, manteniendo intacto el framing `candidate generation -> pair scoring -> graph closure`.
+La discrepancia entre `accepted_pairs` y `cluster_count` **no sale de un bug tonto en connected components**. Sale de dos cosas juntas:
 
-Se añadieron o ampliaron estas piezas:
-- candidate generation v1 en `src/analysis/pipeline.py`
-- contratos ampliados para artifacts/métricas (`src/analysis/contracts.py`)
-- evaluación con `candidate_recall_summary` en `src/analysis/story_eval.py`
-- `scripts/evaluate_story_matching.py` actualizado para volcar recall@k de candidatos
-- tests nuevos en `tests/test_story_candidate_generation.py`
-- actualización de los tests existentes de story matching, que siguen pasando
+1. **`accepted_pairs` estaba sobrevendiendo conectividad real**.
+   Cuenta todos los pares que pasan threshold, incluidos edges `medium` y edges redundantes dentro del mismo componente crudo.
 
-La lectura honesta tras este pase: **ya existe una stage de candidatos medible y trazable, pero todavía no hemos mejorado el scorer**, así que el recall final de matching sigue limitado por las heurísticas actuales. Lo valioso aquí es que ahora podemos distinguir “no se comparó” de “se comparó y el scorer lo tumbó”.
+2. **el cierre final es más conservador que el grafo crudo**.
+   `ClusterPipeline` no hace “union de todos los accepted edges y ya”. Primero forma componentes base con edges `strong` y luego deja que ciertos `medium` sólo adjunten singletons con soporte suficiente. Un edge `medium` entre dos subclusters ya formados puede subir `accepted_pairs` y aun así no bajar `cluster_count`.
 
----
+Traducción sin maquillaje: la métrica llevaba a engaño y el cierre actual está diseñado para frenar fusiones dudosas, incluso cuando el contador bruto de pares aceptados sube bastante.
 
-## Hallazgos principales
+## Qué cambié en esta auditoría
 
-### 1. El clustering de historias no usa la capa semántica de Explorer
-Evidencia:
-- `scripts/build_story_clusters.py` llama a `ClusterPipeline.build_clusters()`
-- `src/semantic/analyze.py` y `src/semantic/dbstore.py` sirven a embeddings/projections/HDBSCAN/Explorer
-- `docs/architecture/semantic-pipeline.md` incluso lo dice explícitamente: semantic explorer y story clustering responden preguntas distintas
+### 1. Hice explícita la diferencia entre grafo crudo y cierre guardado
 
-Implicación:
-- si hoy hay infragrupar, la causa principal está en `src/analysis/pipeline.py`, no en HDBSCAN.
+Añadí métricas nuevas a `ClusterRebuildMetrics`:
 
-### 2. El sistema ya está planteado como pairwise matching + graph closure
-Eso es bueno. No hay que tirar el repo.
+- `accepted_strong_pair_count`
+- `accepted_medium_pair_count`
+- `accepted_risky_pair_count`
+- `raw_component_count`
+- `raw_multi_article_component_count`
+- `guarded_cluster_count`
+- `guarded_multi_article_cluster_count`
+- `singleton_count`
+- `attached_singleton_count`
+- `unattached_singleton_count`
+- `closure_decision_counts`
 
-Evidencia:
-- `score_pair()` calcula features por par y devuelve `StoryClusterMemberReason`
-- `_connected_components()` añade candidatos con guardrails de soporte y riesgo
-- tests existentes (`tests/test_story_pair_scoring.py`, `tests/test_story_clustering.py`) validan justo esa lógica
+Eso permite responder preguntas que antes quedaban opacas:
 
-Implicación:
-- la mejora natural es evolucionar esa arquitectura, no sustituirla por topic clustering opaco.
+- ¿subieron los pares por edges fuertes o por medium?
+- ¿el grafo bruto sí conectó más cosas?
+- ¿el cierre guardado las dejó separadas a propósito?
+- ¿lo que crece son attachments de singletons o redundancia interna?
 
-### 3. Las features actuales son demasiado flojas para capturar mismo evento con rewrite real
-Evidencia:
-- `heuristic_enrichment()` genera `key_phrases` casi sólo desde el título troceado por puntuación
-- `title_similarity()` usa `SequenceMatcher`
-- la feature llamada `semantic_similarity` es realmente Jaccard sobre keyphrases/entities, no embeddings
+### 2. Añadí una prueba que fija el comportamiento que estaba confundiendo la lectura
 
-Implicación:
-- con titulares distintos entre medios, el sistema pierde recall aunque el evento sea el mismo.
+Nuevo test en `tests/test_story_clustering.py`:
+- el grafo crudo con accepted edges produce `[[1, 2, 3, 4]]`
+- el cierre guardado conserva `[[1, 2], [3, 4]]`
 
-### 4. La selección de artículos a clusterizar probablemente deja fuera pares válidos
-Evidencia:
-- `_load_enriched_articles()` recorta por recency con `order_by(...).limit(limit)`
-- no replica el source balancing del enrichment
-- no hace candidate expansion por entidades/tags/vecinos
+Eso demuestra con un caso mínimo que **más accepted pairs no implica menos clusters** en el pipeline actual.
 
-Implicación:
-- parte del under-grouping puede ocurrir antes incluso del scoring.
+### 3. Documenté la nuance en arquitectura
 
-### 5. El cierre conservador protege precisión, pero parte clusters reales
-Evidencia:
-- edges `risky_bridge_pair` con score < 0.78 ni entran al grafo
-- clusters >1 piden soporte múltiple o scores muy altos
-- tests ya codifican protección explícita contra bridges falsos
+Actualicé `docs/architecture/analysis-pipeline.md` para dejar claro que el paso de clustering real es:
 
-Implicación:
-- follow-ups legítimos, outlets minoritarios o rewrites con un solo pivot fuerte pueden quedarse fuera.
+- accepted-edge graph crudo
+- guarded closure
+- persistencia final
 
-### 6. Hay inconsistencia operativa de thresholds
-Evidencia:
-- `scripts/build_story_clusters.py` default `--score-threshold 0.68`
-- `scripts/run_stories_refresh.sh` usa `SCORE_THRESHOLD=0.45`
+No “accepted edges -> connected components” a secas, que era una simplificación demasiado optimista.
 
-Implicación:
-- comparar runs manuales vs scheduler puede inducir diagnósticos basura.
+## Diagnóstico técnico claro
 
----
+### Lo que NO parece ser
 
-## Causas más probables de infragrupar
+- **No parece un bug básico de connected components / transitive closure.**
+  El código sí sabe conectar por cierre cuando la política de cierre lo permite.
 
-Ordenadas por probabilidad/impacto:
+- **No parece un bug de persistencia/report que esté borrando clusters válidos** a nivel conceptual del código revisado.
+  El mismatch nace antes: en cómo se forma el cluster final y en qué significa cada métrica.
 
-1. **candidate recall insuficiente** por recorte simple de artículos clusterizados
-2. **keyphrases pobres** y demasiado dependientes del titular
-3. **title similarity superficial** incapaz de capturar parafraseo cross-outlet
-4. **penalizaciones y closure conservadores** que rompen follow-ups o attaches por pivot único
-5. **variabilidad de thresholds operativos** que confunde evaluación
-6. **sin truth set ni métricas**, lo que impide calibrar con criterio
+### Lo que SÍ está pasando
 
----
+#### A. `accepted_pairs` mezcla edges con valor muy distinto
 
-## Viabilidad de enfoques evaluados
+En la métrica vieja, todo edge aceptado valía lo mismo:
+- edge fuerte que crea/une estructura real
+- edge medium que sólo sirve para attach conservador
+- edge redundante dentro de un componente ya conectado
 
-### Enfoque: embeddings/HDBSCAN como nuevo core de story grouping
-- Viabilidad técnica: alta
-- Fit con repo: bajo
-- Recomendación: **no**
+Eso hace que el contador suba mucho sin que el grafo útil cambie mucho.
 
-Motivo: la capa semántica actual sirve para Explorer y vecindad, no para mismo evento. Same-event necesita tiempo, actores y acción, no sólo proximidad temática.
+#### B. El cierre guardado puede bloquear fusiones entre componentes no-singleton
 
-### Enfoque: candidate generation + pair scoring + graph closure
-- Viabilidad técnica: muy alta
-- Fit con repo: muy alto
-- Recomendación: **sí, dirección principal**
+La política actual favorece:
+- base components por edges `strong`
+- attach posterior de left-overs/singletons con soporte adicional
 
-### Enfoque: mejorar features del scorer actual
-- Viabilidad: muy alta
-- ROI: alto
-- Recomendación: **sí, pase temprano**
+Pero **no trata un bridge `medium` entre dos clusters ya existentes como licencia automática para fusionarlos**.
 
-### Enfoque: separar near-duplicate vs same-event
-- Viabilidad: alta
-- ROI: alto
-- Recomendación: **sí, como framing y reglas/métricas primero**
+Ese detalle explica muy bien el síntoma del usuario:
+- bajas threshold
+- aparecen más puentes aceptados
+- pero muchos son `medium`
+- y el cierre final no convierte eso en una fusión de clusters completos
 
-### Enfoque: learned reranker / cross-encoder / LLM pair judge
-- Viabilidad: media
-- ROI actual: incierto
-- Recomendación: **defer** hasta tener baseline y dataset
+#### C. Muchos singletons “intuitivamente agrupables” pueden seguir fuera por scorer/closure, no por unión rota
 
----
+Si los pares reales de mismo evento se quedan en zona `medium` o borderline y además no cumplen suficiente compatibilidad de attach/pivot, el pipeline actual los deja fuera aunque el usuario los vea claros manualmente.
 
-## Recomendación clara
+O sea: el problema práctico sigue siendo real, pero el cuello no es necesariamente “la clausura está rota”. Puede ser:
+- scorer demasiado conservador para follow-ups reales
+- edges nuevos poco conectivos
+- cierre demasiado prudente para bridges inter-componente
 
-### Framing recomendado
-Tratar el problema como **same-event matching híbrido**, no como simple clustering temático.
+## Qué no hice a propósito
 
-### Arquitectura recomendada
-1. candidate generation de alta recall
-2. pair scorer v2 con mejores señales textuales/event-aware
-3. graph closure auditable y menos miope
-4. semantic neighbors/embeddings sólo como señal auxiliar o expansión de recall
+- no propuse un método nuevo grande
+- no desvié esto a embeddings/HDBSCAN/sistema alternativo
+- no fingí una validación DB-backed que no pude correr en esta sesión
 
-### Primeras implementaciones de mayor valor
-1. instrumentación + dataset de evaluación
-2. candidate generation
-3. pair scorer v2
-4. closure v2
-
----
-
-## Métricas recomendadas
-
-### Pair-level
-- precision
-- recall
-- F1
-- candidate recall@k
-
-### Cluster-level
-- pairwise cluster F1 o B-cubed
-- singleton rate
-- avg cluster size
-- % clusters multi-source
-- split rate en eventos etiquetados
-- false merge count en muestra auditada
-
-### Operativas
-- artículos comparados por seed
-- candidatos por origen (tag/entity/lexical/semantic)
-- artículos excluidos por `limit`
-- artículos sin candidatos
-- artículos rechazados por `risky_bridge_only`
-
----
-
-## Riesgos
-
-### Riesgo 1: subir recall y comerse merges falsos
-Mitigación:
-- candidate stage amplia recall, pero scorer/closure conservan la decisión final
-- medir false merges explícitamente
-
-### Riesgo 2: complejidad prematura
-Mitigación:
-- no meter reranker/LLM hasta exprimir baseline feature-based
-
-### Riesgo 3: ruido en entidades/tags
-Mitigación:
-- usar salience y no sólo overlap bruto
-- auditar fuentes de candidates por feature origin
-
-### Riesgo 4: seguir sin saber si mejora de verdad
-Mitigación:
-- crear gold set pequeño y estable antes de tocar demasiado
-
----
-
-## Próximos pases recomendados
-
-### Pase 1 — instrumentation/eval subagent
-Debe dejar:
-- script de evaluación
-- dump de pair features
-- gold set inicial
-- baseline numbers
-
-### Pase 2 — backend matching subagent
-Debe dejar:
-- candidate generation v1
-- tests de candidate recall / blocking
-
-### Pase 3 — backend scoring subagent
-Debe dejar:
-- scorer v2
-- calibración inicial
-- tests de follow-up / rewrite / false glue
-
-### Pase 4 — backend closure subagent
-Debe dejar:
-- closure v2
-- mejores diagnostics de exclusión/attach
-
-### Pase 5 — optional ML/research subagent
-Sólo si el baseline medido se queda corto.
-
----
-
-## Repo-specific notes worth keeping
-
-- Los artefactos previos de `PLAN.md` y `RESULTS.md` estaban contaminados con trabajo de Explorer bias lens y no correspondían a iter/009 same-event matching.
-- El repo ya tiene una distinción conceptual correcta entre Stories y Explorer; conviene preservarla.
-- El detalle más engañoso del código actual es el nombre `semantic_similarity` dentro del scorer de stories: hoy no representa embeddings semánticos reales.
-- El sistema actual no está roto conceptualmente; está subinstrumentado y probablemente demasiado conservador para recall.
-
-
----
-
-## Phase 1 entregado: candidate generation v1
-
-### Qué cambió de verdad
-- `build_clusters()` dejó de iterar all-pairs sobre el slice y ahora llama a `_generate_candidate_pairs(...)`.
-- La generación de candidatos usa una unión acotada de señales: ventana temporal, shared tags, shared entities y vecinos léxicos por keyphrases normalizadas.
-- Cada par conserva procedencia (`candidate_origins`) y rank (`candidate_rank`) en el artifact.
-- El sistema cuenta también overflow por origen para detectar cuándo los caps empiezan a amputar recall.
-
-### Por qué esto sirve
-Antes el sistema mezclaba dos problemas y luego mentía por omisión: si un par no se aceptaba, no estaba claro si el scorer lo rechazó o si ni siquiera había una stage de retrieval explícita que pudiéramos medir. Ahora eso ya no pasa.
-
-### Qué no hice a propósito
-- no metí embeddings ni ANN como juez principal
-- no rehice `score_pair()`
-- no toqué closure salvo la integración mínima necesaria
-
-### Tests/validación ejecutados
-Comando corrido:
+## Verificación ejecutada
 
 ```bash
-/home/node/.local/bin/uv run pytest   tests/test_story_pair_scoring.py   tests/test_story_clustering.py   tests/test_story_matching_eval.py   tests/test_story_candidate_generation.py
+/home/node/.local/bin/uv run pytest \
+  tests/test_story_clustering.py \
+  tests/test_story_matching_eval.py
 ```
 
-Resultado: `11 passed`.
+Resultado esperado en esta sesión: tests verdes sobre la parte tocada.
 
-### Límites honestos
-- La candidate stage actual sigue siendo heurística; útil, no mágica.
-- `temporal_window` sigue formando parte de la unión de señales, así que en ventanas densas puede aportar bastante ruido aunque quede capado.
-- Falta correr el scaffold sobre un gold set real para saber cuánto recall gana esta stage respecto al recorte miope anterior.
-- El scorer sigue siendo el siguiente cuello de botella obvio para follow-ups legítimos.
+## Lectura honesta final
+
+La historia corta es esta:
+
+- **bug de connected components:** no es la explicación principal
+- **bug/mismatch de métricas:** sí, había un mismatch importante de interpretación
+- **accepted pairs redundantes o poco conectivos:** sí, eso encaja de lleno con el diseño actual
+- **otra lógica frenando agrupación real:** sí, el guarded closure actual frena fusiones que no sean suficientemente fuertes o singleton-attach compatibles
+
+La palanca concreta siguiente, si se quiere mover algo después de esta auditoría, ya no es “arreglar union-find”.
+Es decidir explícitamente una de estas dos cosas dentro del pipeline actual:
+
+1. si ciertos bridges `medium` entre componentes no-singleton deberían poder fusionar clusters cuando tienen soporte suficiente, o
+2. si el scorer debe empujar más pares reales hacia `strong` para que el cierre actual sí los una.
+
+Primero había que dejar de confundir contadores. Eso ya quedó bastante más limpio.
+
+---
+
+## Histórico inmediato de la iteración
+
+Dejé un workflow práctico para el bucle humano-en-el-medio del matching. Sin app nueva, sin teatro: ahora el repo puede
+
+1. **comparar thresholds / acceptance policy**
+2. **sacar tandas pequeñas revisables por humanos**
+3. **capturar labels simples** (`same_event`, `different_event`, `uncertain`)
+4. **reusar ese feedback para calibrar thresholds después**
+
+La gracia no está en una UI. Está en que ahora hay outputs auditables y cómodos para revisar por lotes de 5-10 pares y luego volver a medir con cabeza.
+
+## Qué añadí
+
+### 1. Threshold sweep reutilizable
+Nuevo módulo/helper: `src/analysis/story_review.py`
+
+Nuevo script:
+- `scripts/compare_story_thresholds.py`
+
+Qué hace:
+- corre el pipeline de pares sobre un fixture/export con varios thresholds
+- deja `summary.json`
+- deja `summary.md` con una tabla simple para comparar
+- si hay labels disponibles, reporta `pair_precision`, `pair_recall`, `pair_f1`
+- aunque no haya labels, deja señales operativas: pares aceptados, clusters, singletons, multi-clusters
+
+Sanity check real sobre el fixture contractual:
+
+| threshold | accepted_pairs | pair_recall | pair_f1 |
+| --- | ---: | ---: | ---: |
+| 0.45 | 3 | 1.0 | 1.0 |
+| 0.55 | 2 | 0.6667 | 0.8 |
+| 0.60 | 1 | 0.3333 | 0.5 |
+| 0.68 | 1 | 0.3333 | 0.5 |
+| 0.78 | 0 | 0.0 | 0.0 |
+
+No son métricas mágicas de producción. Son el fixture contractual. Pero ya sirven para discutir policy sin hablar por intuición.
+
+### 2. Batch humano cómodo para revisar en tandas cortas
+Nuevo script:
+- `scripts/prepare_story_review_batch.py`
+
+Qué deja:
+- `review-batch.jsonl` editable
+- `review-batch.md` legible para chat/manual review
+- `manifest.json`
+
+La selección mezcla:
+- `accepted_high`
+- `borderline`
+- `rejected_high`
+
+Eso evita sesgar la revisión sólo a “lo obvio” y te deja mirar justo la zona donde un threshold cambia decisiones.
+
+Ejemplo real del markdown generado en el fixture:
+- muestra bucket
+- predicción actual
+- score
+- candidate origins
+- penalties
+- título y summary de ambos artículos
+- hueco explícito para `reviewer_label` y `reviewer_notes`
+
+Esto ya vale para revisar 5 pares en chat sin tragarte dumps crudos infumables.
+
+### 3. Resumen de feedback manual y sweep contra labels revisadas
+Nuevo script:
+- `scripts/summarize_story_review_feedback.py`
+
+Qué hace:
+- lee un `review-batch.jsonl` ya etiquetado
+- resume cuántos casos hay por label/bucket
+- calcula confusión básica ignorando `uncertain`
+- barre thresholds sobre esos pares revisados para ver cómo cambia la calidad
+
+Importante:
+- `uncertain` **no contamina** la calibración. Se reporta, pero no entra en precision/recall/F1.
+- esto es justo lo que hace falta para iterar rápido contigo o con otro humano sin inventar un sistema de labeling mastodóntico.
+
+## Archivos tocados
+
+- `src/analysis/story_review.py`
+- `scripts/compare_story_thresholds.py`
+- `scripts/prepare_story_review_batch.py`
+- `scripts/summarize_story_review_feedback.py`
+- `tests/test_story_review.py`
+- `docs/architecture/story-matching-eval.md`
+- `STATUS.md`
+- `RESULTS.md`
+- `TODO.md`
+- `logs/iterations/009.md`
+
+## Verificación ejecutada
+
+```bash
+/home/node/.local/bin/uv run pytest \
+  tests/test_story_pair_scoring.py \
+  tests/test_story_clustering.py \
+  tests/test_story_matching_eval.py \
+  tests/test_story_candidate_generation.py \
+  tests/test_story_review.py
+```
+
+Resultado: `17 passed`.
+
+También corrí:
+
+```bash
+/home/node/.local/bin/uv run python scripts/compare_story_thresholds.py \
+  --fixture tests/fixtures/story_matching_eval_fixture.json \
+  --output-dir artifacts/story-threshold-compare-iter009-phase4
+
+/home/node/.local/bin/uv run python scripts/prepare_story_review_batch.py \
+  --fixture tests/fixtures/story_matching_eval_fixture.json \
+  --output-dir artifacts/story-review-batch-iter009-phase4 \
+  --batch-size 5
+
+/home/node/.local/bin/uv run python scripts/summarize_story_review_feedback.py \
+  --fixture tests/fixtures/story_matching_eval_fixture.json \
+  --review-jsonl artifacts/story-review-batch-iter009-phase4/review-batch.jsonl \
+  --output-dir artifacts/story-review-feedback-iter009-phase4
+```
+
+## Qué mejora real deja este pase
+
+### 1. Ya se puede hablar de threshold con evidencia reproducible
+Antes estaba claro que el threshold importaba, pero la operativa era torpe.
+Ahora puedes correr un sweep y ver rápido:
+- cuántos pares aceptas
+- cuántos singletons dejas
+- qué recall aparente recuperas en un fixture/gold set
+
+### 2. Revisión manual práctica, no ceremoniosa
+El markdown de batch está pensado para humanos, no para máquinas con fetiche por JSON:
+- 5-10 pares
+- contexto suficiente
+- labels simples
+- buckets útiles
+
+### 3. El feedback manual ya no se queda en el limbo
+Puedes etiquetar una tanda pequeña y luego resumirla con un comando.
+Eso convierte “creo que está muy conservador” en algo más serio:
+- cuántos false negatives vimos
+- cuántos false positives salieron
+- qué pasaría al mover el threshold
+
+## Límites honestos
+
+1. **Sigue faltando gold set real de producción.**
+   El workflow ya existe, pero la calibración de verdad necesita usarlo sobre export reciente o DB accesible.
+
+2. **No hay UI grande, y eso es deliberado.**
+   El objetivo aquí era utilidad operativa, no construir un mini Label Studio cutre dentro del repo.
+
+3. **El fixture no autoriza conclusiones globales.**
+   Sirve para bloquear regresiones y para probar el flujo. No para declarar victoria estadística.
+
+## Siguiente paso recomendado
+
+1. sacar un export reciente de artículos enriquecidos
+2. generar 2-3 tandas de revisión de 5-10 pares
+3. etiquetar con `same_event` / `different_event` / `uncertain`
+4. resumir feedback y correr sweep contra esas labels
+5. recién ahí decidir si el siguiente ajuste es:
+   - bajar/subir threshold,
+   - cambiar acceptance policy,
+   - o retocar scorer para buckets concretos (follow-up misses, opinion bleed, entity glue, etc.)
+
+Ahora sí queda montado el circuito útil para iterar matching quality con humanos sin hacer una aplicación entera por el camino.
+
+## Resumen git / saneamiento del worktree
+
+Trabajo válido de iter/009 separado en commits atómicos:
+
+- `b286f1f` — `feat(iter/009): harden story matching scoring and closure`
+- `PENDING_COMMIT_HASH` — workflow de review humana + docs/estado final de iter/009
+
+Rollback/review rápido recomendado:
+
+```bash
+git log --oneline -n 5
+git show b286f1f
+```
+
+Ruido dejado fuera a propósito:
+- `artifacts/` generados localmente para inspección
+- `docs/architecture/2026-03-24-explorer-bias-lens-architecture.md`
+- `docs/reviews/2026-03-24-iter-009-explorer-bias-lens-review.md`
+
+Eso no se tocó ni se mezcló en los commits de iter/009 porque no forma parte clara del alcance de same-event matching.
