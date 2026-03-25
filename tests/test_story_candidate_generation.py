@@ -190,6 +190,65 @@ def test_candidate_generation_skips_semantic_neighbors_when_embeddings_missing(m
     assert all("semantic_neighbor" not in summary.origin_counts for summary in summaries)
 
 
+def test_candidate_generation_high_recall_prioritizes_semantic_neighbors(monkeypatch) -> None:
+    from src.semantic import dbstore
+
+    pipeline = ClusterPipeline(session=object())  # type: ignore[arg-type]
+    now = datetime(2026, 3, 18, tzinfo=UTC)
+    articles = [
+        _enriched(
+            article_id=1,
+            title="Acuerdo presupuestario en Catalunya",
+            summary="Resumen A",
+            tags=["politics_regional"],
+            entities=["person-salvador-illa"],
+            key_phrases=["alpha"],
+            when=now,
+        ),
+        _enriched(
+            article_id=2,
+            title="Las cuentas catalanas siguen abiertas",
+            summary="Resumen B",
+            tags=["economy"],
+            entities=["organization-govern"],
+            key_phrases=["beta"],
+            when=now,
+        ),
+        _enriched(
+            article_id=3,
+            title="Temporal en Galicia deja lluvias intensas",
+            summary="Resumen C",
+            tags=["politics_regional"],
+            entities=["person-salvador-illa"],
+            key_phrases=["gamma"],
+            when=now,
+        ),
+    ]
+
+    def _fake_neighbors(_session, *, article_id: int, limit: int):
+        assert limit >= 5
+        if article_id == 1:
+            return [SimpleNamespace(article_id=2, similarity=0.94)]
+        return []
+
+    monkeypatch.setattr(dbstore, "nearest_neighbors", _fake_neighbors)
+
+    pairs, summaries = pipeline._generate_candidate_pairs(  # noqa: SLF001
+        articles,
+        per_seed_limit=1,
+        per_origin_limit=1,
+        recall_mode="high_recall",
+        semantic_backfill_limit=1,
+    )
+
+    pair = next(pair for pair in pairs if {pair.left_article_id, pair.right_article_id} == {1, 2})
+    seed_one = next(summary for summary in summaries if summary.seed_article_id == 1)
+
+    assert "semantic_neighbor" in pair.origins
+    assert pair.rank == 1
+    assert seed_one.origin_counts["semantic_neighbor"] == 1
+
+
 def test_candidate_generation_recall_summary_counts_positive_pairs_covered_by_rank() -> None:
     from src.analysis.story_eval import PairLabel
 

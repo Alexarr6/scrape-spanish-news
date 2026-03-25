@@ -26,6 +26,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--days-back", type=int, default=3)
     parser.add_argument("--limit", type=int, default=200)
     parser.add_argument("--score-threshold", type=float, default=0.55)
+    parser.add_argument(
+        "--recall-mode",
+        choices=("default", "high_recall"),
+        default="default",
+    )
     return parser.parse_args()
 
 
@@ -36,7 +41,10 @@ def main() -> int:
     session = make_session(engine)
     try:
         metrics, artifacts = ClusterPipeline(session).build_clusters(
-            days_back=args.days_back, limit=args.limit, score_threshold=args.score_threshold
+            days_back=args.days_back,
+            limit=args.limit,
+            score_threshold=args.score_threshold,
+            recall_mode=args.recall_mode,
         )
         print(
             json.dumps(

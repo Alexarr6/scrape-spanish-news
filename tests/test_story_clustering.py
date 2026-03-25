@@ -564,6 +564,73 @@ def test_guarded_components_attach_clean_rewrite_singleton_to_existing_cluster()
     assert guarded_components == [[1, 2, 3]]
 
 
+def test_high_recall_merges_clusters_via_followup_bridge() -> None:
+    pipeline = ClusterPipeline(session=None)  # type: ignore[arg-type]
+    accepted_edges = [
+        (
+            1,
+            2,
+            StoryClusterMemberReason(
+                score=0.84,
+                semantic_similarity=0.8,
+                title_similarity=0.74,
+                shared_entity_score=0.8,
+                tag_overlap_score=1.0,
+                keyphrase_overlap_score=0.76,
+                temporal_proximity_score=1.0,
+                days_delta=0,
+                shared_entity_count=2,
+                shared_tag_count=2,
+                shared_keyphrase_count=2,
+            ),
+        ),
+        (
+            3,
+            4,
+            StoryClusterMemberReason(
+                score=0.83,
+                semantic_similarity=0.8,
+                title_similarity=0.72,
+                shared_entity_score=0.8,
+                tag_overlap_score=1.0,
+                keyphrase_overlap_score=0.74,
+                temporal_proximity_score=1.0,
+                days_delta=0,
+                shared_entity_count=2,
+                shared_tag_count=2,
+                shared_keyphrase_count=2,
+            ),
+        ),
+        (
+            2,
+            3,
+            StoryClusterMemberReason(
+                score=0.51,
+                semantic_similarity=0.78,
+                title_similarity=0.62,
+                shared_entity_score=0.8,
+                tag_overlap_score=0.5,
+                keyphrase_overlap_score=0.3,
+                temporal_proximity_score=0.9,
+                days_delta=1,
+                shared_entity_count=2,
+                shared_tag_count=1,
+                shared_keyphrase_count=1,
+            ),
+        ),
+    ]
+
+    default_components = pipeline._connected_components([1, 2, 3, 4], accepted_edges)
+    high_recall_components = pipeline._connected_components(
+        [1, 2, 3, 4],
+        accepted_edges,
+        recall_mode="high_recall",
+    )
+
+    assert default_components == [[1, 2], [3, 4]]
+    assert high_recall_components == [[1, 2, 3, 4]]
+
+
 def test_guarded_components_preserve_medium_only_pair_with_clean_support():
     pipeline = ClusterPipeline(session=None)  # type: ignore[arg-type]
     accepted_edges = [

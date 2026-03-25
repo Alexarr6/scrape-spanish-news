@@ -5,8 +5,10 @@ from __future__ import annotations
 import hashlib
 import json
 from collections import Counter, defaultdict, deque
+from contextlib import contextmanager
 from dataclasses import dataclass, field
 from datetime import UTC, date, datetime, timedelta
+from typing import Any, Literal
 
 from sqlalchemy import delete, or_, select
 from sqlalchemy.exc import SQLAlchemyError
@@ -804,9 +806,15 @@ class ClusterPipeline:
 
     def __init__(self, session: Session) -> None:
         self.session = session
+        self._active_recall_mode: Literal["default", "high_recall"] = "default"
 
     def build_clusters(
-        self, *, days_back: int = 3, limit: int = 200, score_threshold: float = 0.55
+        self,
+        *,
+        days_back: int = 3,
+        limit: int = 200,
+        score_threshold: float = 0.55,
+        recall_mode: Literal["default", "high_recall"] = "default",
     ) -> tuple[ClusterRebuildMetrics, list[PairScoreArtifact]]:
         """Score candidate pairs, accept qualifying edges, and persist components.
 
@@ -821,86 +829,113 @@ class ClusterPipeline:
         article_by_id = {article.article.id: article for article in articles}
         artifacts: list[PairScoreArtifact] = []
         accepted_edges: list[tuple[int, int, StoryClusterMemberReason]] = []
-        candidate_pairs, candidate_summaries = self._generate_candidate_pairs(articles)
-        for summary in candidate_summaries:
-            for origin, count in summary.origin_counts.items():
-                metrics.candidate_origin_counts[origin] = (
-                    metrics.candidate_origin_counts.get(origin, 0) + count
-                )
-            for origin, count in summary.overflow_counts.items():
-                metrics.candidate_overflow_counts[origin] = (
-                    metrics.candidate_overflow_counts.get(origin, 0) + count
-                )
-        for candidate in candidate_pairs:
-            left = article_by_id[candidate.left_article_id]
-            right = article_by_id[candidate.right_article_id]
-            metrics.candidate_pair_count += 1
-            reason = self.score_pair(left, right)
-            accepted = reason.hard_block is None and reason.score >= score_threshold
-            artifacts.append(
-                PairScoreArtifact(
-                    left_article_id=left.article.id,
-                    right_article_id=right.article.id,
-                    accepted=accepted,
-                    candidate_origins=sorted(candidate.origins),
-                    candidate_rank=candidate.rank,
-                    reason=reason,
-                )
+        with self._recall_mode_scope(recall_mode):
+            candidate_kwargs: dict[str, Any] = {}
+            if recall_mode == "high_recall":
+                candidate_kwargs = {
+                    "max_days_delta": 7,
+                    "per_seed_limit": 80,
+                    "per_origin_limit": 30,
+                    "semantic_backfill_limit": 20,
+                }
+            candidate_pairs, candidate_summaries = self._generate_candidate_pairs(
+                articles,
+                recall_mode=recall_mode,
+                **candidate_kwargs,
             )
-            if accepted:
-                metrics.accepted_pair_count += 1
-                edge_class = self._classify_closure_edge(reason)
-                if edge_class == "strong":
-                    metrics.accepted_strong_pair_count += 1
+            for summary in candidate_summaries:
+                for origin, count in summary.origin_counts.items():
+                    metrics.candidate_origin_counts[origin] = (
+                        metrics.candidate_origin_counts.get(origin, 0) + count
+                    )
+                for origin, count in summary.overflow_counts.items():
+                    metrics.candidate_overflow_counts[origin] = (
+                        metrics.candidate_overflow_counts.get(origin, 0) + count
+                    )
+            for candidate in candidate_pairs:
+                left = article_by_id[candidate.left_article_id]
+                right = article_by_id[candidate.right_article_id]
+                metrics.candidate_pair_count += 1
+                reason = self.score_pair(left, right)
+                accepted = reason.hard_block is None and reason.score >= score_threshold
+                artifacts.append(
+                    PairScoreArtifact(
+                        left_article_id=left.article.id,
+                        right_article_id=right.article.id,
+                        accepted=accepted,
+                        candidate_origins=sorted(candidate.origins),
+                        candidate_rank=candidate.rank,
+                        reason=reason,
+                    )
+                )
+                if accepted:
+                    metrics.accepted_pair_count += 1
+                    edge_class = self._classify_closure_edge(reason)
+                    if edge_class == "strong":
+                        metrics.accepted_strong_pair_count += 1
+                    else:
+                        metrics.accepted_medium_pair_count += 1
+                    if reason.risky_bridge_pair:
+                        metrics.accepted_risky_pair_count += 1
+                    accepted_edges.append((left.article.id, right.article.id, reason))
                 else:
-                    metrics.accepted_medium_pair_count += 1
-                if reason.risky_bridge_pair:
-                    metrics.accepted_risky_pair_count += 1
-                accepted_edges.append((left.article.id, right.article.id, reason))
-            else:
-                metrics.rejected_pair_count += 1
-        raw_components = self._raw_connected_components(
-            [article.article.id for article in articles], accepted_edges
-        )
-        metrics.raw_component_count = len(raw_components)
-        metrics.raw_multi_article_component_count = len(
-            [component for component in raw_components if len(component) > 1]
-        )
-        components, member_closure_meta = self._build_guarded_components(
-            [article.article.id for article in articles], accepted_edges
-        )
-        try:
-            self._persist_clusters(articles, components, accepted_edges, member_closure_meta)
-            self.session.commit()
-        except Exception:
-            self.session.rollback()
-            raise
-        metrics.guarded_cluster_count = len(components)
-        metrics.guarded_multi_article_cluster_count = len(
-            [component for component in components if len(component) > 1]
-        )
-        metrics.cluster_count = metrics.guarded_cluster_count
-        metrics.singleton_count = len(
-            [component for component in components if len(component) == 1]
-        )
-        metrics.attached_singleton_count = sum(
-            1
-            for meta in member_closure_meta.values()
-            if meta.get("closure_stage") == "attach"
-        )
-        metrics.unattached_singleton_count = sum(
-            1
-            for meta in member_closure_meta.values()
-            if meta.get("closure_decision") == "no_support"
-        )
-        metrics.closure_decision_counts = dict(
-            Counter(
-                str(meta.get("closure_decision", "unknown"))
-                for meta in member_closure_meta.values()
+                    metrics.rejected_pair_count += 1
+            raw_components = self._raw_connected_components(
+                [article.article.id for article in articles], accepted_edges
             )
-        )
+            metrics.raw_component_count = len(raw_components)
+            metrics.raw_multi_article_component_count = len(
+                [component for component in raw_components if len(component) > 1]
+            )
+            components, member_closure_meta = self._build_guarded_components(
+                [article.article.id for article in articles], accepted_edges
+            )
+            try:
+                self._persist_clusters(articles, components, accepted_edges, member_closure_meta)
+                self.session.commit()
+            except Exception:
+                self.session.rollback()
+                raise
+            metrics.guarded_cluster_count = len(components)
+            metrics.guarded_multi_article_cluster_count = len(
+                [component for component in components if len(component) > 1]
+            )
+            metrics.cluster_count = metrics.guarded_cluster_count
+            metrics.singleton_count = len(
+                [component for component in components if len(component) == 1]
+            )
+            metrics.attached_singleton_count = sum(
+                1
+                for meta in member_closure_meta.values()
+                if meta.get("closure_stage") == "attach"
+            )
+            metrics.unattached_singleton_count = sum(
+                1
+                for meta in member_closure_meta.values()
+                if meta.get("closure_decision") == "no_support"
+            )
+            metrics.closure_decision_counts = dict(
+                Counter(
+                    str(meta.get("closure_decision", "unknown"))
+                    for meta in member_closure_meta.values()
+                )
+            )
         metrics.finished_at = datetime.now(UTC)
         return metrics, artifacts
+
+    @contextmanager
+    def _recall_mode_scope(
+        self, recall_mode: Literal["default", "high_recall"]
+    ) -> Any:
+        previous = self._active_recall_mode
+        self._active_recall_mode = recall_mode
+        try:
+            yield
+        finally:
+            self._active_recall_mode = previous
+
+    def _is_high_recall_mode(self) -> bool:
+        return self._active_recall_mode == "high_recall"
 
     def _load_enriched_articles(self, *, days_back: int, limit: int) -> list[EnrichedArticle]:
         cutoff = datetime.now(UTC) - timedelta(days=days_back)
@@ -953,14 +988,47 @@ class ClusterPipeline:
         max_days_delta: int = 7,
         per_seed_limit: int = 40,
         per_origin_limit: int = 20,
+        recall_mode: Literal["default", "high_recall"] = "default",
+        semantic_backfill_limit: int = 0,
     ) -> tuple[list[CandidatePair], list[CandidateGenerationSummary]]:
         ordered_articles = sorted(articles, key=lambda item: item.article.published_at)
         pair_map: dict[tuple[int, int], CandidatePair] = {}
         summaries: list[CandidateGenerationSummary] = []
+        origin_priority = (
+            (
+                "semantic_neighbor",
+                "shared_entity",
+                "lexical_neighbor",
+                "shared_tag",
+                "temporal_window",
+            )
+            if recall_mode == "high_recall"
+            else (
+                "temporal_window",
+                "shared_tag",
+                "shared_entity",
+                "semantic_neighbor",
+                "lexical_neighbor",
+            )
+        )
+        origin_limits = {origin: per_origin_limit for origin in origin_priority}
+        if recall_mode == "high_recall":
+            origin_limits.update(
+                {
+                    "semantic_neighbor": max(per_origin_limit + 10, per_origin_limit),
+                    "shared_entity": per_origin_limit,
+                    "lexical_neighbor": max(per_origin_limit, 25),
+                    "shared_tag": per_origin_limit,
+                    "temporal_window": max(12, per_origin_limit // 2),
+                }
+            )
         semantic_neighbors_by_seed = self._load_semantic_neighbor_candidates(
             ordered_articles,
             max_days_delta=max_days_delta,
-            limit=max(per_origin_limit * 3, per_origin_limit),
+            limit=max(
+                per_origin_limit * (5 if recall_mode == "high_recall" else 3),
+                per_origin_limit,
+            ),
         )
 
         for seed in ordered_articles:
@@ -1008,13 +1076,19 @@ class ClusterPipeline:
 
             chosen_for_seed: list[int] = []
             seen_ids: set[int] = set()
-            for origin, ranked_rows in candidates.items():
+            ranked_by_origin: dict[str, list[tuple[int, float]]] = {}
+            for origin in origin_priority:
+                ranked_rows = candidates.get(origin, [])
+                if not ranked_rows:
+                    continue
                 ranked = sorted(ranked_rows, key=lambda item: (-item[1], item[0]))
-                summary.origin_counts[origin] = min(len(ranked), per_origin_limit)
-                overflow = max(0, len(ranked) - per_origin_limit)
+                ranked_by_origin[origin] = ranked
+                origin_limit = origin_limits.get(origin, per_origin_limit)
+                summary.origin_counts[origin] = min(len(ranked), origin_limit)
+                overflow = max(0, len(ranked) - origin_limit)
                 if overflow:
                     summary.overflow_counts[origin] = overflow
-                for article_id, _ in ranked[:per_origin_limit]:
+                for article_id, _ in ranked[:origin_limit]:
                     if article_id not in seen_ids and len(chosen_for_seed) >= per_seed_limit:
                         summary.overflow_counts[origin] = summary.overflow_counts.get(origin, 0) + 1
                         continue
@@ -1030,6 +1104,30 @@ class ClusterPipeline:
                     if article_id not in seen_ids:
                         seen_ids.add(article_id)
                         chosen_for_seed.append(article_id)
+            if recall_mode == "high_recall" and semantic_backfill_limit > 0:
+                backfilled = 0
+                for article_id, _ in ranked_by_origin.get("semantic_neighbor", []):
+                    if (
+                        len(chosen_for_seed) >= per_seed_limit
+                        or backfilled >= semantic_backfill_limit
+                    ):
+                        break
+                    if article_id in seen_ids:
+                        continue
+                    pair_key = tuple(sorted((seed.article.id, article_id)))
+                    pair = pair_map.setdefault(
+                        pair_key,
+                        CandidatePair(
+                            left_article_id=pair_key[0],
+                            right_article_id=pair_key[1],
+                        ),
+                    )
+                    pair.origins.add("semantic_backfill")
+                    seen_ids.add(article_id)
+                    chosen_for_seed.append(article_id)
+                    backfilled += 1
+                if backfilled:
+                    summary.origin_counts["semantic_backfill"] = backfilled
             summary.candidate_count = len(chosen_for_seed)
             for rank, article_id in enumerate(chosen_for_seed, start=1):
                 pair_key = tuple(sorted((seed.article.id, article_id)))
@@ -1413,8 +1511,11 @@ class ClusterPipeline:
         self,
         article_ids: list[int],
         accepted_edges: list[tuple[int, int, StoryClusterMemberReason]],
+        *,
+        recall_mode: Literal["default", "high_recall"] = "default",
     ) -> list[list[int]]:
-        components, _ = self._build_guarded_components(article_ids, accepted_edges)
+        with self._recall_mode_scope(recall_mode):
+            components, _ = self._build_guarded_components(article_ids, accepted_edges)
         return components
 
     def _raw_connected_components(
@@ -1566,6 +1667,13 @@ class ClusterPipeline:
                 decision=best_decision,
                 stage="attach",
             )
+        if self._is_high_recall_mode():
+            self._merge_supported_components(
+                components=components,
+                member_meta=member_meta,
+                strong_adjacency=strong_adjacency,
+                medium_adjacency=medium_adjacency,
+            )
 
         final_components = [component for component in components if component]
         normalized = [sorted(component) for component in final_components]
@@ -1695,6 +1803,23 @@ class ClusterPipeline:
             return None
         if best.days_delta > 3:
             return None
+        if (
+            self._is_high_recall_mode()
+            and len(support) >= 1
+            and best.days_delta <= 3
+            and best.shared_entity_count >= 2
+            and (best.shared_tag_count >= 1 or best.shared_keyphrase_count >= 1)
+            and best.score >= 0.5
+        ):
+            return "component_followup_bridge"
+        if (
+            self._is_high_recall_mode()
+            and best.semantic_similarity >= 0.82
+            and best.days_delta <= 3
+            and (best.shared_tag_count >= 1 or best.shared_keyphrase_count >= 1)
+            and best.score >= 0.5
+        ):
+            return "component_semantic_bridge"
         if len(support) >= 2 and mean_score >= 0.52 and best.score >= 0.56:
             return "component_multi_support"
         if (
@@ -1754,7 +1879,9 @@ class ClusterPipeline:
             return {"preserve": False}
         mean_score = sum(reason.score for reason in edges) / len(edges)
         best_score = max(reason.score for reason in edges)
-        if mean_score < 0.54 or best_score < 0.56:
+        minimum_mean = 0.5 if self._is_high_recall_mode() else 0.54
+        minimum_best = 0.52 if self._is_high_recall_mode() else 0.56
+        if mean_score < minimum_mean or best_score < minimum_best:
             return {"preserve": False}
         return {
             "preserve": True,
@@ -1783,17 +1910,31 @@ class ClusterPipeline:
             return False
         if reason.shared_tag_count < 1 and reason.shared_keyphrase_count < 1:
             return False
-        return reason.score >= 0.54
+        return reason.score >= (0.5 if self._is_high_recall_mode() else 0.54)
 
     def _classify_closure_edge(self, reason: StoryClusterMemberReason) -> str:
         if reason.risky_bridge_pair and reason.score < 0.78:
             return "discard"
-        clean_rewrite_edge = (
-            not reason.risky_bridge_pair
-            and reason.title_similarity >= 0.78
+        if (
+            self._is_high_recall_mode()
+            and not reason.risky_bridge_pair
+            and reason.semantic_similarity >= 0.84
             and reason.days_delta <= 3
             and (reason.shared_tag_count >= 1 or reason.shared_keyphrase_count >= 1)
-            and reason.score >= 0.58
+            and reason.score >= 0.52
+            and not any(
+                penalty
+                in {"entity_glue_penalty", "late_story_drift_penalty", "secondary_form_penalty"}
+                for penalty in reason.penalties
+            )
+        ):
+            return "strong"
+        clean_rewrite_edge = (
+            not reason.risky_bridge_pair
+            and reason.title_similarity >= (0.72 if self._is_high_recall_mode() else 0.78)
+            and reason.days_delta <= 3
+            and (reason.shared_tag_count >= 1 or reason.shared_keyphrase_count >= 1)
+            and reason.score >= (0.54 if self._is_high_recall_mode() else 0.58)
             and not any(
                 penalty
                 in {"entity_glue_penalty", "late_story_drift_penalty", "secondary_form_penalty"}
@@ -1873,14 +2014,14 @@ class ClusterPipeline:
             and not has_secondary_form
             and not has_guardrail_penalty
             and best.days_delta <= 3
-            and best.title_similarity >= 0.78
+            and best.title_similarity >= (0.72 if self._is_high_recall_mode() else 0.78)
             and (best.shared_tag_count >= 1 or best.shared_keyphrase_count >= 1)
         )
         if len(cluster) == 1:
             return (
                 "seed_pair"
                 if (
-                    best_score >= 0.56
+                    best_score >= (0.52 if self._is_high_recall_mode() else 0.56)
                     and not risky_support
                     and not has_guardrail_penalty
                     and not has_secondary_form
@@ -1893,17 +2034,31 @@ class ClusterPipeline:
             return "followup_single_support"
         if clean_followup_attach and support_count >= 2 and mean_score >= 0.5:
             return "followup_multi_support"
-        if clean_rewrite_attach and best_score >= 0.54:
+        if clean_rewrite_attach and best_score >= (0.5 if self._is_high_recall_mode() else 0.54):
             return "clean_rewrite_attach"
         if clean_rewrite_attach and support_count >= 2 and mean_score >= 0.5:
             return "rewrite_multi_support_attach"
-        if support_count >= 2 and mean_score >= 0.56 and best_score >= 0.58 and not risky_support:
+        if (
+            self._is_high_recall_mode()
+            and not risky_support
+            and best.semantic_similarity >= 0.82
+            and best.days_delta <= 3
+            and (best.shared_tag_count >= 1 or best.shared_keyphrase_count >= 1)
+            and best_score >= 0.5
+        ):
+            return "semantic_single_support_attach"
+        if (
+            support_count >= 2
+            and mean_score >= (0.52 if self._is_high_recall_mode() else 0.56)
+            and best_score >= (0.54 if self._is_high_recall_mode() else 0.58)
+            and not risky_support
+        ):
             return "multi_support"
         pivot_compatible = (
             not best.risky_bridge_pair
             and best.days_delta <= 4
-            and best_score >= 0.58
-            and best.shared_entity_count >= 1
+            and best_score >= (0.54 if self._is_high_recall_mode() else 0.58)
+            and best.shared_entity_count >= (1 if self._is_high_recall_mode() else 1)
             and (best.shared_tag_count >= 1 or best.shared_keyphrase_count >= 1)
             and "entity_glue_penalty" not in best.penalties
             and "late_story_drift_penalty" not in best.penalties
