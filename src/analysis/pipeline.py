@@ -1161,6 +1161,12 @@ class ClusterPipeline:
                 or (len(shared_entities) >= 2 and tag_overlap_score >= 0.33)
             )
         )
+        is_recurring_results_pair = self._is_recurring_results_article(
+            left
+        ) and self._is_recurring_results_article(right)
+        is_question_utility_pair = self._is_question_utility_article(
+            left
+        ) and self._is_question_utility_article(right)
         clean_followup_continuity = (
             days_delta <= 4
             and len(shared_entities) >= 2
@@ -1186,6 +1192,20 @@ class ClusterPipeline:
                 or article_types != {"opinion"}
             ):
                 hard_block = "opinion_editorial_excluded_from_primary_clusters"
+        if (
+            hard_block is None
+            and is_recurring_results_pair
+            and left.article.published_at.date() != right.article.published_at.date()
+        ):
+            hard_block = "recurring_results_series_excluded"
+        if (
+            hard_block is None
+            and is_question_utility_pair
+            and left.article.source == right.article.source
+            and max(title_sim, lede_sim) < 0.78
+            and keyphrase_overlap_score < 0.55
+        ):
+            hard_block = "question_utility_series_excluded"
         if article_types & secondary_types and (
             lede_sim < 0.58 or keyphrase_overlap_score < 0.32
         ):
@@ -1262,6 +1282,37 @@ class ClusterPipeline:
             hard_block=hard_block,
             penalties=penalties,
         )
+
+    def _is_recurring_results_article(self, article: EnrichedArticle) -> bool:
+        title = normalize_lookup(article.article.title)
+        summary = normalize_lookup(article.article.summary)
+        text = " ".join(bit for bit in [title, summary] if bit)
+        lottery_terms = {"bonoloto", "primitiva", "euromillones", "once"}
+        return (
+            "comprobar" in text
+            and "resultados" in text
+            and "hoy" in text
+            and any(term in text for term in lottery_terms)
+        )
+
+    def _is_question_utility_article(self, article: EnrichedArticle) -> bool:
+        title = article.article.title.strip().lower()
+        summary = normalize_lookup(article.article.summary)
+        question_markers = (
+            "¿" in article.article.title
+            or article.article.title.strip().endswith("?")
+        )
+        utility_markers = (
+            "legálitas" in article.article.title.lower()
+            or "legalitas" in title
+            or "alquiler" in summary
+            or "casero" in summary
+            or "inquilino" in summary
+            or "hipoteca" in summary
+            or "vivienda" in summary
+            or "local" in summary
+        )
+        return question_markers and utility_markers
 
     def _connected_components(
         self,
@@ -1508,7 +1559,7 @@ class ClusterPipeline:
             return {"preserve": False}
         mean_score = sum(reason.score for reason in edges) / len(edges)
         best_score = max(reason.score for reason in edges)
-        if mean_score < 0.58 or best_score < 0.6:
+        if mean_score < 0.54 or best_score < 0.56:
             return {"preserve": False}
         return {
             "preserve": True,
@@ -1537,7 +1588,7 @@ class ClusterPipeline:
             return False
         if reason.shared_tag_count < 1 and reason.shared_keyphrase_count < 1:
             return False
-        return reason.score >= 0.58
+        return reason.score >= 0.54
 
     def _classify_closure_edge(self, reason: StoryClusterMemberReason) -> str:
         if reason.risky_bridge_pair and reason.score < 0.78:
@@ -1611,7 +1662,7 @@ class ClusterPipeline:
         if len(cluster) == 1:
             return (
                 "seed_pair"
-                if best_score >= 0.58
+                if best_score >= 0.56
                 and not risky_support
                 and not has_guardrail_penalty
                 and not has_secondary_form
@@ -1619,16 +1670,16 @@ class ClusterPipeline:
                 and (best.shared_tag_count >= 1 or best.shared_keyphrase_count >= 1)
                 else None
             )
-        if clean_followup_attach and best_score >= 0.58:
+        if clean_followup_attach and best_score >= 0.56:
             return "followup_single_support"
-        if clean_followup_attach and support_count >= 2 and mean_score >= 0.54:
+        if clean_followup_attach and support_count >= 2 and mean_score >= 0.5:
             return "followup_multi_support"
-        if support_count >= 2 and mean_score >= 0.62 and best_score >= 0.64 and not risky_support:
+        if support_count >= 2 and mean_score >= 0.58 and best_score >= 0.6 and not risky_support:
             return "multi_support"
         pivot_compatible = (
             not best.risky_bridge_pair
             and best.days_delta <= 4
-            and best_score >= 0.64
+            and best_score >= 0.6
             and best.shared_entity_count >= 2
             and (best.shared_tag_count >= 1 or best.shared_keyphrase_count >= 1)
             and "entity_glue_penalty" not in best.penalties

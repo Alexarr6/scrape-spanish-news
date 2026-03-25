@@ -17,10 +17,11 @@ def _enriched(
     entities: list[str],
     when: datetime,
     key_phrases: list[str] | None = None,
+    source: str | None = None,
 ) -> EnrichedArticle:
     article = ArticleRead(
         id=article_id,
-        source="elpais" if article_id % 2 else "elmundo",
+        source=source or ("elpais" if article_id % 2 else "elmundo"),
         title=title,
         url=f"https://example.com/{article_id}",
         published_at=when,
@@ -141,3 +142,67 @@ def test_story_pair_scoring_marks_entity_glue_bridge_as_risky():
     assert reason.risky_bridge_pair is True
     assert "secondary_form_penalty" in reason.penalties
     assert "entity_glue_penalty" in reason.penalties
+
+
+def test_story_pair_scoring_blocks_recurring_daily_results_series() -> None:
+    pipeline = ClusterPipeline(session=None)  # type: ignore[arg-type]
+    left = _enriched(
+        article_id=1,
+        title="Comprobar Bonoloto: resultados de hoy, lunes 23 de marzo de 2026",
+        summary="Resultados del sorteo de hoy.",
+        article_type="news_report",
+        tags=["other"],
+        entities=[],
+        when=datetime(2026, 3, 23, tzinfo=UTC),
+        key_phrases=["bonoloto resultados"],
+        source="20minutos",
+    )
+    right = _enriched(
+        article_id=2,
+        title="Comprobar Bonoloto: resultados de hoy, martes 24 de marzo de 2026",
+        summary="Resultados del sorteo de hoy.",
+        article_type="news_report",
+        tags=["other"],
+        entities=[],
+        when=datetime(2026, 3, 24, tzinfo=UTC),
+        key_phrases=["bonoloto resultados"],
+        source="20minutos",
+    )
+
+    reason = pipeline.score_pair(left, right)
+
+    assert reason.hard_block == "recurring_results_series_excluded"
+
+
+def test_story_pair_scoring_blocks_same_source_question_utility_series() -> None:
+    pipeline = ClusterPipeline(session=None)  # type: ignore[arg-type]
+    now = datetime(2026, 3, 24, tzinfo=UTC)
+    left = _enriched(
+        article_id=1,
+        title=(
+            "¿Tengo derecho a quedarme siete años en un piso de alquiler "
+            "si el casero es una sociedad limitada?"
+        ),
+        summary="Consulta sobre alquiler, vivienda y casero.",
+        article_type="explainer",
+        tags=["housing"],
+        entities=["organization-legalitas", "region_city-madrid"],
+        when=now,
+        key_phrases=["alquiler vivienda casero"],
+        source="elpais",
+    )
+    right = _enriched(
+        article_id=2,
+        title="¿Qué necesito para cambiar el uso de un local a vivienda?",
+        summary="Consulta sobre local, vivienda y trámites.",
+        article_type="explainer",
+        tags=["housing"],
+        entities=["organization-legalitas", "region_city-madrid"],
+        when=now,
+        key_phrases=["local vivienda tramites"],
+        source="elpais",
+    )
+
+    reason = pipeline.score_pair(left, right)
+
+    assert reason.hard_block == "question_utility_series_excluded"
