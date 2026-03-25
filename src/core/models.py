@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
+from zoneinfo import ZoneInfo
 
 
 @dataclass
@@ -48,3 +49,24 @@ def parse_any_date_to_utc_iso(value: str) -> str:
         except ValueError:
             continue
     return ""
+
+
+def iso_to_local_date(value: str, timezone_name: str) -> str:
+    value = (value or "").strip()
+    if not value:
+        return ""
+    raw = value.replace("Z", "+00:00")
+    try:
+        dt = datetime.fromisoformat(raw)
+    except ValueError:
+        return ""
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    return dt.astimezone(ZoneInfo(timezone_name)).date().isoformat()
+
+
+def parse_any_date_to_local_date(value: str, timezone_name: str) -> str:
+    iso = parse_any_date_to_utc_iso(value)
+    if not iso:
+        return ""
+    return iso_to_local_date(iso, timezone_name)

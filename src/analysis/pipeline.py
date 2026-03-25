@@ -56,6 +56,7 @@ from src.analysis.orm_models import (
     ArticleAnalysisORM,
     ArticleEditorialAnalysisORM,
     ArticleEnrichmentRunORM,
+    ArticleMatchingSelectionORM,
     ArticleTagORM,
     ClusterEntityORM,
     ClusterMemberORM,
@@ -117,7 +118,13 @@ class AnalysisPipeline:
                 row.is_active = True
         self.session.commit()
 
-    def enrich_articles(self, *, days_back: int = 2, limit: int = 150) -> EnrichmentRunMetrics:
+    def enrich_articles(
+        self,
+        *,
+        days_back: int = 2,
+        limit: int = 150,
+        corpus: Literal["raw", "matching"] = "matching",
+    ) -> EnrichmentRunMetrics:
         """Enrich a bounded recent article window and persist the resulting analysis.
 
         The pipeline always starts with heuristic extraction so there is a stable
@@ -144,9 +151,23 @@ class AnalysisPipeline:
         stmt = (
             select(ArticleORM)
             .where(ArticleORM.published_at.is_not(None), ArticleORM.published_at >= cutoff)
-            .order_by(ArticleORM.published_at.desc())
-            .limit(limit * 4)
         )
+        if corpus == "matching":
+            stmt = (
+                stmt.join(
+                    ArticleMatchingSelectionORM,
+                    ArticleMatchingSelectionORM.article_id == ArticleORM.id,
+                )
+                .where(ArticleMatchingSelectionORM.selection_rank.is_not(None))
+                .order_by(
+                    ArticleMatchingSelectionORM.local_published_date.desc().nullslast(),
+                    ArticleMatchingSelectionORM.selection_rank.asc().nullslast(),
+                    ArticleORM.published_at.desc(),
+                )
+                .limit(limit * 4)
+            )
+        else:
+            stmt = stmt.order_by(ArticleORM.published_at.desc()).limit(limit * 4)
         rows = self._select_source_balanced_enrichment_rows(
             self.session.execute(stmt).scalars().all(),
             limit=limit,
@@ -815,6 +836,7 @@ class ClusterPipeline:
         limit: int = 200,
         score_threshold: float = 0.55,
         recall_mode: Literal["default", "high_recall"] = "default",
+        corpus: Literal["raw", "matching"] = "matching",
     ) -> tuple[ClusterRebuildMetrics, list[PairScoreArtifact]]:
         """Score candidate pairs, accept qualifying edges, and persist components.
 
@@ -824,7 +846,7 @@ class ClusterPipeline:
         """
 
         started = datetime.now(UTC)
-        articles = self._load_enriched_articles(days_back=days_back, limit=limit)
+        articles = self._load_enriched_articles(days_back=days_back, limit=limit, corpus=corpus)
         metrics = ClusterRebuildMetrics(article_count=len(articles), started_at=started)
         article_by_id = {article.article.id: article for article in articles}
         artifacts: list[PairScoreArtifact] = []
@@ -937,15 +959,35 @@ class ClusterPipeline:
     def _is_high_recall_mode(self) -> bool:
         return self._active_recall_mode == "high_recall"
 
-    def _load_enriched_articles(self, *, days_back: int, limit: int) -> list[EnrichedArticle]:
+    def _load_enriched_articles(
+        self,
+        *,
+        days_back: int,
+        limit: int,
+        corpus: Literal["raw", "matching"] = "matching",
+    ) -> list[EnrichedArticle]:
         cutoff = datetime.now(UTC) - timedelta(days=days_back)
         stmt = (
             select(ArticleORM, ArticleAnalysisORM)
             .join(ArticleAnalysisORM, ArticleAnalysisORM.article_id == ArticleORM.id)
             .where(ArticleORM.published_at.is_not(None), ArticleORM.published_at >= cutoff)
-            .order_by(ArticleORM.published_at.desc())
-            .limit(limit)
         )
+        if corpus == "matching" and self.session is not None:
+            stmt = (
+                stmt.join(
+                    ArticleMatchingSelectionORM,
+                    ArticleMatchingSelectionORM.article_id == ArticleORM.id,
+                )
+                .where(ArticleMatchingSelectionORM.selection_rank.is_not(None))
+                .order_by(
+                    ArticleMatchingSelectionORM.local_published_date.desc().nullslast(),
+                    ArticleMatchingSelectionORM.selection_rank.asc().nullslast(),
+                    ArticleORM.published_at.desc(),
+                )
+                .limit(limit)
+            )
+        else:
+            stmt = stmt.order_by(ArticleORM.published_at.desc()).limit(limit)
         rows = self.session.execute(stmt).all()
         tag_lookup = {
             row.id: row.tag_code for row in self.session.execute(select(TagORM)).scalars()

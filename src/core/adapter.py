@@ -5,7 +5,7 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass
 
 from .contracts import validate_metrics_payload
-from .models import Article
+from .models import Article, iso_to_local_date
 
 
 @dataclass
@@ -13,6 +13,7 @@ class RunConfig:
     max_discovery_urls: int = 300
     max_articles_to_extract: int = 120
     max_runtime_seconds: int = 90
+    local_timezone: str = "Europe/Madrid"
 
 
 class BaseSourceAdapter(ABC):
@@ -59,7 +60,8 @@ class BaseSourceAdapter(ABC):
             try:
                 raw = self.extract(url)
                 article = self.normalize(raw)
-                if article.published_at[:10] != target_date:
+                article_local_date = iso_to_local_date(article.published_at, cfg.local_timezone)
+                if article_local_date != target_date:
                     metrics["discarded_by_date"] += 1
                     continue
                 out.append(article)

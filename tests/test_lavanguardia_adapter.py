@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import unittest
 
+from src.adapters.discovery_profile import candidate_from_url
 from src.adapters.lavanguardia import LaVanguardiaAdapter
 from src.adapters.url_filters import is_probable_noise_url
 from src.core.adapter import RunConfig
@@ -66,18 +67,30 @@ class LaVanguardiaTests(unittest.TestCase):
             )
         )
 
-    def test_discover_prioritizes_same_day_urls_over_stale_urls(self):
+    def test_discover_prioritizes_same_day_urls_and_drops_stale_backlog(self):
         adapter = LaVanguardiaAdapter(http_client=_FakeHttp({}))
-        adapter._discover_links_from_feeds = lambda feeds: (
+        adapter._discover_candidates_from_feeds = lambda feeds: (
             [
-                "https://www.lavanguardia.com/politica/2025/12/01/very-old.html",
-                "https://www.lavanguardia.com/politica/2026/03/23/fresh.html",
-                "https://www.lavanguardia.com/politica/2026/03/22/nearby.html",
+                candidate_from_url(
+                    url="https://www.lavanguardia.com/politica/2025/12/01/very-old.html",
+                    origin="rss",
+                    source="lavanguardia",
+                ),
+                candidate_from_url(
+                    url="https://www.lavanguardia.com/politica/2026/03/23/fresh.html",
+                    origin="rss",
+                    source="lavanguardia",
+                ),
+                candidate_from_url(
+                    url="https://www.lavanguardia.com/politica/2026/03/22/nearby.html",
+                    origin="rss",
+                    source="lavanguardia",
+                ),
             ],
             0,
         )
-        adapter._discover_links_from_sitemaps = lambda sitemaps: ([], 0)
-        adapter._discover_links_from_html_pages = lambda pages: ([], 0)
+        adapter._discover_candidates_from_sitemaps = lambda sitemaps: ([], 0)
+        adapter._discover_candidates_from_html_pages = lambda pages: ([], 0)
 
         urls = adapter.discover("2026-03-23", RunConfig(max_discovery_urls=10))
 
@@ -86,7 +99,6 @@ class LaVanguardiaTests(unittest.TestCase):
             [
                 "https://www.lavanguardia.com/politica/2026/03/23/fresh.html",
                 "https://www.lavanguardia.com/politica/2026/03/22/nearby.html",
-                "https://www.lavanguardia.com/politica/2025/12/01/very-old.html",
             ],
         )
 

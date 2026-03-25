@@ -8,10 +8,12 @@ LOCAL_TZ="${LOCAL_TZ:-Europe/Madrid}"
 SHARED_DAYS_BACK="${DAYS_BACK:-${REFRESH_DAYS_BACK:-}}"
 ENRICH_DAYS_BACK="${ENRICH_DAYS_BACK:-${SHARED_DAYS_BACK:-3}}"
 CLUSTER_DAYS_BACK="${CLUSTER_DAYS_BACK:-${SHARED_DAYS_BACK:-3}}"
+MATCHING_DAYS_BACK="${MATCHING_DAYS_BACK:-${SHARED_DAYS_BACK:-3}}"
 CLUSTER_LIMIT="${CLUSTER_LIMIT:-${SURFACE_LIMIT:-500}}"
 ENRICH_LIMIT="${ENRICH_LIMIT:-$(( CLUSTER_LIMIT * 2 > ${SURFACE_LIMIT:-500} ? CLUSTER_LIMIT * 2 : ${SURFACE_LIMIT:-500} ))}"
 SCORE_THRESHOLD="${SCORE_THRESHOLD:-0.55}"
 OUT_PREFIX="${OUT_PREFIX:-sched}"
+MATCHING_DAILY_CAP="${MATCHING_DAILY_CAP:-60}"
 VAR_ROOT="$REPO_ROOT/var"
 LOCK_DIR="$VAR_ROOT/lock"
 LOG_DIR="$VAR_ROOT/log"
@@ -83,7 +85,7 @@ finish_failure() {
 }
 trap 'finish_failure "$?"' ERR
 
-log "stories refresh start repo_root=$REPO_ROOT date_local=$DATE_LOCAL enrich_days_back=$ENRICH_DAYS_BACK cluster_days_back=$CLUSTER_DAYS_BACK enrich_limit=$ENRICH_LIMIT cluster_limit=$CLUSTER_LIMIT score_threshold=$SCORE_THRESHOLD out_prefix=$OUT_PREFIX uv=$UV"
+log "stories refresh start repo_root=$REPO_ROOT date_local=$DATE_LOCAL enrich_days_back=$ENRICH_DAYS_BACK cluster_days_back=$CLUSTER_DAYS_BACK matching_days_back=$MATCHING_DAYS_BACK enrich_limit=$ENRICH_LIMIT cluster_limit=$CLUSTER_LIMIT matching_daily_cap=$MATCHING_DAILY_CAP score_threshold=$SCORE_THRESHOLD out_prefix=$OUT_PREFIX uv=$UV"
 
 run_step preflight \
   make --no-print-directory -C "$REPO_ROOT" preflight UV="$UV"
@@ -100,12 +102,22 @@ run_step analysis-db-init \
     DATABASE_URL="$DATABASE_URL" \
     UV="$UV"
 
+run_step build-matching-corpus \
+  make --no-print-directory -C "$REPO_ROOT" build-matching-corpus \
+    DATABASE_URL="$DATABASE_URL" \
+    UV="$UV" \
+    DATE="$DATE_LOCAL" \
+    DAYS_BACK="$MATCHING_DAYS_BACK" \
+    DAILY_CAP="$MATCHING_DAILY_CAP" \
+    AUDIT_OUT="data/${OUT_PREFIX}_matching_audit_${DATE_LOCAL}.json"
+
 run_step enrich-articles \
   make --no-print-directory -C "$REPO_ROOT" enrich-articles \
     DATABASE_URL="$DATABASE_URL" \
     UV="$UV" \
     DAYS_BACK="$ENRICH_DAYS_BACK" \
-    LIMIT="$ENRICH_LIMIT"
+    LIMIT="$ENRICH_LIMIT" \
+    CORPUS="matching"
 
 run_step build-story-clusters \
   make --no-print-directory -C "$REPO_ROOT" build-story-clusters \
@@ -113,7 +125,8 @@ run_step build-story-clusters \
     UV="$UV" \
     DAYS_BACK="$CLUSTER_DAYS_BACK" \
     LIMIT="$CLUSTER_LIMIT" \
-    SCORE_THRESHOLD="$SCORE_THRESHOLD"
+    SCORE_THRESHOLD="$SCORE_THRESHOLD" \
+    CORPUS="matching"
 
 run_step verify-output \
   make --no-print-directory -C "$REPO_ROOT" verify-output \

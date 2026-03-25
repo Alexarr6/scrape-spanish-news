@@ -1,6 +1,7 @@
 import unittest
 
 from src.adapters.abc import ABCAdapter
+from src.adapters.discovery_profile import candidate_from_url
 from src.adapters.url_filters import is_probable_noise_url
 from src.core.adapter import RunConfig
 
@@ -27,16 +28,28 @@ class ABCTests(unittest.TestCase):
 
     def test_discover_prioritizes_fresh_urls_and_drops_assets(self):
         adapter = ABCAdapter()
-        adapter._discover_links_from_feeds = lambda feeds: (
+        adapter._discover_candidates_from_feeds = lambda feeds: (
             [
-                "https://www.abc.es/espana/2026/03/20/older.html",
-                "https://www.abc.es/espana/2026/03/23/fresh.html",
-                "https://www.abc.es/espana/2026/03/23/cover.jpg",
+                candidate_from_url(
+                    url="https://www.abc.es/espana/2026/03/20/older.html",
+                    origin="rss",
+                    source="abc",
+                ),
+                candidate_from_url(
+                    url="https://www.abc.es/espana/2026/03/23/fresh.html",
+                    origin="rss",
+                    source="abc",
+                ),
+                candidate_from_url(
+                    url="https://www.abc.es/espana/2026/03/23/cover.jpg",
+                    origin="rss",
+                    source="abc",
+                ),
             ],
             0,
         )
-        adapter._discover_links_from_sitemaps = lambda sitemaps: ([], 0)
-        adapter._discover_links_from_html_pages = lambda pages: ([], 0)
+        adapter._discover_candidates_from_sitemaps = lambda sitemaps: ([], 0)
+        adapter._discover_candidates_from_html_pages = lambda pages: ([], 0)
 
         urls = adapter.discover("2026-03-23", RunConfig(max_discovery_urls=10))
 

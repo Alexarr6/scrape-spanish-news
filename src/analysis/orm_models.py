@@ -79,6 +79,32 @@ class ArticleAnalysisORM(Base):
     )
 
 
+class ArticleMatchingSelectionORM(Base):
+    __tablename__ = "article_matching_selection"
+    __table_args__ = (
+        UniqueConstraint("article_id", name="uq_article_matching_selection_article_id"),
+        Index("ix_article_matching_selection_local_published_date", "local_published_date"),
+        Index("ix_article_matching_selection_eligible", "eligible"),
+        Index("ix_article_matching_selection_bucket", "bucket"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    article_id: Mapped[int] = mapped_column(
+        ForeignKey("articles.id", ondelete="CASCADE"), nullable=False
+    )
+    eligible: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    eligibility_reason: Mapped[str] = mapped_column(String(80), default="", nullable=False)
+    bucket: Mapped[str] = mapped_column(String(40), default="", nullable=False)
+    score: Mapped[float] = mapped_column(Float, default=0.0, nullable=False)
+    local_published_date: Mapped[date | None] = mapped_column(Date, nullable=True)
+    selection_rank: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    profile_version: Mapped[str] = mapped_column(String(40), default="matching-v1", nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+
+
 class EntityORM(Base):
     __tablename__ = "entities"
     __table_args__ = (

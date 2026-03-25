@@ -3,25 +3,68 @@ from __future__ import annotations
 import html
 import re
 
+from src.adapters.discovery_profile import LocalityPenaltyRule, SourceDiscoveryProfile
+from src.adapters.profiled_adapter import ProfiledRSSAdapter
 from src.core.models import Article
 from src.core.text_normalization import normalize_text
 
-from .rss_adapter import GenericRSSAdapter
 
-
-class ElMundoAdapter(GenericRSSAdapter):
+class ElMundoAdapter(ProfiledRSSAdapter):
     source = "elmundo"
-    feeds = [
-        "https://e00-elmundo.uecdn.es/elmundo/rss/espana.xml",
-        "https://e00-elmundo.uecdn.es/elmundo/rss/portada.xml",
-    ]
+    profile = SourceDiscoveryProfile(
+        seed_feeds=(
+            "https://e00-elmundo.uecdn.es/elmundo/rss/espana.xml",
+            "https://e00-elmundo.uecdn.es/elmundo/rss/portada.xml",
+        ),
+        seed_sitemaps=(
+            "https://www.elmundo.es/sitemap.xml",
+            "https://www.elmundo.es/sitemap_news.xml",
+        ),
+        seed_html_pages=(
+            "https://www.elmundo.es/espana.html",
+            "https://www.elmundo.es/internacional.html",
+        ),
+        include_path_patterns=(
+            "/espana/",
+            "/internacional/",
+            "/madrid/",
+            "/cataluna/",
+            "/economia/",
+        ),
+        exclude_path_patterns=(
+            "/deportes/",
+            "/futbol/",
+            "/cultura/",
+            "/toros/",
+            "/television/",
+            "/loc/",
+            "/opinion/",
+        ),
+        exclude_section_patterns=("opinión", "opinion", "toros", "deportes"),
+        locality_penalty_rules=(
+            LocalityPenaltyRule(
+                patterns=("/madrid/", "/cataluna/", "/baleares/", "/comunidad-valenciana/"),
+                penalty=1,
+            ),
+        ),
+        bucket_rules={
+            "politics": ("espana", "gobierno", "congreso", "tribunal", "amnist"),
+            "society": ("sanidad", "vivienda", "seguridad", "justicia"),
+            "international": ("internacional", "ue", "gaza", "iran", "ucran"),
+            "economy": ("economia", "energia", "empleo", "impuestos"),
+        },
+    )
 
     def normalize(self, raw: dict) -> Article:
         article = super().normalize(raw)
-        if article.article_text:
+        custom_body = _read_elmundo_article_body(raw.get("html", ""))
+        if not custom_body:
             return article
 
-        article.article_text = _read_elmundo_article_body(raw.get("html", ""))
+        if not article.article_text or any(
+            marker in article.article_text for marker in ("Entradilla", "Relacionada")
+        ):
+            article.article_text = custom_body
         return article
 
 

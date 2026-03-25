@@ -26,6 +26,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--days-back", type=int, default=3)
     parser.add_argument("--limit", type=int, default=200)
     parser.add_argument("--score-threshold", type=float, default=0.55)
+    parser.add_argument("--corpus", choices=("raw", "matching"), default="matching")
     parser.add_argument(
         "--recall-mode",
         choices=("default", "high_recall"),
@@ -45,6 +46,7 @@ def main() -> int:
             limit=args.limit,
             score_threshold=args.score_threshold,
             recall_mode=args.recall_mode,
+            corpus=args.corpus,
         )
         print(
             json.dumps(

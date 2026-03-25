@@ -5,10 +5,25 @@ import json
 import re
 import xml.etree.ElementTree as ET
 
+from src.adapters.discovery_profile import (
+    DiscoveredCandidate,
+    candidate_from_feed_item,
+    candidate_from_url,
+)
 from src.core.adapter import BaseSourceAdapter, RunConfig
 from src.core.http import HttpClient
 from src.core.models import Article, parse_any_date_to_utc_iso
 from src.core.text_normalization import normalize_text
+
+try:
+    from selectolax.parser import HTMLParser
+except ImportError:  # pragma: no cover - dependency is optional at runtime
+    HTMLParser = None
+
+try:
+    import trafilatura
+except ImportError:  # pragma: no cover - dependency is optional at runtime
+    trafilatura = None
 
 
 class GenericRSSAdapter(BaseSourceAdapter):
@@ -59,7 +74,13 @@ class GenericRSSAdapter(BaseSourceAdapter):
         )
 
     def _discover_links_from_feeds(self, feeds: list[str]) -> tuple[list[str], int]:
-        links: list[str] = []
+        candidates, errors = self._discover_candidates_from_feeds(feeds)
+        return [candidate.url for candidate in candidates], errors
+
+    def _discover_candidates_from_feeds(
+        self, feeds: list[str]
+    ) -> tuple[list[DiscoveredCandidate], int]:
+        candidates: list[DiscoveredCandidate] = []
         errors = 0
         for feed in feeds:
             try:
@@ -68,13 +89,18 @@ class GenericRSSAdapter(BaseSourceAdapter):
                 errors += 1
                 continue
             for item in self._parse_feed(xml):
-                link = item.get("link", "")
-                if link:
-                    links.append(link)
-        return links, errors
+                if item.get("link", ""):
+                    candidates.append(candidate_from_feed_item(self.source, item))
+        return candidates, errors
 
     def _discover_links_from_sitemaps(self, sitemaps: list[str]) -> tuple[list[str], int]:
-        links: list[str] = []
+        candidates, errors = self._discover_candidates_from_sitemaps(sitemaps)
+        return [candidate.url for candidate in candidates], errors
+
+    def _discover_candidates_from_sitemaps(
+        self, sitemaps: list[str]
+    ) -> tuple[list[DiscoveredCandidate], int]:
+        candidates: list[DiscoveredCandidate] = []
         errors = 0
         for sitemap in sitemaps:
             try:
@@ -82,11 +108,20 @@ class GenericRSSAdapter(BaseSourceAdapter):
             except Exception:
                 errors += 1
                 continue
-            links.extend(self._parse_sitemap(xml))
-        return links, errors
+            for link in self._parse_sitemap(xml):
+                candidates.append(
+                    candidate_from_url(url=link, origin="sitemap", source=self.source)
+                )
+        return candidates, errors
 
     def _discover_links_from_html_pages(self, pages: list[str]) -> tuple[list[str], int]:
-        links: list[str] = []
+        candidates, errors = self._discover_candidates_from_html_pages(pages)
+        return [candidate.url for candidate in candidates], errors
+
+    def _discover_candidates_from_html_pages(
+        self, pages: list[str]
+    ) -> tuple[list[DiscoveredCandidate], int]:
+        candidates: list[DiscoveredCandidate] = []
         errors = 0
         for page in pages:
             try:
@@ -94,8 +129,9 @@ class GenericRSSAdapter(BaseSourceAdapter):
             except Exception:
                 errors += 1
                 continue
-            links.extend(self._extract_links(html))
-        return links, errors
+            for link in self._extract_links(html):
+                candidates.append(candidate_from_url(url=link, origin="html", source=self.source))
+        return candidates, errors
 
     def _parse_feed(self, xml_text: str) -> list[dict]:
         root = ET.fromstring(xml_text)
@@ -127,6 +163,17 @@ def _read_article_text(page: str) -> str:
     for value in _extract_json_ld_values(page, "articleBody"):
         text = normalize_text(value)
         if text:
+            return text
+
+    if trafilatura is not None:
+        extracted = trafilatura.extract(
+            page,
+            output_format="txt",
+            include_links=False,
+            include_images=False,
+        )
+        text = normalize_text(extracted or "")
+        if len(text) >= 400:
             return text
     return ""
 
@@ -230,21 +277,13 @@ def _parse_sitemap(xml_text: str) -> list[str]:
     return links
 
 
-def _extract_links(html: str) -> list[str]:
-    return re.findall(r'href=["\'](https?://[^"\']+)["\']', html)
-
-
-def _parse_sitemap(xml_text: str) -> list[str]:
-    try:
-        root = ET.fromstring(xml_text)
-    except Exception:
-        return []
-    links = []
-    for loc in root.findall(".//{*}loc"):
-        if loc.text:
-            links.append(loc.text.strip())
-    return links
-
-
-def _extract_links(html: str) -> list[str]:
-    return re.findall(r'href=["\'](https?://[^"\']+)["\']', html)
+def _extract_links(html_text: str) -> list[str]:
+    if HTMLParser is not None:
+        parser = HTMLParser(html_text)
+        links: list[str] = []
+        for node in parser.css("a[href]"):
+            href = (node.attributes.get("href") or "").strip()
+            if href.startswith("http://") or href.startswith("https://"):
+                links.append(href)
+        return links
+    return re.findall(r'href=["\'](https?://[^"\']+)["\']', html_text)

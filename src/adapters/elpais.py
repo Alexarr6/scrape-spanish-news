@@ -1,35 +1,55 @@
 from __future__ import annotations
 
-from src.core.adapter import RunConfig
-from src.core.strategies.metrics import build_strategy_metrics_envelope
-from src.core.strategies.orchestrator import DiscoveryOrchestrator
-from src.core.strategies.rss_discovery import RSSDiscoveryStrategy
-
-from .rss_adapter import GenericRSSAdapter
+from src.adapters.discovery_profile import LocalityPenaltyRule, SourceDiscoveryProfile
+from src.adapters.profiled_adapter import ProfiledRSSAdapter
 
 
-class ElPaisAdapter(GenericRSSAdapter):
+class ElPaisAdapter(ProfiledRSSAdapter):
     source = "elpais"
-    feeds = [
-        "https://feeds.elpais.com/mrss-s/pages/ep/site/elpais.com/portada",
-        "https://feeds.elpais.com/mrss-s/pages/ep/site/elpais.com/section/espana/portada",
-    ]
-
-    def __init__(self, http_client=None):
-        super().__init__(http_client=http_client)
-        self._strategy_metrics: list[dict] = []
-
-    def discover(self, target_date: str, cfg: RunConfig) -> list[str]:
-        orchestrator = DiscoveryOrchestrator(
-            [
-                RSSDiscoveryStrategy(feeds=self.feeds, http_client=self.http),
-            ]
-        )
-        urls, metrics = orchestrator.run(target_date=target_date, cfg=cfg)
-        self._strategy_metrics = metrics
-        return urls
-
-    def run(self, target_date: str, cfg: RunConfig):
-        articles, metrics = super().run(target_date=target_date, cfg=cfg)
-        metrics["strategy_metrics"] = build_strategy_metrics_envelope(self._strategy_metrics)
-        return articles, metrics
+    profile = SourceDiscoveryProfile(
+        seed_feeds=(
+            "https://feeds.elpais.com/mrss-s/pages/ep/site/elpais.com/portada",
+            "https://feeds.elpais.com/mrss-s/pages/ep/site/elpais.com/section/espana/portada",
+            "https://feeds.elpais.com/mrss-s/pages/ep/site/elpais.com/section/internacional/portada",
+            "https://feeds.elpais.com/mrss-s/pages/ep/site/elpais.com/section/economia/portada",
+        ),
+        seed_sitemaps=(
+            "https://elpais.com/sitemaps/news.xml",
+            "https://elpais.com/sitemaps/sitemap.xml",
+        ),
+        seed_html_pages=(
+            "https://elpais.com/espana/",
+            "https://elpais.com/internacional/",
+            "https://elpais.com/economia/",
+        ),
+        include_path_patterns=(
+            "/espana/",
+            "/internacional/",
+            "/economia/",
+            "/america/",
+            "/mexico/",
+        ),
+        exclude_path_patterns=(
+            "/opinion/",
+            "/deportes/",
+            "/futbol/",
+            "/television/",
+            "/gente/",
+            "/eps/",
+            "/babelia/",
+            "/cinco-dias/",
+        ),
+        exclude_section_patterns=("opinión", "opinion", "fútbol", "televisión", "gente"),
+        locality_penalty_rules=(
+            LocalityPenaltyRule(
+                patterns=("/comunidad-valenciana/", "/catalunya/", "/andalucia/", "/madrid/"),
+                penalty=1,
+            ),
+        ),
+        bucket_rules={
+            "politics": ("espana", "gobierno", "congreso", "senado", "tribunal"),
+            "society": ("sanidad", "vivienda", "educacion", "justicia"),
+            "international": ("internacional", "europa", "gaza", "iran", "ucran"),
+            "economy": ("economia", "energia", "inflacion", "presupuesto"),
+        },
+    )

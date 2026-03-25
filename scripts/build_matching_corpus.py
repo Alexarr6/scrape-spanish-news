@@ -1,4 +1,4 @@
-"""CLI entrypoint for enriching persisted articles with tags and entities."""
+"""Build and audit the derived hard-news matching corpus."""
 
 from __future__ import annotations
 
@@ -11,8 +11,7 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
-from src.analysis.llm_client import LLMSettings  # noqa: E402
-from src.analysis.pipeline import AnalysisPipeline  # noqa: E402
+from src.analysis.matching_corpus import MATCHING_DAILY_CAP, MatchingCorpusPipeline  # noqa: E402
 from src.persistence.db import (  # noqa: E402
     create_postgres_engine,
     init_schema,
@@ -22,13 +21,11 @@ from src.persistence.db import (  # noqa: E402
 
 
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(
-        description="Enrich persisted articles with article type, tags and entities"
-    )
+    parser = argparse.ArgumentParser(description="Build the derived hard-news matching corpus")
     parser.add_argument("--db-url", default="")
-    parser.add_argument("--days-back", type=int, default=2)
-    parser.add_argument("--limit", type=int, default=150)
-    parser.add_argument("--corpus", choices=("raw", "matching"), default="matching")
+    parser.add_argument("--days-back", type=int, default=3)
+    parser.add_argument("--daily-cap", type=int, default=MATCHING_DAILY_CAP)
+    parser.add_argument("--audit-out", default="")
     return parser.parse_args()
 
 
@@ -38,11 +35,10 @@ def main() -> int:
     init_schema(engine)
     session = make_session(engine)
     try:
-        pipeline = AnalysisPipeline(session, llm_settings=LLMSettings.from_env())
-        metrics = pipeline.enrich_articles(
+        metrics = MatchingCorpusPipeline(session).build(
             days_back=args.days_back,
-            limit=args.limit,
-            corpus=args.corpus,
+            daily_cap=args.daily_cap,
+            audit_path=args.audit_out,
         )
         print(json.dumps(metrics.model_dump(mode="json"), ensure_ascii=False, indent=2))
         return 0
