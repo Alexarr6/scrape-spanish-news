@@ -53,6 +53,9 @@ def main() -> int:
         "cluster_summary": None
         if result.cluster_summary is None
         else result.cluster_summary.__dict__,
+        "candidate_recall_summary": None
+        if result.candidate_recall_summary is None
+        else result.candidate_recall_summary.model_dump(mode="json"),
     }
     (output_dir / "summary.json").write_text(
         json.dumps(summary, ensure_ascii=False, indent=2), encoding="utf-8"

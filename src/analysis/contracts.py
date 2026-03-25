@@ -273,7 +273,22 @@ class PairScoreArtifact(BaseModel):
     left_article_id: int
     right_article_id: int
     accepted: bool
+    candidate_origins: list[str] = Field(default_factory=list)
+    candidate_rank: int | None = None
     reason: StoryClusterMemberReason
+
+
+class CandidateGenerationSummary(BaseModel):
+    seed_article_id: int
+    candidate_count: int = 0
+    origin_counts: dict[str, int] = Field(default_factory=dict)
+    overflow_counts: dict[str, int] = Field(default_factory=dict)
+
+
+class CandidateRecallSummary(BaseModel):
+    positive_pair_count: int
+    recall_at_k: dict[str, float] = Field(default_factory=dict)
+    covered_pair_count_by_k: dict[str, int] = Field(default_factory=dict)
 
 
 class ClusterRebuildMetrics(BaseModel):
@@ -282,6 +297,8 @@ class ClusterRebuildMetrics(BaseModel):
     accepted_pair_count: int = 0
     rejected_pair_count: int = 0
     cluster_count: int = 0
+    candidate_origin_counts: dict[str, int] = Field(default_factory=dict)
+    candidate_overflow_counts: dict[str, int] = Field(default_factory=dict)
     started_at: datetime | None = None
     finished_at: datetime | None = None
 

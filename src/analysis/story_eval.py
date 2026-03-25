@@ -6,7 +6,7 @@ from itertools import combinations
 from pathlib import Path
 
 from src.analysis.pipeline import ClusterPipeline, EnrichedArticle
-from src.analysis.contracts import PairScoreArtifact
+from src.analysis.contracts import CandidateRecallSummary, PairScoreArtifact
 
 
 @dataclass
@@ -54,6 +54,7 @@ class ClusterEvalSummary:
 class EvalRunResult:
     pair_summary: PairEvalSummary | None
     cluster_summary: ClusterEvalSummary | None
+    candidate_recall_summary: CandidateRecallSummary | None
     artifacts: list[PairScoreArtifact]
     predicted_components: list[list[int]]
 
@@ -74,16 +75,22 @@ def build_pair_artifacts(
 ) -> tuple[list[PairScoreArtifact], list[tuple[int, int, object]], list[list[int]]]:
     artifacts: list[PairScoreArtifact] = []
     accepted_edges = []
-    for left, right in combinations(articles, 2):
-        days_delta = abs((left.article.published_at - right.article.published_at).days)
-        if days_delta > max_days_delta:
-            continue
+    article_by_id = {article.article.id: article for article in articles}
+    candidate_pairs, _ = pipeline._generate_candidate_pairs(  # noqa: SLF001
+        articles,
+        max_days_delta=max_days_delta,
+    )
+    for candidate in candidate_pairs:
+        left = article_by_id[candidate.left_article_id]
+        right = article_by_id[candidate.right_article_id]
         reason = pipeline.score_pair(left, right)
         accepted = reason.hard_block is None and reason.score >= score_threshold
         artifact = PairScoreArtifact(
             left_article_id=left.article.id,
             right_article_id=right.article.id,
             accepted=accepted,
+            candidate_origins=sorted(candidate.origins),
+            candidate_rank=candidate.rank,
             reason=reason,
         )
         artifacts.append(artifact)
@@ -110,9 +117,11 @@ def evaluate_fixture(
     )
     pair_summary = evaluate_pair_labels(artifacts, dataset.pair_labels)
     cluster_summary = evaluate_clusters(components, dataset.gold_clusters)
+    candidate_recall_summary = evaluate_candidate_recall(artifacts, dataset.pair_labels)
     return EvalRunResult(
         pair_summary=pair_summary,
         cluster_summary=cluster_summary,
+        candidate_recall_summary=candidate_recall_summary,
         artifacts=artifacts,
         predicted_components=components,
     )
@@ -223,3 +232,31 @@ def _cluster_pairs(clusters: list[list[int]]) -> set[tuple[int, int]]:
         for left, right in combinations(sorted(cluster), 2):
             pairs.add((left, right))
     return pairs
+
+
+def evaluate_candidate_recall(
+    artifacts: list[PairScoreArtifact],
+    labels: list[PairLabel],
+    *,
+    ks: tuple[int, ...] = (5, 10, 20, 50),
+) -> CandidateRecallSummary | None:
+    positive_labels = [label for label in labels if label.is_positive]
+    if not positive_labels:
+        return None
+    artifact_by_key = {
+        tuple(sorted((artifact.left_article_id, artifact.right_article_id))): artifact
+        for artifact in artifacts
+    }
+    covered_counts = {str(k): 0 for k in ks}
+    for label in positive_labels:
+        artifact = artifact_by_key.get(label.key)
+        rank = artifact.candidate_rank if artifact is not None else None
+        for k in ks:
+            if rank is not None and rank <= k:
+                covered_counts[str(k)] += 1
+    total = len(positive_labels)
+    return CandidateRecallSummary(
+        positive_pair_count=total,
+        covered_pair_count_by_k=covered_counts,
+        recall_at_k={str(k): round(covered_counts[str(k)] / total, 4) for k in ks},
+    )

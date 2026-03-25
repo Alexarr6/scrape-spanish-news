@@ -5,7 +5,7 @@ from __future__ import annotations
 import hashlib
 import json
 from collections import Counter, defaultdict, deque
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import UTC, date, datetime, timedelta
 
 from sqlalchemy import delete, or_, select
@@ -17,6 +17,7 @@ from src.analysis.contracts import (
     ArticleAnalysisRead,
     ArticleEditorialAnalysisPayload,
     ArticleEnrichmentPayload,
+    CandidateGenerationSummary,
     ClusterRebuildMetrics,
     EditorialAnalysisDiagnostics,
     EditorialAnalysisRunMetrics,
@@ -58,6 +59,16 @@ from src.analysis.orm_models import (
 from src.analysis.taxonomy import CANONICAL_TAGS
 from src.persistence.core import ArticleRead
 from src.persistence.orm import ArticleORM
+
+
+
+
+@dataclass
+class CandidatePair:
+    left_article_id: int
+    right_article_id: int
+    origins: set[str] = field(default_factory=set)
+    rank: int | None = None
 
 
 @dataclass
@@ -802,28 +813,36 @@ class ClusterPipeline:
         started = datetime.now(UTC)
         articles = self._load_enriched_articles(days_back=days_back, limit=limit)
         metrics = ClusterRebuildMetrics(article_count=len(articles), started_at=started)
+        article_by_id = {article.article.id: article for article in articles}
         artifacts: list[PairScoreArtifact] = []
         accepted_edges: list[tuple[int, int, StoryClusterMemberReason]] = []
-        for idx, left in enumerate(articles):
-            for right in articles[idx + 1 :]:
-                if abs((left.article.published_at - right.article.published_at).days) > 7:
-                    continue
-                metrics.candidate_pair_count += 1
-                reason = self.score_pair(left, right)
-                accepted = reason.hard_block is None and reason.score >= score_threshold
-                artifacts.append(
-                    PairScoreArtifact(
-                        left_article_id=left.article.id,
-                        right_article_id=right.article.id,
-                        accepted=accepted,
-                        reason=reason,
-                    )
+        candidate_pairs, candidate_summaries = self._generate_candidate_pairs(articles)
+        for summary in candidate_summaries:
+            for origin, count in summary.origin_counts.items():
+                metrics.candidate_origin_counts[origin] = metrics.candidate_origin_counts.get(origin, 0) + count
+            for origin, count in summary.overflow_counts.items():
+                metrics.candidate_overflow_counts[origin] = metrics.candidate_overflow_counts.get(origin, 0) + count
+        for candidate in candidate_pairs:
+            left = article_by_id[candidate.left_article_id]
+            right = article_by_id[candidate.right_article_id]
+            metrics.candidate_pair_count += 1
+            reason = self.score_pair(left, right)
+            accepted = reason.hard_block is None and reason.score >= score_threshold
+            artifacts.append(
+                PairScoreArtifact(
+                    left_article_id=left.article.id,
+                    right_article_id=right.article.id,
+                    accepted=accepted,
+                    candidate_origins=sorted(candidate.origins),
+                    candidate_rank=candidate.rank,
+                    reason=reason,
                 )
-                if accepted:
-                    metrics.accepted_pair_count += 1
-                    accepted_edges.append((left.article.id, right.article.id, reason))
-                else:
-                    metrics.rejected_pair_count += 1
+            )
+            if accepted:
+                metrics.accepted_pair_count += 1
+                accepted_edges.append((left.article.id, right.article.id, reason))
+            else:
+                metrics.rejected_pair_count += 1
         components = self._connected_components(
             [article.article.id for article in articles], accepted_edges
         )
@@ -879,6 +898,83 @@ class ClusterPipeline:
                 )
             )
         return result
+
+
+    def _generate_candidate_pairs(
+        self,
+        articles: list[EnrichedArticle],
+        *,
+        max_days_delta: int = 7,
+        per_seed_limit: int = 40,
+        per_origin_limit: int = 20,
+    ) -> tuple[list[CandidatePair], list[CandidateGenerationSummary]]:
+        ordered_articles = sorted(articles, key=lambda item: item.article.published_at)
+        pair_map: dict[tuple[int, int], CandidatePair] = {}
+        summaries: list[CandidateGenerationSummary] = []
+
+        for seed in ordered_articles:
+            summary = CandidateGenerationSummary(seed_article_id=seed.article.id)
+            candidates: dict[str, list[tuple[int, float]]] = defaultdict(list)
+            seed_time = seed.article.published_at
+            seed_tags = set(seed.tag_codes)
+            seed_entities = set(seed.entity_slugs)
+            seed_keyphrases = {normalize_lookup(value) for value in seed.key_phrases if normalize_lookup(value)}
+            for other in ordered_articles:
+                if other.article.id == seed.article.id:
+                    continue
+                days_delta = abs((seed_time - other.article.published_at).days)
+                if days_delta > max_days_delta:
+                    continue
+                score = max(0.0, 1 - (days_delta / max_days_delta))
+                candidates['temporal_window'].append((other.article.id, score))
+
+                shared_tags = seed_tags & set(other.tag_codes)
+                if shared_tags:
+                    candidates['shared_tag'].append((other.article.id, len(shared_tags) + score))
+
+                shared_entities = seed_entities & set(other.entity_slugs)
+                if shared_entities:
+                    candidates['shared_entity'].append((other.article.id, len(shared_entities) + score))
+
+                other_keyphrases = {normalize_lookup(value) for value in other.key_phrases if normalize_lookup(value)}
+                lexical_overlap = len(seed_keyphrases & other_keyphrases)
+                if lexical_overlap:
+                    candidates['lexical_neighbor'].append((other.article.id, lexical_overlap + score))
+
+            chosen_for_seed: list[int] = []
+            seen_ids: set[int] = set()
+            for origin, ranked_rows in candidates.items():
+                ranked = sorted(ranked_rows, key=lambda item: (-item[1], item[0]))
+                summary.origin_counts[origin] = min(len(ranked), per_origin_limit)
+                overflow = max(0, len(ranked) - per_origin_limit)
+                if overflow:
+                    summary.overflow_counts[origin] = overflow
+                for article_id, _ in ranked[:per_origin_limit]:
+                    if article_id not in seen_ids and len(chosen_for_seed) >= per_seed_limit:
+                        summary.overflow_counts[origin] = summary.overflow_counts.get(origin, 0) + 1
+                        continue
+                    pair_key = tuple(sorted((seed.article.id, article_id)))
+                    pair = pair_map.setdefault(
+                        pair_key,
+                        CandidatePair(
+                            left_article_id=pair_key[0],
+                            right_article_id=pair_key[1],
+                        ),
+                    )
+                    pair.origins.add(origin)
+                    if article_id not in seen_ids:
+                        seen_ids.add(article_id)
+                        chosen_for_seed.append(article_id)
+            summary.candidate_count = len(chosen_for_seed)
+            for rank, article_id in enumerate(chosen_for_seed, start=1):
+                pair_key = tuple(sorted((seed.article.id, article_id)))
+                pair = pair_map[pair_key]
+                if pair.rank is None or rank < pair.rank:
+                    pair.rank = rank
+            summaries.append(summary)
+
+        pairs = sorted(pair_map.values(), key=lambda item: (item.rank or 999999, item.left_article_id, item.right_article_id))
+        return pairs, summaries
 
     def score_pair(self, left: EnrichedArticle, right: EnrichedArticle) -> StoryClusterMemberReason:
         """Score whether two enriched articles should belong to the same story cluster."""

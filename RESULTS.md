@@ -1,18 +1,18 @@
-# RESULTS.md — iter/009 Phase 0 instrumentation + evaluation
+# RESULTS.md — iter/009 Phase 1 candidate generation v1
 
 ## Executive summary
 
-En este pase no toqué candidate generation v1, scorer v2 ni closure v2. Hice lo que hacía falta antes: **dejar una base reproducible para medir el matching actual y auditar por qué acepta o rechaza pares**.
+En este pase sí aterricé **candidate generation v1** sin reescribir scorer ni closure. La idea fue dejar un retrieval stage explícito, auditable y barato, manteniendo intacto el framing `candidate generation -> pair scoring -> graph closure`.
 
-Se añadieron:
-- una capa de evaluación reutilizable (`src/analysis/story_eval.py`)
-- un script de baseline (`scripts/evaluate_story_matching.py`)
-- un script para bootstrap de gold manual (`scripts/bootstrap_story_gold_set.py`)
-- un fixture/gold set inicial pequeño pero contractual (`tests/fixtures/story_matching_eval_fixture.json`)
-- un test que fija el baseline actual (`tests/test_story_matching_eval.py`)
-- documentación específica (`docs/architecture/story-matching-eval.md`)
+Se añadieron o ampliaron estas piezas:
+- candidate generation v1 en `src/analysis/pipeline.py`
+- contratos ampliados para artifacts/métricas (`src/analysis/contracts.py`)
+- evaluación con `candidate_recall_summary` en `src/analysis/story_eval.py`
+- `scripts/evaluate_story_matching.py` actualizado para volcar recall@k de candidatos
+- tests nuevos en `tests/test_story_candidate_generation.py`
+- actualización de los tests existentes de story matching, que siguen pasando
 
-La baseline reproducible que sí queda cerrada en repo muestra justo el patrón que sospechábamos: **el sistema actual mantiene precisión en un rewrite cercano, pero pierde recall en follow-ups legítimos**.
+La lectura honesta tras este pase: **ya existe una stage de candidatos medible y trazable, pero todavía no hemos mejorado el scorer**, así que el recall final de matching sigue limitado por las heurísticas actuales. Lo valioso aquí es que ahora podemos distinguir “no se comparó” de “se comparó y el scorer lo tumbó”.
 
 ---
 
@@ -221,3 +221,37 @@ Sólo si el baseline medido se queda corto.
 - El repo ya tiene una distinción conceptual correcta entre Stories y Explorer; conviene preservarla.
 - El detalle más engañoso del código actual es el nombre `semantic_similarity` dentro del scorer de stories: hoy no representa embeddings semánticos reales.
 - El sistema actual no está roto conceptualmente; está subinstrumentado y probablemente demasiado conservador para recall.
+
+
+---
+
+## Phase 1 entregado: candidate generation v1
+
+### Qué cambió de verdad
+- `build_clusters()` dejó de iterar all-pairs sobre el slice y ahora llama a `_generate_candidate_pairs(...)`.
+- La generación de candidatos usa una unión acotada de señales: ventana temporal, shared tags, shared entities y vecinos léxicos por keyphrases normalizadas.
+- Cada par conserva procedencia (`candidate_origins`) y rank (`candidate_rank`) en el artifact.
+- El sistema cuenta también overflow por origen para detectar cuándo los caps empiezan a amputar recall.
+
+### Por qué esto sirve
+Antes el sistema mezclaba dos problemas y luego mentía por omisión: si un par no se aceptaba, no estaba claro si el scorer lo rechazó o si ni siquiera había una stage de retrieval explícita que pudiéramos medir. Ahora eso ya no pasa.
+
+### Qué no hice a propósito
+- no metí embeddings ni ANN como juez principal
+- no rehice `score_pair()`
+- no toqué closure salvo la integración mínima necesaria
+
+### Tests/validación ejecutados
+Comando corrido:
+
+```bash
+/home/node/.local/bin/uv run pytest   tests/test_story_pair_scoring.py   tests/test_story_clustering.py   tests/test_story_matching_eval.py   tests/test_story_candidate_generation.py
+```
+
+Resultado: `11 passed`.
+
+### Límites honestos
+- La candidate stage actual sigue siendo heurística; útil, no mágica.
+- `temporal_window` sigue formando parte de la unión de señales, así que en ventanas densas puede aportar bastante ruido aunque quede capado.
+- Falta correr el scaffold sobre un gold set real para saber cuánto recall gana esta stage respecto al recorte miope anterior.
+- El scorer sigue siendo el siguiente cuello de botella obvio para follow-ups legítimos.
