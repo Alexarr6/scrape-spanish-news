@@ -15,15 +15,9 @@ from sqlalchemy.orm import Session
 from src.analysis.orm_models import ArticleMatchingSelectionORM
 from src.persistence.orm import ArticleORM
 
-MATCHING_PROFILE_VERSION = "matching-v1"
+MATCHING_PROFILE_VERSION = "matching-v2"
 MATCHING_TIMEZONE = "Europe/Madrid"
-MATCHING_DAILY_CAP = 60
-MATCHING_BUCKET_TARGETS = {
-    "politics": 20,
-    "society": 15,
-    "international": 15,
-    "economy": 10,
-}
+MATCHING_DAILY_CAP = 0
 
 NATIONAL_TERMS = (
     "gobierno",
@@ -76,6 +70,7 @@ GLOBAL_EXCLUDE_TERMS = (
     "eps",
     "babelia",
     "viajes",
+    "viajar",
 )
 
 SOFT_LIFESTYLE_TERMS = (
@@ -87,6 +82,39 @@ SOFT_LIFESTYLE_TERMS = (
     "televisión",
     "television",
     "gente",
+)
+
+GLOBAL_EXCLUDE_SECTION_TERMS = (
+    "opinion",
+    "opinión",
+    "editorial",
+    "tribuna",
+    "deportes",
+    "fútbol",
+    "futbol",
+    "toros",
+    "televisión",
+    "television",
+    "gente",
+    "magazine",
+    "eps",
+    "babelia",
+    "viajes",
+    "viajar",
+    "recreo",
+    "moda",
+    "shopping",
+    "compras",
+)
+
+GLOBAL_EXCLUDE_PATH_TERMS = (
+    "/topics/",
+    "/topic/",
+    "/temas/",
+    "/tema/",
+    "/autor/",
+    "/autores/",
+    "/firmas/",
 )
 
 LOCALITY_TERMS = (
@@ -107,8 +135,6 @@ LOCALITY_TERMS = (
 
 BUCKET_PATTERNS = {
     "politics": (
-        "espana",
-        "españa",
         "politica",
         "política",
         "gobierno",
@@ -123,6 +149,9 @@ BUCKET_PATTERNS = {
         "eleccion",
     ),
     "society": (
+        "espana",
+        "españa",
+        "nacional",
         "sociedad",
         "sanidad",
         "salud",
@@ -171,6 +200,14 @@ SOURCE_EXCLUDE_TERMS = {
     "20minutos": ("sueldazo", "once", "comprobar", "tiempo hará", "aemet avanza"),
     "eldiario": ("opinion", "opinión", "blogs", "vertele", "consumoclaro"),
     "lavanguardia": ("tribuna", "brújula para un mundo extraño"),
+}
+
+SOURCE_EXCLUDE_SECTION_TERMS = {
+    "abc": ("recreo", "viajar"),
+    "20minutos": ("gonzoo", "capaces", "moda", "aplicaciones", "juegos"),
+    "eldiario": ("spin", "the guardian", "la gomera ahora", "vertele", "consumoclaro"),
+    "elpais": ("cultura",),
+    "lavanguardia": ("opinión", "opinion"),
 }
 
 
@@ -267,46 +304,19 @@ class MatchingCorpusPipeline:
             grouped[(row.source, local_date)].append((row, decisions[row.id]))
 
         selected: dict[int, dict[str, Any]] = {}
+        uncapped = daily_cap <= 0
         for (source, local_date), items in grouped.items():
             eligible_items = [(row, decision) for row, decision in items if decision.eligible]
-            by_bucket: dict[str, list[tuple[ArticleORM, MatchingDecision]]] = defaultdict(list)
-            for row, decision in eligible_items:
-                by_bucket[decision.bucket].append((row, decision))
-            for bucket_items in by_bucket.values():
-                bucket_items.sort(
-                    key=lambda item: (-item[1].score, item[0].published_at),
-                    reverse=False,
+            eligible_items.sort(
+                key=lambda item: (
+                    -item[1].score,
+                    item[0].published_at or datetime.min.replace(tzinfo=UTC),
+                    item[0].url,
                 )
-
+            )
             rank = 1
-            selected_ids: set[int] = set()
-            for bucket, target in MATCHING_BUCKET_TARGETS.items():
-                for row, decision in by_bucket.get(bucket, [])[:target]:
-                    selected[row.id] = {
-                        "source": source,
-                        "local_date": local_date,
-                        "bucket": decision.bucket,
-                        "score": decision.score,
-                        "rank": rank,
-                    }
-                    selected_ids.add(row.id)
-                    rank += 1
-                    if len(selected_ids) >= daily_cap:
-                        break
-                if len(selected_ids) >= daily_cap:
-                    break
-
-            if len(selected_ids) >= daily_cap:
-                continue
-
-            remainder: list[tuple[ArticleORM, MatchingDecision]] = []
-            for bucket_items in by_bucket.values():
-                for row, decision in bucket_items:
-                    if row.id not in selected_ids:
-                        remainder.append((row, decision))
-            remainder.sort(key=lambda item: (-item[1].score, item[0].published_at), reverse=False)
-            for row, decision in remainder:
-                if len(selected_ids) >= daily_cap:
+            for row, decision in eligible_items:
+                if not uncapped and rank > daily_cap:
                     break
                 selected[row.id] = {
                     "source": source,
@@ -315,7 +325,6 @@ class MatchingCorpusPipeline:
                     "score": decision.score,
                     "rank": rank,
                 }
-                selected_ids.add(row.id)
                 rank += 1
         return selected
 
@@ -399,7 +408,16 @@ class MatchingCorpusPipeline:
             return MatchingDecision(False, "missing_local_date", "", 0.0)
 
         path = (urlparse(row.url).path or "").casefold()
+        section = (row.section or "").casefold()
         text = _text_blob(row)
+        if any(term in path for term in GLOBAL_EXCLUDE_PATH_TERMS):
+            return MatchingDecision(False, "excluded_non_article_path", "", 0.0)
+        if any(term in section for term in GLOBAL_EXCLUDE_SECTION_TERMS):
+            return MatchingDecision(False, "excluded_section", "", 0.0)
+        if any(
+            term in section for term in SOURCE_EXCLUDE_SECTION_TERMS.get(row.source, ())
+        ):
+            return MatchingDecision(False, "excluded_source_section", "", 0.0)
         if any(term in text for term in GLOBAL_EXCLUDE_TERMS):
             return MatchingDecision(False, "excluded_article_type", "", 0.0)
         if any(term in path or term in text for term in SOURCE_EXCLUDE_TERMS.get(row.source, ())):

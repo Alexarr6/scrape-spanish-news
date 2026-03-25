@@ -4,7 +4,7 @@ import unittest
 
 from src.adapters.discovery_profile import candidate_from_url
 from src.adapters.lavanguardia import LaVanguardiaAdapter
-from src.adapters.url_filters import is_probable_noise_url
+from src.adapters.url_filters import extract_url_date, is_probable_noise_url
 from src.core.adapter import RunConfig
 
 
@@ -100,6 +100,51 @@ class LaVanguardiaTests(unittest.TestCase):
                 "https://www.lavanguardia.com/politica/2026/03/23/fresh.html",
                 "https://www.lavanguardia.com/politica/2026/03/22/nearby.html",
             ],
+        )
+
+    def test_discover_rejects_topic_hub_urls(self):
+        adapter = LaVanguardiaAdapter(http_client=_FakeHttp({}))
+        adapter._discover_candidates_from_feeds = lambda feeds: (
+            [
+                candidate_from_url(
+                    url="https://www.lavanguardia.com/topics/ucrania",
+                    origin="rss",
+                    source="lavanguardia",
+                ),
+                candidate_from_url(
+                    url=(
+                        "https://www.lavanguardia.com/politica/20260325/11496378/"
+                        "sanchez-congreso.html"
+                    ),
+                    origin="rss",
+                    source="lavanguardia",
+                ),
+            ],
+            0,
+        )
+        adapter._discover_candidates_from_sitemaps = lambda sitemaps: ([], 0)
+        adapter._discover_candidates_from_html_pages = lambda pages: ([], 0)
+
+        urls = adapter.discover("2026-03-25", RunConfig(max_discovery_urls=10))
+
+        self.assertEqual(
+            urls,
+            [
+                (
+                    "https://www.lavanguardia.com/politica/20260325/11496378/"
+                    "sanchez-congreso.html"
+                )
+            ],
+        )
+
+    def test_extract_url_date_supports_compact_path_dates(self):
+        self.assertEqual(
+            str(
+                extract_url_date(
+                    "https://www.lavanguardia.com/politica/20260325/11496378/foo.html"
+                )
+            ),
+            "2026-03-25",
         )
 
     def test_run_emits_strategy_metrics_envelope(self):

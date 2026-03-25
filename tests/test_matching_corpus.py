@@ -97,6 +97,83 @@ def test_matching_corpus_excludes_opinion_and_soft_content_but_keeps_hard_news()
     )
 
 
+def test_matching_corpus_excludes_soft_sections_by_section_name() -> None:
+    session = _make_session()
+    kept = _article(
+        session,
+        source="20minutos",
+        title="El Gobierno y Bruselas negocian un nuevo paquete energético",
+        section="Nacional",
+        url="https://www.20minutos.es/noticia/123456/nacional/paquete-energetico/",
+    )
+    excluded = [
+        _article(
+            session,
+            source="abc",
+            title="Pasatiempos de primavera",
+            section="recreo",
+            url="https://www.abc.es/recreo/2026-03-22/pasatiempos.html",
+        ),
+        _article(
+            session,
+            source="20minutos",
+            title="Tendencias de temporada",
+            section="Moda",
+            url="https://www.20minutos.es/moda/tendencias-primavera/",
+        ),
+        _article(
+            session,
+            source="20minutos",
+            title="Aplicaciones para organizar tu semana",
+            section="Aplicaciones",
+            url="https://www.20minutos.es/tecnologia/aplicaciones/organizar-semana/",
+        ),
+        _article(
+            session,
+            source="eldiario",
+            title="Crónica cultural de la jornada",
+            section="SPIN",
+            url="https://www.eldiario.es/cultura/spin/cronica-jornada.html",
+        ),
+    ]
+
+    MatchingCorpusPipeline(session).build(days_back=30)
+
+    rows = {
+        row.article_id: row
+        for row in session.execute(select(ArticleMatchingSelectionORM)).scalars().all()
+    }
+
+    assert rows[kept.id].eligible is True
+    assert rows[kept.id].selection_rank == 1
+    for article in excluded:
+        assert rows[article.id].eligible is False
+        assert rows[article.id].selection_rank is None
+        assert rows[article.id].eligibility_reason in {
+            "excluded_section",
+            "excluded_source_section",
+        }
+
+
+def test_matching_corpus_is_uncapped_by_default() -> None:
+    session = _make_session()
+    for index in range(3):
+        _article(
+            session,
+            source="elpais",
+            title=f"El Congreso debate la ley {index}",
+            section="España",
+            url=f"https://elpais.com/espana/2026-03-22/ley-{index}.html",
+        )
+
+    metrics = MatchingCorpusPipeline(session).build(days_back=30)
+
+    rows = session.execute(select(ArticleMatchingSelectionORM)).scalars().all()
+
+    assert metrics.selected_count == 3
+    assert sum(1 for row in rows if row.selection_rank is not None) == 3
+
+
 def test_matching_corpus_uses_local_madrid_day_for_selection() -> None:
     session = _make_session()
     article = _article(

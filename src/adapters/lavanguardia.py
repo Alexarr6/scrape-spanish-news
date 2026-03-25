@@ -30,6 +30,13 @@ class LaVanguardiaAdapter(ProfiledRSSAdapter):
             "/magazine/",
             "/vida/",
             "/opinion/",
+            "/topics/",
+            "/topic/",
+            "/temas/",
+            "/tema/",
+            "/autor/",
+            "/autores/",
+            "/firmas/",
         ),
         exclude_section_patterns=("opinión", "opinion", "tribuna"),
         locality_penalty_rules=(

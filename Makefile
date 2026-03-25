@@ -190,7 +190,7 @@ enrich-articles: preflight
 build-matching-corpus: preflight
 	@set -euo pipefail; \
 	[[ -n "$(DATABASE_URL)" ]] || { echo 'DATABASE_URL is required for build-matching-corpus'; exit 1; }; \
-	cd "$(APP_ROOT)" && PYTHONPATH="$(APP_ROOT):$${PYTHONPATH:-}" $(PYTHON) scripts/build_matching_corpus.py --db-url "$(DATABASE_URL)" --days-back "$${DAYS_BACK:-3}" --daily-cap "$${DAILY_CAP:-60}" --audit-out "$${AUDIT_OUT:-data/matching_audit_$(DATE).json}"
+	cd "$(APP_ROOT)" && PYTHONPATH="$(APP_ROOT):$${PYTHONPATH:-}" $(PYTHON) scripts/build_matching_corpus.py --db-url "$(DATABASE_URL)" --days-back "$${DAYS_BACK:-3}" --daily-cap "$${DAILY_CAP:-0}" --audit-out "$${AUDIT_OUT:-data/matching_audit_$(DATE).json}"
 
 analyze-editorial: preflight
 	@set -euo pipefail; \

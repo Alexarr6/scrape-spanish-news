@@ -24,7 +24,12 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Build the derived hard-news matching corpus")
     parser.add_argument("--db-url", default="")
     parser.add_argument("--days-back", type=int, default=3)
-    parser.add_argument("--daily-cap", type=int, default=MATCHING_DAILY_CAP)
+    parser.add_argument(
+        "--daily-cap",
+        type=int,
+        default=MATCHING_DAILY_CAP,
+        help="Maximum selected articles per source/day. Use 0 to disable the cap.",
+    )
     parser.add_argument("--audit-out", default="")
     return parser.parse_args()
 
