@@ -1,0 +1,197 @@
+{
+  "articles": [
+    {
+      "article": {
+        "id": 1,
+        "source": "elpais",
+        "title": "Illa anuncia un acuerdo con ERC sobre presupuestos",
+        "url": "https://example.com/1",
+        "published_at": "2026-03-18T10:00:00Z",
+        "scraped_at": "2026-03-18T10:00:00Z",
+        "section": "politica",
+        "author": "Reporter",
+        "summary": "El Govern anuncia un pacto presupuestario con ERC tras varios días de negociación.",
+        "article_text": "El Govern anuncia un pacto presupuestario con ERC tras varios días de negociación.",
+        "tags": "politics_regional,agreement_negotiation"
+      },
+      "analysis": {
+        "article_id": 1,
+        "article_type": "news_report",
+        "article_type_confidence": 0.9,
+        "is_event_coverage": true,
+        "language": "es",
+        "primary_topic_tag_id": null,
+        "key_phrases_json": "[\"acuerdo presupuestos erc\", \"govern catalunya pacto\", \"cuentas catalanas\"]",
+        "claims_json": "[]",
+        "extraction_version": "v1",
+        "content_hash": "hash-1"
+      },
+      "tag_codes": ["politics_regional", "agreement_negotiation"],
+      "entity_slugs": ["political_party-erc", "person-salvador-illa"],
+      "key_phrases": ["acuerdo presupuestos erc", "govern catalunya pacto", "cuentas catalanas"]
+    },
+    {
+      "article": {
+        "id": 2,
+        "source": "elmundo",
+        "title": "El Govern sella con ERC las cuentas catalanas tras una larga negociación",
+        "url": "https://example.com/2",
+        "published_at": "2026-03-18T13:00:00Z",
+        "scraped_at": "2026-03-18T13:00:00Z",
+        "section": "politica",
+        "author": "Reporter",
+        "summary": "El ejecutivo catalán cierra el acuerdo de presupuestos con ERC.",
+        "article_text": "El ejecutivo catalán cierra el acuerdo de presupuestos con ERC.",
+        "tags": "politics_regional,agreement_negotiation"
+      },
+      "analysis": {
+        "article_id": 2,
+        "article_type": "news_report",
+        "article_type_confidence": 0.9,
+        "is_event_coverage": true,
+        "language": "es",
+        "primary_topic_tag_id": null,
+        "key_phrases_json": "[\"acuerdo presupuestos erc\", \"cuentas catalanas\", \"pacto govern erc\"]",
+        "claims_json": "[]",
+        "extraction_version": "v1",
+        "content_hash": "hash-2"
+      },
+      "tag_codes": ["politics_regional", "agreement_negotiation"],
+      "entity_slugs": ["political_party-erc", "person-salvador-illa"],
+      "key_phrases": ["acuerdo presupuestos erc", "cuentas catalanas", "pacto govern erc"]
+    },
+    {
+      "article": {
+        "id": 3,
+        "source": "eldiario",
+        "title": "ERC exige nuevas condiciones a Illa dos días después del pacto presupuestario",
+        "url": "https://example.com/3",
+        "published_at": "2026-03-21T09:00:00Z",
+        "scraped_at": "2026-03-21T09:00:00Z",
+        "section": "politica",
+        "author": "Reporter",
+        "summary": "Las conversaciones sobre el acuerdo siguen abiertas y ERC reclama ajustes.",
+        "article_text": "Las conversaciones sobre el acuerdo siguen abiertas y ERC reclama ajustes.",
+        "tags": "politics_regional,statement_reaction"
+      },
+      "analysis": {
+        "article_id": 3,
+        "article_type": "news_report",
+        "article_type_confidence": 0.9,
+        "is_event_coverage": true,
+        "language": "es",
+        "primary_topic_tag_id": null,
+        "key_phrases_json": "[\"nuevas condiciones erc\", \"pacto presupuestario\", \"negociacion abierta\"]",
+        "claims_json": "[]",
+        "extraction_version": "v1",
+        "content_hash": "hash-3"
+      },
+      "tag_codes": ["politics_regional", "statement_reaction"],
+      "entity_slugs": ["political_party-erc", "person-salvador-illa"],
+      "key_phrases": ["nuevas condiciones erc", "pacto presupuestario", "negociacion abierta"]
+    },
+    {
+      "article": {
+        "id": 4,
+        "source": "abc",
+        "title": "Opinión: el peaje político de Illa por pactar con ERC",
+        "url": "https://example.com/4",
+        "published_at": "2026-03-18T16:00:00Z",
+        "scraped_at": "2026-03-18T16:00:00Z",
+        "section": "opinion",
+        "author": "Columnist",
+        "summary": "Una columna sobre el coste político del acuerdo.",
+        "article_text": "Una columna sobre el coste político del acuerdo.",
+        "tags": "politics_regional,agreement_negotiation"
+      },
+      "analysis": {
+        "article_id": 4,
+        "article_type": "opinion",
+        "article_type_confidence": 0.95,
+        "is_event_coverage": false,
+        "language": "es",
+        "primary_topic_tag_id": null,
+        "key_phrases_json": "[\"opinion pacto erc\", \"coste politico illa\"]",
+        "claims_json": "[]",
+        "extraction_version": "v1",
+        "content_hash": "hash-4"
+      },
+      "tag_codes": ["politics_regional", "agreement_negotiation"],
+      "entity_slugs": ["political_party-erc", "person-salvador-illa"],
+      "key_phrases": ["opinion pacto erc", "coste politico illa"]
+    },
+    {
+      "article": {
+        "id": 5,
+        "source": "lavanguardia",
+        "title": "Illa reorganiza su gabinete en plena presión interna del PSC",
+        "url": "https://example.com/5",
+        "published_at": "2026-03-19T11:00:00Z",
+        "scraped_at": "2026-03-19T11:00:00Z",
+        "section": "politica",
+        "author": "Reporter",
+        "summary": "El presidente catalán estudia cambios de equipo ajenos al pacto presupuestario.",
+        "article_text": "El presidente catalán estudia cambios de equipo ajenos al pacto presupuestario.",
+        "tags": "politics_regional,policy_announcement"
+      },
+      "analysis": {
+        "article_id": 5,
+        "article_type": "news_report",
+        "article_type_confidence": 0.9,
+        "is_event_coverage": true,
+        "language": "es",
+        "primary_topic_tag_id": null,
+        "key_phrases_json": "[\"reorganizacion gabinete\", \"presion interna psc\"]",
+        "claims_json": "[]",
+        "extraction_version": "v1",
+        "content_hash": "hash-5"
+      },
+      "tag_codes": ["politics_regional", "policy_announcement"],
+      "entity_slugs": ["person-salvador-illa"],
+      "key_phrases": ["reorganizacion gabinete", "presion interna psc"]
+    },
+    {
+      "article": {
+        "id": 6,
+        "source": "20minutos",
+        "title": "La Aemet activa avisos por lluvia en Galicia",
+        "url": "https://example.com/6",
+        "published_at": "2026-03-18T08:00:00Z",
+        "scraped_at": "2026-03-18T08:00:00Z",
+        "section": "sociedad",
+        "author": "Reporter",
+        "summary": "Protección Civil avisa de precipitaciones fuertes en Lugo y A Coruña.",
+        "article_text": "Protección Civil avisa de precipitaciones fuertes en Lugo y A Coruña.",
+        "tags": "weather_alert"
+      },
+      "analysis": {
+        "article_id": 6,
+        "article_type": "news_report",
+        "article_type_confidence": 0.9,
+        "is_event_coverage": true,
+        "language": "es",
+        "primary_topic_tag_id": null,
+        "key_phrases_json": "[\"avisos lluvia galicia\", \"aemet precipitaciones\"]",
+        "claims_json": "[]",
+        "extraction_version": "v1",
+        "content_hash": "hash-6"
+      },
+      "tag_codes": ["weather_alert"],
+      "entity_slugs": ["organization-aemet", "region_city-galicia"],
+      "key_phrases": ["avisos lluvia galicia", "aemet precipitaciones"]
+    }
+  ],
+  "pair_labels": [
+    {"left_article_id": 1, "right_article_id": 2, "label": "same_event", "notes": "mismo acuerdo presupuestario"},
+    {"left_article_id": 1, "right_article_id": 3, "label": "same_event", "notes": "follow-up del mismo proceso presupuestario"},
+    {"left_article_id": 2, "right_article_id": 3, "label": "same_event", "notes": "follow-up del mismo proceso presupuestario"},
+    {"left_article_id": 1, "right_article_id": 4, "label": "different_event", "notes": "opinion, no cobertura primaria"},
+    {"left_article_id": 2, "right_article_id": 4, "label": "different_event", "notes": "opinion, no cobertura primaria"},
+    {"left_article_id": 1, "right_article_id": 5, "label": "different_event", "notes": "mismo actor, evento distinto"},
+    {"left_article_id": 2, "right_article_id": 5, "label": "different_event", "notes": "mismo actor, evento distinto"},
+    {"left_article_id": 3, "right_article_id": 5, "label": "different_event", "notes": "mismo actor, evento distinto"},
+    {"left_article_id": 1, "right_article_id": 6, "label": "different_event", "notes": "tema distinto"},
+    {"left_article_id": 2, "right_article_id": 6, "label": "different_event", "notes": "tema distinto"}
+  ],
+  "gold_clusters": [[1, 2, 3], [4], [5], [6]]
+}
