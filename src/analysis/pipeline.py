@@ -1164,6 +1164,7 @@ class ClusterPipeline:
         is_recurring_results_pair = self._is_recurring_results_article(
             left
         ) and self._is_recurring_results_article(right)
+        same_results_game = self._results_game_key(left) == self._results_game_key(right)
         is_question_utility_pair = self._is_question_utility_article(
             left
         ) and self._is_question_utility_article(right)
@@ -1175,6 +1176,16 @@ class ClusterPipeline:
                 or len(shared_keyphrases) >= 1
                 or followup_marker_overlap > 0
                 or event_overlap_score >= 0.14
+            )
+        )
+        clean_rewrite_shape = (
+            days_delta <= 3
+            and title_sim >= 0.74
+            and lexical_overlap_score >= 0.22
+            and (
+                len(shared_entities) >= 1
+                or len(shared_tags) >= 1
+                or len(shared_keyphrases) >= 1
             )
         )
         event_continuity_score = min(
@@ -1195,7 +1206,10 @@ class ClusterPipeline:
         if (
             hard_block is None
             and is_recurring_results_pair
-            and left.article.published_at.date() != right.article.published_at.date()
+            and (
+                left.article.published_at.date() != right.article.published_at.date()
+                or not same_results_game
+            )
         ):
             hard_block = "recurring_results_series_excluded"
         if (
@@ -1257,6 +1271,8 @@ class ClusterPipeline:
             score += 0.06
         if clean_followup_continuity:
             score += 0.04
+        if clean_rewrite_shape:
+            score += 0.06
         if "secondary_form_penalty" in penalties:
             score -= 0.14
         if "followup_penalty" in penalties:
@@ -1294,6 +1310,13 @@ class ClusterPipeline:
             and "hoy" in text
             and any(term in text for term in lottery_terms)
         )
+
+    def _results_game_key(self, article: EnrichedArticle) -> str:
+        text = normalize_lookup(article.article.title)
+        for game in ("bonoloto", "primitiva", "euromillones", "once"):
+            if game in text:
+                return game
+        return ""
 
     def _is_question_utility_article(self, article: EnrichedArticle) -> bool:
         title = article.article.title.strip().lower()
@@ -1593,6 +1616,19 @@ class ClusterPipeline:
     def _classify_closure_edge(self, reason: StoryClusterMemberReason) -> str:
         if reason.risky_bridge_pair and reason.score < 0.78:
             return "discard"
+        clean_rewrite_edge = (
+            not reason.risky_bridge_pair
+            and reason.title_similarity >= 0.82
+            and reason.days_delta <= 3
+            and (reason.shared_tag_count >= 1 or reason.shared_keyphrase_count >= 1)
+            and not any(
+                penalty
+                in {"entity_glue_penalty", "late_story_drift_penalty", "secondary_form_penalty"}
+                for penalty in reason.penalties
+            )
+        )
+        if clean_rewrite_edge:
+            return "strong"
         if not reason.risky_bridge_pair and reason.score >= 0.78:
             return "strong"
         return "medium"

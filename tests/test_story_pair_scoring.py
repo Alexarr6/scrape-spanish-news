@@ -174,6 +174,37 @@ def test_story_pair_scoring_blocks_recurring_daily_results_series() -> None:
     assert reason.hard_block == "recurring_results_series_excluded"
 
 
+def test_story_pair_scoring_blocks_distinct_same_day_results_games() -> None:
+    pipeline = ClusterPipeline(session=None)  # type: ignore[arg-type]
+    when = datetime(2026, 3, 24, tzinfo=UTC)
+    left = _enriched(
+        article_id=1,
+        title="Comprobar Bonoloto: resultados de hoy, martes 24 de marzo de 2026",
+        summary="Resultados del sorteo de hoy.",
+        article_type="news_report",
+        tags=["other"],
+        entities=[],
+        when=when,
+        key_phrases=["bonoloto resultados"],
+        source="20minutos",
+    )
+    right = _enriched(
+        article_id=2,
+        title="Comprobar ONCE: resultados de hoy, martes 24 de marzo de 2026",
+        summary="Resultados del sorteo de hoy.",
+        article_type="news_report",
+        tags=["other"],
+        entities=[],
+        when=when,
+        key_phrases=["once resultados"],
+        source="20minutos",
+    )
+
+    reason = pipeline.score_pair(left, right)
+
+    assert reason.hard_block == "recurring_results_series_excluded"
+
+
 def test_story_pair_scoring_blocks_same_source_question_utility_series() -> None:
     pipeline = ClusterPipeline(session=None)  # type: ignore[arg-type]
     now = datetime(2026, 3, 24, tzinfo=UTC)
@@ -206,3 +237,39 @@ def test_story_pair_scoring_blocks_same_source_question_utility_series() -> None
     reason = pipeline.score_pair(left, right)
 
     assert reason.hard_block == "question_utility_series_excluded"
+
+
+def test_story_pair_scoring_rewards_clean_rewrite_with_sparse_entity_support() -> None:
+    pipeline = ClusterPipeline(session=None)  # type: ignore[arg-type]
+    now = datetime(2026, 3, 23, tzinfo=UTC)
+    left = _enriched(
+        article_id=1,
+        title="Estrasburgo rechaza revisar las prisiones del procés y vuelve a avalar al Supremo",
+        summary="El tribunal europeo rechaza revisar el caso de Junqueras, Turull y Sànchez.",
+        article_type="news_report",
+        tags=["justice"],
+        entities=["institution-tribunal-supremo"],
+        when=now,
+        key_phrases=["estrasburgo proceso supremo"],
+        source="abc",
+    )
+    right = _enriched(
+        article_id=2,
+        title=(
+            "Estrasburgo avala el rechazo a revisar el caso de prisión preventiva "
+            "a Junqueras, Turull y Sànchez"
+        ),
+        summary="La corte europea respalda al Supremo en el caso del procés.",
+        article_type="news_report",
+        tags=["justice"],
+        entities=["institution-tribunal-supremo"],
+        when=now,
+        key_phrases=["estrasburgo proceso supremo"],
+        source="lavanguardia",
+    )
+
+    reason = pipeline.score_pair(left, right)
+
+    assert reason.hard_block is None
+    assert reason.risky_bridge_pair is False
+    assert reason.score >= 0.56

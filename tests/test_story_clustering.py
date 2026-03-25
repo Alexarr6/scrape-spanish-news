@@ -149,6 +149,25 @@ def test_closure_v2_attaches_followup_via_strong_pivot():
     assert components == [[1, 2, 3]]
 
 
+def test_classify_closure_edge_treats_clean_rewrite_as_strong() -> None:
+    pipeline = ClusterPipeline(session=None)  # type: ignore[arg-type]
+    reason = StoryClusterMemberReason(
+        score=0.67,
+        semantic_similarity=0.6,
+        title_similarity=0.84,
+        shared_entity_score=0.66,
+        tag_overlap_score=0.5,
+        keyphrase_overlap_score=0.42,
+        temporal_proximity_score=1.0,
+        days_delta=0,
+        shared_entity_count=1,
+        shared_tag_count=1,
+        shared_keyphrase_count=1,
+    )
+
+    assert pipeline._classify_closure_edge(reason) == "strong"
+
+
 def test_guarded_components_attach_clean_followup_with_single_support() -> None:
     pipeline = ClusterPipeline(session=None)  # type: ignore[arg-type]
     accepted_edges = [
