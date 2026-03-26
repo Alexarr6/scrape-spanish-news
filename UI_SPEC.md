@@ -692,3 +692,202 @@ The product should feel:
 - uncertainty and applicability remain visible
 
 If the next pass ships only badges without evidence and limits, it failed.
+---
+
+# UI_SPEC.md — iter/011 Stories detail simplification
+
+**Role:** Frontend architect  
+**Date:** 2026-03-26  
+**Status:** Approved for frontend.react
+
+## 1. Product stance
+
+The Stories detail panel should read like a tight brief, not an editorial diagnostics dump.
+
+For this iteration:
+- keep the useful **per-source editorial summary**
+- remove or collapse low-value editorial furniture
+- separate **Nearby Articles** from Editorial Lens
+- fix the structural alignment of the first three major sections
+
+This is a simplification pass, not a reinvention.
+
+## 2. Shipping surface
+
+Primary files/surfaces:
+- `frontend/src/components/stories/StoryFocusPanel.tsx`
+- `frontend/src/components/stories/EditorialLensSection.tsx`
+- `frontend/src/styles.css`
+
+Optional small support touch:
+- `frontend/src/components/layout/SectionDivider.tsx` only if needed to keep the new major-section rhythm clean
+
+Out of scope:
+- backend changes
+- type-contract changes
+- Explorer redesign
+- new editorial analytics
+
+## 3. Approved section order
+
+Stories detail should render in this order:
+1. **Breaking Event**
+2. **Coverage**
+3. **Editorial Lens**
+4. **Nearby Articles**
+5. **Articles by Source**
+6. existing selected-article detail inside Articles by Source flow
+
+Important rule:
+- `Nearby Articles` is a story-detail section now, but it still depends on the currently selected article's existing `article.neighbors` data.
+- If no article is selected, or the selected article has no neighbors, hide the section entirely.
+- Do not invent a cluster-level nearby-articles datasource.
+
+## 4. Major-section shell contract
+
+### Problem
+The current top stack is structurally inconsistent:
+- `focus-brief` uses its own padded block
+- Coverage is just raw `CoverageBar` inside `focus-section`
+- Editorial Lens adds another inset card inside `focus-section`
+
+That makes the page look misaligned even before you notice the content differences.
+
+### Approved fix
+Define one shared **major-section shell** for:
+- Breaking Event
+- Coverage
+- Editorial Lens
+
+The shell must provide:
+- the same horizontal padding
+- the same inner surface/card contract
+- the same header-to-body spacing rhythm
+- the same perceived left/right edge alignment
+
+### Implementation rule
+Do this structurally, not with random margin nudges.
+
+Preferred shape:
+- introduce a shared wrapper/class such as `story-focus-major-section`
+- place the actual content surface for all three sections inside that shell
+- remove the extra “special card within a card” feel from Editorial Lens
+
+Non-negotiable outcome:
+- Breaking Event, Coverage, and Editorial Lens must read as siblings in one layout system
+
+## 5. Editorial Lens: approved information hierarchy
+
+### What stays
+Editorial Lens keeps:
+- title/subtitle
+- analysis-status badges (`analyzed`, `pending`, `failed`) when present
+- the **per-source summary list**
+- optional short comparison note per source when available
+- one compact framing highlight row per source when supported
+
+### What goes from the default surface
+Remove or collapse these from the main Stories detail lens:
+- top-level applicability/article-type coverage grid
+- source-level comparative metric index grid
+- source-level metric notes list
+- separate divergence callouts block
+- separate cluster signals block
+- standalone confidence callout block
+- standalone scope-note paragraph block
+
+Those belong in deeper analysis or operator surfaces, not in the middle of a reader-facing story brief.
+
+## 6. Per-source row contract
+
+Each source row should be short, scannable, and useful.
+
+### Required row contents
+- source name
+- analyzed count / total count
+- review-state badges when present
+- comparison note if present and actually readable
+- one compact summary treatment for source mix
+
+### Preferred summary treatment
+Keep one compact summary grid or a compact stacked pair using only the strongest breakdowns.
+
+Approved priority:
+1. `article_type_breakdown`
+2. `bias_label_breakdown` **or** `tone_emotional_breakdown`
+3. optional framing chips if they have support
+
+### De-emphasis rules
+- no numeric comparative indexes in the row
+- no three-line metric note lists
+- no sub-sections inside every source row unless framing chips actually exist
+
+### Empty/thin signal handling
+- if a source has little comparative support, still show the row
+- show at most one restrained sentence, not a mini empty-state card
+
+## 7. Global low-signal behavior
+
+The whole section should stop apologizing for weak data in six different places.
+
+Approved rule:
+- if `editorialSummary` is missing: show one compact empty state
+- if it exists but the comparative signal is thin: keep the source rows and show at most one muted fallback sentence near the top
+- hide weak sub-blocks entirely instead of rendering repeated “not available” containers
+
+Good fallback copy style:
+- `Comparative signal is limited; source summaries are the clearest read right now.`
+
+## 8. Nearby Articles section contract
+
+### Placement
+Render `Nearby Articles` directly below `Editorial Lens` and above `Articles by Source`.
+
+### Data dependency
+Continue using:
+- selected article detail
+- `article.neighbors`
+
+### Visibility rule
+Only show the section when all are true:
+- an article is selected
+- article detail is loaded
+- `article.neighbors.length > 0`
+
+### Presentation rule
+This section should look related but separate:
+- section label/title: `Nearby Articles`
+- same major-section rhythm as the top stack, but not visually merged into Editorial Lens
+- use the existing neighbor-list interaction model unless a tiny cleanup is needed for consistency
+
+### Avoid
+- no empty placeholder if nothing is selected
+- no duplicate nearby list inside article detail once the section moves
+
+## 9. Articles by Source stability rule
+
+The selected-article drill-in flow stays intact.
+
+Allowed change:
+- remove the inline Nearby Articles block from `ArticleDetailSection`
+
+Everything else in article detail should remain stable unless a tiny spacing cleanup is required because the nearby block moved out.
+
+## 10. Implementer handoff
+
+The frontend.react pass should do exactly this:
+1. normalize the top three major sections under one shell contract
+2. simplify `EditorialLensSection` to a source-centric section
+3. remove low-signal comparative sub-blocks instead of restyling them into slightly smaller noise
+4. render `Nearby Articles` as its own section below Editorial Lens using existing selected-article data
+5. keep article detail and source-group behavior stable otherwise
+6. run `cd frontend && npm run build`
+
+## 11. Acceptance read
+
+This iteration is correct when:
+- Editorial Lens is visibly shorter, calmer, and more source-centric
+- the per-source editorial summary still does real work
+- Nearby Articles sits below Editorial Lens as its own section
+- Breaking Event, Coverage, and Editorial Lens finally align like they were designed by the same species
+- no backend work was needed
