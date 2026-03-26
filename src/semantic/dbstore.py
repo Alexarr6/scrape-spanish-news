@@ -22,9 +22,18 @@ from src.semantic.analyze import analyze_points
 from src.semantic.contracts import (
     EmbeddingArtifact,
     NeighborArtifact,
-    PointAnalysisArtifact,
     PointArtifact,
     SemanticArticle,
+)
+from src.semantic.explorer_readside import (
+    analysis_for_row,
+    editorial_preview_for_row,
+    load_available_clusters,
+    load_cluster_summaries,
+    load_distinct_values,
+    load_explorer_editorial_metadata,
+    load_filtered_distinct_values,
+    load_projection_bounds,
 )
 from src.semantic.project import project_embeddings
 
@@ -750,8 +759,8 @@ def load_projected_points(
             x=float(row["x"]),
             y=float(row["y"]),
             z=float(row["z"]),
-            editorial_preview=_editorial_preview_for_row(row),
-            analysis=_analysis_for_row(row, neighbors=[]),
+            editorial_preview=editorial_preview_for_row(row),
+            analysis=analysis_for_row(row, neighbors=[]),
         )
         for row in rows
     ]
@@ -1176,8 +1185,8 @@ def load_explorer_points_page(session: Session, *, filters: ExplorerFilters) -> 
                 x=float(row["x"]),
                 y=float(row["y"]),
                 z=float(row["z"]),
-                editorial_preview=_editorial_preview_for_row(row),
-                analysis=_analysis_for_row(
+                editorial_preview=editorial_preview_for_row(row),
+                analysis=analysis_for_row(
                     row,
                     neighbors=neighbors,
                     story_cluster_ids=story_cluster_ids_by_article.get(int(row["article_id"]), []),
@@ -1206,40 +1215,42 @@ def load_explorer_points_page(session: Session, *, filters: ExplorerFilters) -> 
         total=int(total),
         limit=filters.limit,
         projection_set=filters.projection_set,
-        bounds=_load_projection_bounds(session, projection_set=filters.projection_set),
-        available_sources=_load_filtered_distinct_values(
+        bounds=load_projection_bounds(session, projection_set=filters.projection_set, projection_kind_for_set=projection_kind_for_set),
+        available_sources=load_filtered_distinct_values(
             session,
             column="a.source",
             where_sql=where_sql,
             params=params,
         ),
-        available_sections=_load_filtered_distinct_values(
+        available_sections=load_filtered_distinct_values(
             session,
             column="a.section",
             where_sql=where_sql,
             params=params,
         ),
-        available_clusters=_load_available_clusters(session, projection_set=filters.projection_set),
-        cluster_summaries=_load_cluster_summaries(session, projection_set=filters.projection_set),
+        available_clusters=load_available_clusters(session, projection_set=filters.projection_set),
+        cluster_summaries=load_cluster_summaries(session, projection_set=filters.projection_set),
         story_cluster_metadata_available=(filters.story_cluster_id is not None and visual_mode == "highlight"),
-        editorial=_load_explorer_editorial_metadata(session, filters=filters),
+        editorial=load_explorer_editorial_metadata(session, filters=filters, projection_kind_for_set=projection_kind_for_set, build_explorer_where_clause=_build_explorer_where_clause),
     )
 
 
 def load_explorer_filter_options(session: Session, *, projection_set: str) -> dict[str, Any]:
     return {
         "projection_set": projection_set,
-        "available_sources": _load_distinct_values(
-            session, column="a.source", projection_set=projection_set
+        "available_sources": load_distinct_values(
+            session, column="a.source", projection_set=projection_set, projection_kind_for_set=projection_kind_for_set
         ),
-        "available_sections": _load_distinct_values(
-            session, column="a.section", projection_set=projection_set
+        "available_sections": load_distinct_values(
+            session, column="a.section", projection_set=projection_set, projection_kind_for_set=projection_kind_for_set
         ),
-        "available_clusters": _load_available_clusters(session, projection_set=projection_set),
-        "cluster_summaries": _load_cluster_summaries(session, projection_set=projection_set),
-        "editorial": _load_explorer_editorial_metadata(
+        "available_clusters": load_available_clusters(session, projection_set=projection_set),
+        "cluster_summaries": load_cluster_summaries(session, projection_set=projection_set),
+        "editorial": load_explorer_editorial_metadata(
             session,
             filters=ExplorerFilters(projection_set=projection_set),
+            projection_kind_for_set=projection_kind_for_set,
+            build_explorer_where_clause=_build_explorer_where_clause,
         ),
     }
 
@@ -1325,8 +1336,8 @@ def load_explorer_article_detail(
             x=float(row["x"]),
             y=float(row["y"]),
             z=float(row["z"]),
-            editorial_preview=_editorial_preview_for_row(row),
-            analysis=_analysis_for_row(
+            editorial_preview=editorial_preview_for_row(row),
+            analysis=analysis_for_row(
                 row,
                 neighbors=neighbors,
                 story_cluster_ids=story_cluster_ids_by_article.get(article_id, []),
@@ -1410,221 +1421,6 @@ def _build_explorer_where_clause(
 
 
 
-
-def _editorial_preview_for_row(row: Any) -> dict[str, Any]:
-    analysis_status = str(row.get("editorial_analysis_status") or "pending")
-    editorial_applicability = str(row.get("editorial_applicability") or "full")
-    article_type = str(row.get("editorial_article_type") or "unclear")
-    article_type_confidence = float(row.get("editorial_article_type_confidence") or 0.0)
-    bias_label = str(row.get("editorial_bias_label") or "unclear")
-    bias_confidence = float(row.get("editorial_bias_confidence") or 0.0)
-    unclear_reasons = _parse_json_scalar_list(row.get("editorial_unclear_reasons_json"))
-    evidence_spans = _parse_json_list(row.get("editorial_evidence_spans_json"))
-    return {
-        "analysis_status": analysis_status,
-        "editorial_applicability": editorial_applicability,
-        "article_type": article_type,
-        "article_type_confidence": article_type_confidence,
-        "bias_label": bias_label,
-        "bias_confidence": bias_confidence,
-        "review_flags": _build_editorial_review_flags(
-            analysis_status=analysis_status,
-            bias_label=bias_label,
-            bias_confidence=bias_confidence,
-            evidence_spans=evidence_spans,
-            unclear_reasons=unclear_reasons,
-            editorial_applicability=editorial_applicability,
-        ),
-    }
-
-
-def _load_explorer_editorial_metadata(session: Session, *, filters: ExplorerFilters) -> dict[str, Any]:
-    projection_kind = projection_kind_for_set(filters.projection_set)
-    where_sql, params = _build_explorer_where_clause(filters, projection_kind=projection_kind)
-    article_type_rows = (
-        session.execute(
-            text(
-                f"""
-                SELECT COALESCE(aea.article_type, 'unclear') AS value, COUNT(*) AS count
-                FROM article_projections p
-                JOIN articles a ON a.id = p.article_id
-                JOIN article_embeddings e ON e.id = p.embedding_id
-                LEFT JOIN semantic_point_analysis spa
-                  ON spa.article_id = p.article_id
-                 AND spa.projection_set = p.projection_set
-                LEFT JOIN article_editorial_analysis aea
-                  ON aea.article_id = p.article_id
-                {where_sql}
-                GROUP BY COALESCE(aea.article_type, 'unclear')
-                ORDER BY count DESC, value ASC
-                """
-            ),
-            params,
-        )
-        .mappings()
-        .all()
-    )
-    bias_rows = (
-        session.execute(
-            text(
-                f"""
-                SELECT COALESCE(aea.bias_label, 'unclear') AS value, COUNT(*) AS count
-                FROM article_projections p
-                JOIN articles a ON a.id = p.article_id
-                JOIN article_embeddings e ON e.id = p.embedding_id
-                LEFT JOIN semantic_point_analysis spa
-                  ON spa.article_id = p.article_id
-                 AND spa.projection_set = p.projection_set
-                LEFT JOIN article_editorial_analysis aea
-                  ON aea.article_id = p.article_id
-                {where_sql}
-                  AND COALESCE(aea.analysis_status, 'pending') = 'completed'
-                  AND COALESCE(aea.editorial_applicability, 'full') = 'full'
-                  AND COALESCE(aea.bias_label, 'unclear') <> 'unclear'
-                  AND COALESCE(aea.bias_confidence, 0.0) >= 0.45
-                GROUP BY COALESCE(aea.bias_label, 'unclear')
-                ORDER BY count DESC, value ASC
-                """
-            ),
-            params,
-        )
-        .mappings()
-        .all()
-    )
-    coverage_row = (
-        session.execute(
-            text(
-                f"""
-                SELECT
-                  COUNT(*) AS total,
-                  SUM(CASE WHEN aea.article_id IS NULL OR COALESCE(aea.analysis_status, 'pending') = 'pending' THEN 1 ELSE 0 END) AS pending,
-                  SUM(CASE WHEN COALESCE(aea.analysis_status, '') = 'failed' THEN 1 ELSE 0 END) AS failed,
-                  SUM(CASE WHEN COALESCE(aea.article_type, 'unclear') = 'unclear' THEN 1 ELSE 0 END) AS unknown,
-                  SUM(CASE WHEN COALESCE(aea.editorial_applicability, 'full') = 'limited' THEN 1 ELSE 0 END) AS limited,
-                  SUM(CASE WHEN COALESCE(aea.editorial_applicability, 'full') = 'out_of_domain' THEN 1 ELSE 0 END) AS out_of_domain,
-                  SUM(CASE WHEN COALESCE(aea.analysis_status, 'pending') = 'completed' THEN 1 ELSE 0 END) AS bias_total_completed,
-                  SUM(CASE WHEN COALESCE(aea.analysis_status, 'pending') = 'completed' AND COALESCE(aea.bias_confidence, 0.0) < 0.45 THEN 1 ELSE 0 END) AS bias_low_confidence,
-                  SUM(CASE WHEN COALESCE(aea.analysis_status, 'pending') = 'completed' AND COALESCE(aea.bias_label, 'unclear') = 'unclear' THEN 1 ELSE 0 END) AS bias_unknown,
-                  SUM(CASE WHEN aea.article_id IS NULL OR COALESCE(aea.analysis_status, 'pending') = 'pending' THEN 1 ELSE 0 END) AS bias_pending,
-                  SUM(CASE WHEN COALESCE(aea.analysis_status, '') = 'failed' THEN 1 ELSE 0 END) AS bias_failed,
-                  SUM(CASE WHEN COALESCE(aea.editorial_applicability, 'full') = 'limited' THEN 1 ELSE 0 END) AS bias_limited,
-                  SUM(CASE WHEN COALESCE(aea.editorial_applicability, 'full') = 'out_of_domain' THEN 1 ELSE 0 END) AS bias_out_of_domain
-                FROM article_projections p
-                JOIN articles a ON a.id = p.article_id
-                JOIN article_embeddings e ON e.id = p.embedding_id
-                LEFT JOIN semantic_point_analysis spa
-                  ON spa.article_id = p.article_id
-                 AND spa.projection_set = p.projection_set
-                LEFT JOIN article_editorial_analysis aea
-                  ON aea.article_id = p.article_id
-                {where_sql}
-                """
-            ),
-            params,
-        )
-        .mappings()
-        .first()
-    )
-    coverage = coverage_row or {}
-    return {
-        "article_type": [
-            {"value": str(row["value"]), "count": int(row["count"] or 0)} for row in article_type_rows if row["value"]
-        ],
-        "bias_label": [
-            {"value": str(row["value"]), "count": int(row["count"] or 0)} for row in bias_rows if row["value"]
-        ],
-        "coverage": {
-            key: int(coverage.get(key) or 0)
-            for key in [
-                "total",
-                "pending",
-                "failed",
-                "unknown",
-                "limited",
-                "out_of_domain",
-                "bias_total_completed",
-                "bias_low_confidence",
-                "bias_unknown",
-                "bias_pending",
-                "bias_failed",
-                "bias_limited",
-                "bias_out_of_domain",
-            ]
-        },
-    }
-
-def _load_projection_bounds(session: Session, *, projection_set: str) -> dict[str, float] | None:
-    projection_kind = projection_kind_for_set(projection_set)
-    row = (
-        session.execute(
-            text(
-                """
-            SELECT MIN(x) AS min_x,
-                   MAX(x) AS max_x,
-                   MIN(y) AS min_y,
-                   MAX(y) AS max_y,
-                   MIN(COALESCE(z, 0.0)) AS min_z,
-                   MAX(COALESCE(z, 0.0)) AS max_z
-            FROM article_projections
-            WHERE projection_set = :projection_set
-              AND projection_kind = :projection_kind
-            """
-            ),
-            {"projection_set": projection_set, "projection_kind": projection_kind},
-        )
-        .mappings()
-        .first()
-    )
-    if row is None or row["min_x"] is None:
-        return None
-    return {key: float(row[key]) for key in ("min_x", "max_x", "min_y", "max_y", "min_z", "max_z")}
-
-
-def _load_distinct_values(session: Session, *, column: str, projection_set: str) -> list[str]:
-    return _load_filtered_distinct_values(
-        session,
-        column=column,
-        where_sql=(
-            "WHERE p.projection_set = :projection_set AND p.projection_kind = :projection_kind"
-        ),
-        params={
-            "projection_set": projection_set,
-            "projection_kind": projection_kind_for_set(projection_set),
-        },
-    )
-
-
-def _load_filtered_distinct_values(
-    session: Session,
-    *,
-    column: str,
-    where_sql: str,
-    params: dict[str, Any],
-) -> list[str]:
-    rows = (
-        session.execute(
-            text(
-                f"""
-            SELECT DISTINCT {column} AS value
-            FROM article_projections p
-            JOIN articles a ON a.id = p.article_id
-            JOIN article_embeddings e ON e.id = p.embedding_id
-            LEFT JOIN semantic_point_analysis spa
-              ON spa.article_id = p.article_id
-             AND spa.projection_set = p.projection_set
-            LEFT JOIN article_editorial_analysis aea
-              ON aea.article_id = p.article_id
-            {where_sql}
-              AND {column} <> ''
-            ORDER BY value ASC
-            """
-            ),
-            params,
-        )
-        .scalars()
-        .all()
-    )
-    return [str(value) for value in rows if value is not None]
 
 
 def _safe_neighbors(session: Session, *, article_id: int, limit: int) -> list[NeighborArtifact]:

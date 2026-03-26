@@ -1,12 +1,13 @@
 - State: DONE
-- Iteration: iter/026
-- Focus: phase-1 readside structural refactor implementation
+- Iteration: iter/027
+- Focus: semantic layer structural refactor phase 1
 - Result:
-  - extracted editorial read-model shaping, JSON parsing helpers, review-flag derivation, and cluster editorial aggregation/comparative metrics into `src/analysis/readside_editorial.py`
-  - kept public loaders and SQL/query assembly in `src/analysis/readside.py`
-  - preserved API behavior across editorial, cluster, and semantic explorer touchpoints
+  - extracted explorer read-model shaping and metadata helpers from `src/semantic/dbstore.py` into `src/semantic/explorer_readside.py`
+  - kept schema, persistence, SQL orchestration, and public explorer loader entrypoints in `src/semantic/dbstore.py`
+  - explicitly kept `src/semantic/export.py` out of scope beyond preserving existing import/contract behavior
 - Verification:
-  - `uv run python -m pytest tests/test_api_editorial.py tests/test_api_clusters.py tests/test_api_semantic_explorer.py` → 21 passed
+  - `uv run python -m pytest tests/test_semantic_dbstore.py tests/test_api_semantic_explorer.py tests/test_semantic_export.py tests/test_semantic_build_cli.py`
+  - result: `60 passed`
 - Notes:
-  - repo `.venv` was stale/broken and got recreated by `uv run` during verification
-  - scope stayed bounded to the approved editorial seam only
+  - scope stayed bounded to the approved read-side seam
+  - no semantic/explorer behavior changes were introduced

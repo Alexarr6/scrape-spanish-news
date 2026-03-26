@@ -1,52 +1,64 @@
-# RESULTS.md — iter/026 readside structural refactor phase 1
+# RESULTS.md — iter/027 semantic layer structural refactor phase 1
 
 ## Resumen breve
 
-Iter/026 ejecutó la fase 1 del refactor estructural de `src/analysis/readside.py` sin hacer la típica estupidez de convertir un corte limpio en una gira turística por todo el backend.
+Iter/027 ejecutó la fase 1 del refactor estructural de la capa semántica sin montar un circo innecesario.
 
-Se extrajo la lógica de **shaping editorial** y **agregación editorial por cluster** a un módulo dedicado (`src/analysis/readside_editorial.py`), mientras `readside.py` se quedó como dueño de los loaders públicos y del ensamblado SQL/query. El contrato API se mantuvo intacto.
+Se extrajo el **explorer read-model shaping** y los **helpers de metadata editorial/cluster/filtros** desde `src/semantic/dbstore.py` a un módulo dedicado: `src/semantic/explorer_readside.py`. `dbstore.py` se quedó con lo que debía: esquema, persistencia, orquestación SQL y loaders públicos.
+
+`src/semantic/export.py` se inspeccionó y se dejó quieto a propósito. Tocar eso ahora habría sido ensanchar el diff por puro deporte.
 
 ## Cambio aplicado
 
-### Nuevo módulo editorial
-- `src/analysis/readside_editorial.py` (nuevo)
-  - mueve el shaping de payloads editoriales de artículo
-  - mueve la derivación de `review_flags`
-  - mueve el parseo JSON defensivo usado por el read-model editorial
-  - mueve la agregación editorial de cluster y las comparative metrics por fuente
+### Nuevo módulo read-side
+- `src/semantic/explorer_readside.py` (nuevo)
+  - mueve el shaping de `editorial_preview`
+  - mueve el shaping de `PointAnalysisArtifact` para filas del explorer
+  - mueve parseo JSON defensivo de campos editoriales/read-model
+  - mueve helpers de metadata para:
+    - bounds de proyección
+    - valores distintos / filtrados
+    - clusters disponibles
+    - resúmenes de cluster
+    - metadata editorial de explorer
 
-### Orquestación conservada en readside
-- `src/analysis/readside.py`
-  - mantiene sin rediseño los loaders públicos consumidos por la API
-  - mantiene la construcción de queries / filtros / ordenación SQLAlchemy
-  - ahora importa y usa helpers editoriales explícitos desde el nuevo módulo
-  - pierde el bloque más denso del god-file sin cambiar el comportamiento visible
+### Orquestación conservada en dbstore
+- `src/semantic/dbstore.py`
+  - mantiene schema/init helpers
+  - mantiene upserts/persistencia de embeddings y projections
+  - mantiene query orchestration y SQL de los loaders públicos
+  - mantiene entrypoints públicos:
+    - `load_projected_points()`
+    - `load_explorer_points_page()`
+    - `load_explorer_filter_options()`
+    - `load_explorer_article_detail()`
+  - ahora delega el shaping read-side al nuevo módulo
 
 ## Invariantes preservadas
 
-- no hubo cambios en routers ni endpoints
-- no hubo cambios en nombres de loaders públicos
-- se preservaron shapes de respuesta para:
-  - detalle editorial de artículo
-  - listado editorial
-  - previews editoriales en cluster detail
-  - `editorial_summary` de cluster
-  - resumen editorial en semantic explorer article detail
-- `readside.py` sigue siendo el punto de entrada para loaders y query assembly
+- sin cambios en schema
+- sin cambios en contratos API/router
+- sin cambios en export HTML
+- sin cambios en nombres ni firmas de loaders públicos
+- se preservó el payload del explorer, incluyendo:
+  - `editorial_preview`
+  - `analysis.cluster_id`
+  - `analysis.story_cluster_ids`
+  - metadata de filtros/editorial
+  - cluster summaries
 
 ## Verificación ejecutada
 
-1. `uv run python -m pytest tests/test_api_editorial.py tests/test_api_clusters.py tests/test_api_semantic_explorer.py`
+1. `uv run python -m pytest tests/test_semantic_dbstore.py tests/test_api_semantic_explorer.py tests/test_semantic_export.py tests/test_semantic_build_cli.py`
 
 ## Resultado de verificación
 
-- targeted API suite: **21 passed**
-- nota operativa: el `.venv` existente estaba roto por apuntar a un intérprete inexistente bajo `/home/pi/...`; `uv run` lo recreó automáticamente y luego ejecutó la suite correctamente
+- suite objetivo: **60 passed**
 
 ## Commits
 
-- `refactor(analysis): extract editorial readside helpers`
+- `refactor(semantic): extract explorer readside helpers`
 
 ## Riesgo residual honesto
 
-Queda más trabajo posible dentro de `readside.py`, claro. Pero esa no era la misión. En esta iteración el corte bueno era editorial shaping + cluster editorial aggregation, y ahí termina el asunto.
+Sí, `dbstore.py` sigue siendo grande. Pero ya perdió un bloque de responsabilidad real y bien delimitado. Eso era la misión. Convertir esta iteración en un “ya que estamos” sobre `export.py` habría sido una cagada de scope.
