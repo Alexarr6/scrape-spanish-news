@@ -1,20 +1,26 @@
-- State: IMPLEMENTATION_DONE
-- Iteration: iter/024
-- Focus: remove only the legacy scrape-only scheduler family while preserving the canonical modern Stories / Explorer refresh surface
-- Implementation verdict:
-  - removed `scripts/run_scheduled.sh`
-  - removed Makefile variable `SCHEDULER_SCRIPT`
-  - removed Makefile targets `scheduler-dry-run`, `scheduler-once`, `status`, and `tail-log`
-  - removed the legacy help block from `make help`
-  - removed the explicit legacy references in `README.md`, `docs/operator-guide/scheduler.md`, `docs/operator-guide/workflows.md`, and `docs/reference/outputs.md`
-  - preserved `run_stories_refresh.sh`, `run_explorer_refresh.sh`, `make stories-refresh-once`, `make explorer-refresh-once`, `make full-refresh-once`, and the documented `stories_*` / `explorer_*` state surface
+- State: DONE
+- Iteration: iter/025
+- Focus: phase-1 frontend navigation / URL-state refactor implementation
+- Planning verdict:
+  - inspected `frontend/src/App.tsx`, `frontend/src/hooks/useClusterUrlState.ts`, `frontend/src/hooks/useExplorerUrlState.ts`, and `frontend/src/lib/navigation.ts`
+  - defined a bounded phase-1 target centered on app-mode ownership, shared URL mechanics, and explicit cross-surface handoff rules
+  - captured invariants for Stories/Explorer mode switching, deep-link survival, and seeded transitions
+  - identified safe-now cleanup targets without drifting into a full router rewrite
+- Architect verdict:
+  - approved `App.tsx` as the sole app-mode owner via a tiny helper layer instead of repeated ambient URL reads
+  - approved one small shared URL-mechanics module for param parsing/deletion/serialization while keeping Stories and Explorer as separate state domains
+  - narrowed `frontend/src/lib/navigation.ts` to explicit Stories/Explorer handoff builders with intentional seeded-transition params only
+  - wrote the implementation handoff in `docs/architecture/2026-03-26-navigation-url-state-phase1-architecture.md`
+- Implementer verdict:
+  - added `frontend/src/lib/urlState.ts` for shared app-mode + URL mechanics only
+  - made `App.tsx` the single owner of app mode for render and nav active state
+  - refactored both URL-state hooks to reuse shared integer parsing and URL serialization while preserving separate Stories and Explorer ownership domains
+  - narrowed `frontend/src/lib/navigation.ts` to explicit Stories/Explorer handoff builders and updated Stories → Explorer call sites
 - Verification:
-  - scoped legacy-reference grep: clean
-  - modern-surface grep: ok
-  - `make help`: passed
-  - `make docs-build`: passed
-  - `make test`: failed during API test collection with `ModuleNotFoundError` for `fastapi` / `fastapi.datastructures`; appears unrelated to the bounded scheduler removal
+  - `cd frontend && npm run build` ✅
 - Scope guard:
-  - no wrapper-behavior changes
-  - no scheduler redesign
-  - no unrelated cleanup
+  - no router-library adoption
+  - no visual redesign
+  - no broad query-param renaming
+  - no hook-merging into a generic state blob
+- Result: DONE

@@ -1,80 +1,81 @@
-# RESULTS.md — iter/024 legacy scrape-only scheduler family removal
+# RESULTS.md — iter/025 frontend navigation / URL-state refactor phase 1
 
 ## Resumen breve
 
-Iter/024 eliminó por completo la familia legacy del scheduler scrape-only que seguía viva en el repo: se borró `scripts/run_scheduled.sh`, se quitó su wiring en `Makefile`, y se limpiaron las referencias explícitas pedidas en README y docs.
+Iter/025 ejecutó la fase 1 aprobada del refactor de navegación/URL-state del frontend sin meterse en la estupidez de medio reescribir el router.
 
-La superficie canónica moderna quedó intacta: `run_stories_refresh.sh`, `run_explorer_refresh.sh`, `make stories-refresh-once`, `make explorer-refresh-once`, y `make full-refresh-once`, junto con la documentación `stories_*` / `explorer_*` de lock/log/state.
+`App.tsx` pasó a ser el dueño explícito del modo de la app (`stories` vs `explorer`) para **render** y **nav active state**. Además, se extrajeron helpers mínimos de mecánica URL compartida y `navigation.ts` quedó reducido a builders de handoff explícitos entre superficies.
+
+Stories y Explorer siguen siendo dominios de estado separados. No se creó ningún mega-hook genérico.
 
 ## Cambio aplicado
 
-### Eliminado
-- `scripts/run_scheduled.sh`
-- variable `SCHEDULER_SCRIPT` en `Makefile`
-- targets `scheduler-dry-run`, `scheduler-once`, `status`, `tail-log`
-- bloque legacy de ayuda en `make help`
+### App shell
+- `frontend/src/App.tsx`
+  - resuelve `appMode` una sola vez con `getAppModeFromSearch()`
+  - construye los `navItems` dentro del componente, no congelados a nivel de módulo
+  - usa el mismo `appMode` tanto para el item activo de navegación como para decidir si renderiza `ClusterBrowserPage` o `ExplorerPage`
 
-### Actualizado
-- `README.md`
-  - eliminado el bloque del scheduler legacy
-  - eliminada la referencia de entrypoint `bash scripts/run_scheduled.sh`
-  - ajustada la sección para exponer sólo la superficie moderna
-- `docs/operator-guide/scheduler.md`
-  - eliminados entrypoints/targets legacy
-  - eliminada la sección `Legacy wrapper`
-  - eliminado `var/log/scheduler.log` del layout documentado
-- `docs/operator-guide/workflows.md`
-  - eliminada la sección `Legacy scrape-only wrapper`
-- `docs/reference/outputs.md`
-  - eliminada la sección completa del layout legacy `scheduler.log` / `var/state/last_*`
+### Helpers compartidos
+- `frontend/src/lib/urlState.ts` (nuevo)
+  - lectura/clonado de `URLSearchParams`
+  - borrado de listas conocidas de params
+  - serialización/reemplazo de URL preservando `pathname` y `hash`
+  - parseo genérico de enteros positivos / no negativos / opcionales
+  - helper mínimo de modo de app (`getAppModeFromSearch`, `buildAppModeHref`)
 
-## Evidencia de seguridad en repo
+### Hooks de URL-state
+- `frontend/src/hooks/useClusterUrlState.ts`
+  - conserva la propiedad del dominio Stories (`search`, `source`, `tag`, `entity`, `from`, `to`, `limit`, `offset`, `cluster`, `article`)
+  - elimina parse helpers duplicados
+  - reutiliza helpers compartidos para leer/borrar/escribir params
 
-### Comprobación de eliminación
-La comprobación acotada sobre los archivos objetivo no devolvió referencias restantes a:
-- `run_scheduled.sh`
-- `SCHEDULER_SCRIPT`
-- `scheduler-dry-run`
-- `scheduler-once`
-- `make status`
-- `make tail-log`
-- `scheduler.log`
-- `var/state/last_status`
-- `var/state/last_run_utc`
-- `var/state/last_success_utc`
-- `var/state/last_error`
-- `var/state/consecutive_failures`
-- `var/state/last_alert_utc`
+- `frontend/src/hooks/useExplorerUrlState.ts`
+  - conserva la propiedad del dominio Explorer (`view=semantic`, `sem_*`, visual/editorial state)
+  - elimina parse helpers duplicados
+  - reutiliza helpers compartidos para leer/borrar/escribir params
 
-### Comprobación de preservación
-La comprobación de superficie moderna confirmó que siguen presentes y documentados:
-- `bash scripts/run_stories_refresh.sh`
-- `bash scripts/run_explorer_refresh.sh`
-- `make stories-refresh-once`
-- `make explorer-refresh-once`
-- `make full-refresh-once`
-- los archivos `stories_*` / `explorer_*` bajo `var/state/`
+### Handoff explícito entre superficies
+- `frontend/src/lib/navigation.ts`
+  - elimina la lectura ambiental de modo de app
+  - sustituye builders vagos por:
+    - `buildStoriesSurfaceHref(...)`
+    - `buildExplorerSurfaceHref(...)`
+  - `buildExplorerSurfaceHref(...)` mantiene el contrato de seeded transition:
+    - fuerza `view=semantic`
+    - si hay contexto, siembra `sem_story_cluster` y/o `sem_article`
+    - fuerza `sem_mode=highlight`
+    - fuerza `sem_color=active-match`
+    - limpia sólo los filtros Explorer incompatibles declarados (`sem_search`, `sem_source`, `sem_from`, `sem_to`, `sem_cluster`, `sem_section`, `sem_outliers`, `sem_editorial_dim`, `sem_editorial_value`)
+
+### Call sites ajustados
+- `frontend/src/components/stories/StoryFocusPanel.tsx`
+  - usa el nuevo builder explícito hacia Explorer para el empty state y para los CTAs de “Open in Explorer”
+
+## Invariantes preservadas
+
+- Stories sigue siendo el modo por defecto cuando no existe `view=semantic`
+- Explorer sigue activándose sólo cuando `view=semantic` está presente
+- Los deep links de Stories y Explorer sobreviven porque cada hook sigue leyendo sólo sus claves
+- Las transiciones Stories → Explorer siguen sembrando contexto de story/article y defaults visuales esperados
+- No hubo rediseño visual amplio ni router rewrite
 
 ## Verificación ejecutada
 
-1. grep acotado de referencias legacy eliminadas
-2. grep acotado de referencias modernas preservadas
-3. `make help`
-4. `make test`
-5. `make docs-build`
+1. revisión de diff contra la arquitectura aprobada
+2. `cd frontend && npm run build`
 
 ## Resultado de verificación
 
-- grep legacy acotado: **limpio**
-- grep moderno acotado: **ok**
-- `make help`: **ok**
-- `make docs-build`: **ok**
-- `make test`: **falló por un problema de entorno/dependencias no relacionado con este cambio**
-  - durante colección de tests API apareció `ModuleNotFoundError: No module named 'fastapi'`
-  - y también `ModuleNotFoundError: No module named 'fastapi.datastructures'`
+- `npm run build`: **ok**
+- Vite emitió warnings preexistentes/no bloqueantes:
+  - warning de chunk grande >500 kB
+  - warning de `@loaders.gl/worker-utils` / `spawn` durante build, pero la build completó correctamente
+
+## Commits
+
+- `de62251` — `refactor(frontend): centralize app mode and url mechanics`
 
 ## Riesgo residual honesto
 
-El cambio de esta iteración es deliberadamente rompedor para cualquiera que aún estuviera usando el wrapper legacy scrape-only. Dentro del alcance pedido, la eliminación quedó limpia.
-
-Lo único feo del pase fue `make test`, pero el fallo no apunta a esta limpieza del scheduler; huele a entorno/instalación de dependencias de FastAPI, no a la superficie moderna que se preservó.
+Quedan deudas de routing más profundas fuera de esta fase: no hay sincronización dedicada de `popstate`, no se renombró el esquema de params y no existe routing por paths. Bien. Eso era justo lo que había que **no** hacer aquí.

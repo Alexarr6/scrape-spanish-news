@@ -1,28 +1,31 @@
 import { Shell } from './components/layout/Shell'
 import type { NavItem } from './components/layout/Shell'
-import { buildClusterBrowserHref, buildSemanticExplorerHref, isSemanticExplorerMode } from './lib/navigation'
+import { buildExplorerSurfaceHref, buildStoriesSurfaceHref } from './lib/navigation'
+import { getAppModeFromSearch } from './lib/urlState'
 import { ClusterBrowserPage } from './routes/ClusterBrowserPage'
 import { ExplorerPage } from './routes/ExplorerPage'
 
-const navItems: NavItem[] = [
-  {
-    key: 'stories',
-    label: 'Stories',
-    href: buildClusterBrowserHref(),
-    active: !isSemanticExplorerMode(),
-  },
-  {
-    key: 'explorer',
-    label: 'Explorer',
-    href: buildSemanticExplorerHref({}),
-    active: isSemanticExplorerMode(),
-  },
-]
-
 export default function App() {
+  const appMode = getAppModeFromSearch()
+
+  const navItems: NavItem[] = [
+    {
+      key: 'stories',
+      label: 'Stories',
+      href: buildStoriesSurfaceHref(),
+      active: appMode === 'stories',
+    },
+    {
+      key: 'explorer',
+      label: 'Explorer',
+      href: buildExplorerSurfaceHref({}),
+      active: appMode === 'explorer',
+    },
+  ]
+
   return (
     <Shell navItems={navItems}>
-      {isSemanticExplorerMode() ? <ExplorerPage /> : <ClusterBrowserPage />}
+      {appMode === 'explorer' ? <ExplorerPage /> : <ClusterBrowserPage />}
     </Shell>
   )
 }

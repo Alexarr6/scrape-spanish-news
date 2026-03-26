@@ -7,6 +7,13 @@ import type {
   ExplorerQuery,
   ExplorerVisualMode,
 } from '../lib/types'
+import {
+  deleteSearchParams,
+  parseOptionalPositiveInt,
+  parseStrictPositiveInt,
+  readSearchParams,
+  replaceUrlSearchParams,
+} from '../lib/urlState'
 
 const EXPLORER_PARAM_KEYS = [
   'view',
@@ -26,16 +33,6 @@ const EXPLORER_PARAM_KEYS = [
   'sem_editorial_value',
 ] as const
 
-function parseStrictPositiveInteger(value: string | null, fallback: number): number {
-  const parsed = Number(value)
-  return Number.isInteger(parsed) && parsed > 0 ? parsed : fallback
-}
-
-function parseOptionalInteger(value: string | null): number | null {
-  const parsed = Number(value)
-  return Number.isInteger(parsed) && parsed > 0 ? parsed : null
-}
-
 function parseVisualMode(value: string | null): ExplorerVisualMode {
   return value === 'filter' ? 'filter' : 'highlight'
 }
@@ -51,7 +48,7 @@ function parseEditorialDimension(value: string | null): ExplorerEditorialDimensi
 }
 
 function readInitialState() {
-  const params = new URLSearchParams(window.location.search)
+  const params = readSearchParams()
   const editorialDimension = parseEditorialDimension(params.get('sem_editorial_dim'))
   const editorialValue = editorialDimension ? params.get('sem_editorial_value') ?? DEFAULT_QUERY.editorialValue : ''
 
@@ -64,14 +61,14 @@ function readInitialState() {
     dateFrom: params.get('sem_from') ?? DEFAULT_QUERY.dateFrom,
     dateTo: params.get('sem_to') ?? DEFAULT_QUERY.dateTo,
     outlierOnly: params.get('sem_outliers') === 'true',
-    limit: parseStrictPositiveInteger(params.get('sem_limit'), DEFAULT_QUERY.limit),
+    limit: parseStrictPositiveInt(params.get('sem_limit'), DEFAULT_QUERY.limit),
     editorialDimension,
     editorialValue,
   }
 
   return {
     query,
-    selectedArticleId: parseOptionalInteger(params.get('sem_article')),
+    selectedArticleId: parseOptionalPositiveInt(params.get('sem_article')),
     visualMode: parseVisualMode(params.get('sem_mode')),
     colorMode: parseColorMode(params.get('sem_color')),
   }
@@ -81,8 +78,7 @@ export function useExplorerUrlState() {
   const [state, setState] = useState(readInitialState)
 
   useEffect(() => {
-    const params = new URLSearchParams(window.location.search)
-    for (const key of EXPLORER_PARAM_KEYS) params.delete(key)
+    const params = deleteSearchParams(readSearchParams(), EXPLORER_PARAM_KEYS)
 
     params.set('view', 'semantic')
     if (state.query.search.trim()) params.set('sem_search', state.query.search.trim())
@@ -102,8 +98,7 @@ export function useExplorerUrlState() {
       params.set('sem_editorial_value', state.query.editorialValue)
     }
 
-    const nextUrl = `${window.location.pathname}?${params.toString()}${window.location.hash}`
-    window.history.replaceState(null, '', nextUrl)
+    replaceUrlSearchParams(params)
   }, [state])
 
   const activeFilterCount = useMemo(() => {

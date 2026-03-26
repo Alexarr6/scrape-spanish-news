@@ -1,5 +1,5 @@
 import { clampText, formatDate, formatSimilarity } from '../../lib/format'
-import { buildSemanticExplorerHref } from '../../lib/navigation'
+import { buildExplorerSurfaceHref } from '../../lib/navigation'
 import type { ExplorerArticleDetail, StoryClusterDetail, StoryClusterMemberItem } from '../../lib/types'
 import { EditorialStatusBadge } from '../editorial/EditorialStatusBadge'
 import { SectionDivider } from '../layout/SectionDivider'
@@ -59,7 +59,7 @@ export function StoryFocusPanel({
           <p className="story-focus-empty-desc">
             Pick any cluster from the stream to inspect its source coverage and article detail.
           </p>
-          <a href="?view=semantic" className="btn-ghost">
+          <a href={buildExplorerSurfaceHref({})} className="btn-ghost">
             Open Explorer →
           </a>
         </div>
@@ -68,7 +68,7 @@ export function StoryFocusPanel({
   }
 
   const showArticleDetail = selectedArticleId != null && (article != null || articleLoading || articleError != null)
-  const explorerHref = buildSemanticExplorerHref({ detail, articleId: selectedArticleId })
+  const explorerHref = buildExplorerSurfaceHref({ detail, articleId: selectedArticleId })
 
   return (
     <div className="story-focus-panel">
@@ -237,7 +237,7 @@ function ArticleDetailSection({
 
           <div className="article-detail-actions">
             <a
-              href={buildSemanticExplorerHref({ detail, article, articleId: article.article.article_id })}
+              href={buildExplorerSurfaceHref({ detail, article, articleId: article.article.article_id })}
               className="btn-ghost"
             >
               Open in Explorer →

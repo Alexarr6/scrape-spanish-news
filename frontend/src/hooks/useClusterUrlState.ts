@@ -1,6 +1,14 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { DEFAULT_CLUSTER_QUERY } from '../lib/types'
 import type { StoryClusterQuery } from '../lib/types'
+import {
+  deleteSearchParams,
+  parseNonNegativeInt,
+  parseOptionalPositiveInt,
+  parseStrictPositiveInt,
+  readSearchParams,
+  replaceUrlSearchParams,
+} from '../lib/urlState'
 
 const CLUSTER_PARAM_KEYS = [
   'search',
@@ -15,23 +23,8 @@ const CLUSTER_PARAM_KEYS = [
   'article',
 ] as const
 
-function parseStrictPositiveInteger(value: string | null, fallback: number): number {
-  const parsed = Number(value)
-  return Number.isInteger(parsed) && parsed > 0 ? parsed : fallback
-}
-
-function parseNonNegativeInteger(value: string | null, fallback: number): number {
-  const parsed = Number(value)
-  return Number.isInteger(parsed) && parsed >= 0 ? parsed : fallback
-}
-
-function parseOptionalInteger(value: string | null): number | null {
-  const parsed = Number(value)
-  return Number.isInteger(parsed) && parsed > 0 ? parsed : null
-}
-
 function readInitialState() {
-  const params = new URLSearchParams(window.location.search)
+  const params = readSearchParams()
   const query: StoryClusterQuery = {
     search: params.get('search') ?? DEFAULT_CLUSTER_QUERY.search,
     source: params.get('source') ?? DEFAULT_CLUSTER_QUERY.source,
@@ -39,14 +32,14 @@ function readInitialState() {
     entitySlug: params.get('entity') ?? DEFAULT_CLUSTER_QUERY.entitySlug,
     dateFrom: params.get('from') ?? DEFAULT_CLUSTER_QUERY.dateFrom,
     dateTo: params.get('to') ?? DEFAULT_CLUSTER_QUERY.dateTo,
-    limit: parseStrictPositiveInteger(params.get('limit'), DEFAULT_CLUSTER_QUERY.limit),
-    offset: parseNonNegativeInteger(params.get('offset'), DEFAULT_CLUSTER_QUERY.offset),
+    limit: parseStrictPositiveInt(params.get('limit'), DEFAULT_CLUSTER_QUERY.limit),
+    offset: parseNonNegativeInt(params.get('offset'), DEFAULT_CLUSTER_QUERY.offset),
   }
 
   return {
     query,
-    selectedClusterId: parseOptionalInteger(params.get('cluster')),
-    selectedArticleId: parseOptionalInteger(params.get('article')),
+    selectedClusterId: parseOptionalPositiveInt(params.get('cluster')),
+    selectedArticleId: parseOptionalPositiveInt(params.get('article')),
   }
 }
 
@@ -54,8 +47,7 @@ export function useClusterUrlState() {
   const [state, setState] = useState(readInitialState)
 
   useEffect(() => {
-    const params = new URLSearchParams(window.location.search)
-    for (const key of CLUSTER_PARAM_KEYS) params.delete(key)
+    const params = deleteSearchParams(readSearchParams(), CLUSTER_PARAM_KEYS)
 
     if (state.query.search.trim()) params.set('search', state.query.search.trim())
     if (state.query.source) params.set('source', state.query.source)
@@ -68,8 +60,7 @@ export function useClusterUrlState() {
     if (state.selectedClusterId != null) params.set('cluster', String(state.selectedClusterId))
     if (state.selectedArticleId != null) params.set('article', String(state.selectedArticleId))
 
-    const nextUrl = `${window.location.pathname}${params.toString() ? `?${params.toString()}` : ''}${window.location.hash}`
-    window.history.replaceState(null, '', nextUrl)
+    replaceUrlSearchParams(params)
   }, [state])
 
   const activeFilterCount = useMemo(() => {
