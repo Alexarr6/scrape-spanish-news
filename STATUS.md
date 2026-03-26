@@ -1,12 +1,15 @@
-- State: DONE
-- Iteration: iter/014
-- Focus: fix Cluster Context metric formatting in Explorer and restore the default left accent on Stories article cards
+- State: AUDIT_DONE
+- Iteration: iter/015
+- Focus: repo-wide technical-debt audit with evidence, risk classes, and bounded cleanup lots
 - Notes:
-  - `ExplorerContextRail.tsx` now renders Cluster Context stats with the existing `.editorial-dimension-*` item pattern instead of undefined `metric-*` classes.
-  - `.member-card` in `frontend/src/styles.css` now has a subtle default left rail, while `.member-card.selected` keeps the stronger accent state.
-  - Scope stayed tiny and frontend-only: one React markup/classname adjustment plus one surgical CSS tweak.
+  - Added `TECH_DEBT_AUDIT.md` as the main audit artifact covering frontend, backend, scripts, contracts/docs alignment, generated/runtime clutter, and Makefile/tooling.
+  - Distinguished confirmed dead code from suspicious-but-unconfirmed debt.
+  - Classified findings into `safe delete`, `safe simplify`, `needs verification`, and `defer`.
+  - Included a concrete Makefile/tooling audit and grouped next work into bounded lots (`2A` through `4B`).
+  - No giant cleanup pass was performed; this iteration stayed audit-first and reviewable.
 - Verification:
-  - `cd frontend && npm run build` ✅
+  - Reviewed live entrypoints and operator wiring via `Makefile`, `README.md`, `mkdocs.yml`, `src/main.py`, and `src/api/app.py`.
+  - Performed structural reference scans across Python and frontend sources to distinguish dead leaves from live paths.
+  - Checked `git status`, `git ls-files`, `.gitignore`, and `frontend/.gitignore` to separate tracked source from generated/runtime clutter.
 - Result:
-  - Cluster Context metrics now display as deliberate label/value items.
-  - Stories article cards regained a visible default left-side anchor without changing the rest of the layout.
+  - Repo now has a trustworthy technical-debt audit and an execution-ready cleanup queue for later bounded phases.
