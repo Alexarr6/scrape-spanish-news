@@ -1,16 +1,16 @@
 - State: IMPLEMENTATION_DONE
-- Iteration: iter/017
-- Focus: execute the exact lot 2C dead frontend hook cleanup and verify the branch stays disciplined
+- Iteration: iter/018
+- Focus: execute the narrowed lot 2B delete set without pretending `rss_discovery.py` is still safely dead
 - Notes:
-  - Re-read `PROJECT_BRIEF.md`, `TASK_CONTRACT.md`, `PLAN.md`, `STATUS.md`, and the relevant lot 2C findings in `TECH_DEBT_AUDIT.md`.
-  - Deleted only the approved three hook files: `useClusterFilters.ts`, `useExplorerBootstrap.ts`, and `useExplorerFilters.ts`.
-  - No live importer appeared during verification, so no scope expansion was needed.
-  - Kept the branch bounded to the three deletions plus iteration bookkeeping updates.
+  - Re-read `PROJECT_BRIEF.md`, `TASK_CONTRACT.md`, and the lot 2B findings in `TECH_DEBT_AUDIT.md`.
+  - Reconfirmed `src/persistence/contracts.py` as the only clean live-branch safe-delete candidate in lot 2B.
+  - Reconfirmed again that `src/core/strategies/rss_discovery.py` no longer matches the audit claim of zero in-repo importers because `src/core/strategies/__init__.py` imports and re-exports `RSSDiscoveryStrategy`, with additional live string usage in adapters/tests.
+  - Deleted only `src/persistence/contracts.py`.
+  - Left `src/core/strategies/rss_discovery.py` untouched and recorded that it needs reclassification rather than deletion.
 - Verification:
-  - `grep -RIn "useClusterFilters" frontend/src`
-  - `grep -RIn "useExplorerBootstrap" frontend/src`
-  - `grep -RIn "useExplorerFilters" frontend/src`
-  - `cd frontend && npm run build`
-  - `git status --short frontend/src/hooks`
+  - `grep -RIn "src\.persistence\.contracts\|from src\.persistence\.contracts\|import src\.persistence\.contracts" src tests scripts docs README.md Makefile` → no results
+  - `grep -RIn "RSSDiscoveryStrategy\|rss_discovery" src tests scripts` → live references remain; no deletion attempted
+  - `make test` → failed with three unrelated pre-existing failures in `test_layered_discovery`, `test_llm_client_usage`, and `test_run_traceability`
+  - `git status --short src/persistence src/core/strategies` → `D src/persistence/contracts.py`
 - Result:
-  - Implementation complete. The three approved dead hooks were removed, frontend build passed, and hook status showed only the intended deletions.
+  - Implementation complete for the narrowed safe-delete set. Only `src/persistence/contracts.py` was removed. `src/core/strategies/rss_discovery.py` should be reclassified before any future deletion attempt.
