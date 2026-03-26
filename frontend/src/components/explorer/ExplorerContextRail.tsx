@@ -412,5 +412,5 @@ function ClusterContextSection({ summary, selectedCluster }: { summary: Explorer
 }
 
 function MetricItem({ label, value }: { label: string; value: string }) {
-  return <div className="metric-item"><span className="metric-label">{label}</span><span className="metric-value">{value}</span></div>
+  return <div className="editorial-dimension-item"><span className="editorial-dimension-label">{label}</span><span className="editorial-dimension-value">{value}</span></div>
 }

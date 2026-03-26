@@ -1,34 +1,34 @@
-# RESULTS.md — iter/013 frontend.react pass
+# RESULTS.md — iter/014 frontend.react pass
 
 ## Resumen breve
 
-Iter/013 arregla una micro-cutrez visual en Editorial Lens sin tocar nada más:
-- `Type mix` y `Editorial mix` dejan de renderizarse con clases muertas `metric-*`
-- ambos bloques ahora reutilizan el patrón existente `.editorial-dimension-*`
-- la fila por fuente sigue compacta y estable, sin inventar CSS nueva porque no hacía falta
+Iter/014 corrige dos mini-regresiones visuales sin tocar nada más:
+- Cluster Context deja de renderizar sus métricas con clases muertas `metric-*`
+- las métricas ahora reutilizan el patrón existente `.editorial-dimension-*`
+- las cards de artículos en Stories recuperan un rail izquierdo sutil por defecto, mientras la seleccionada sigue mandando con un acento más fuerte
 
 ## Qué cambió
 
-### 1. Swap quirúrgico de markup/clases en Editorial Lens
-En `frontend/src/components/stories/EditorialLensSection.tsx`:
-- reemplacé los dos summary blocks dentro de `.editorial-source-grid.compact`
-- antes usaban:
+### 1. Fix quirúrgico del bloque Cluster Context
+En `frontend/src/components/explorer/ExplorerContextRail.tsx`:
+- `MetricItem` ya no usa:
   - `metric-item`
   - `metric-label`
   - `metric-value`
-- ahora usan:
+- ahora usa:
   - `editorial-dimension-item`
   - `editorial-dimension-label`
   - `editorial-dimension-value`
 
-Eso hace que `Type mix` y `Editorial mix` hereden el mismo tratamiento visual compacto, con borde y jerarquía label/value que ya existía en el sistema editorial.
+Eso reaprovecha el contrato visual que ya existe en la app para label/value items y evita inventar CSS nueva para algo que ya estaba resuelto.
 
-### 2. Sin CSS extra porque habría sido postureo
-En `frontend/src/styles.css` ya existía el contrato visual correcto:
-- `.editorial-source-grid.compact` mantiene una columna
-- `.editorial-dimension-*` ya define el patrón de mini-summary item
+### 2. Restore del left rail por defecto en Stories
+En `frontend/src/styles.css`:
+- `.member-card` deja de tener `border-left` transparente
+- ahora usa un left rail sutil con `var(--color-border-strong)`
+- `.member-card.selected` sigue elevándolo con `var(--color-accent)`
 
-Así que no añadí tightening nuevo. Meter más CSS aquí habría sido tocar por tocar.
+Resultado: la lista vuelve a tener anclaje visual sin convertir cada card en un cartel luminoso.
 
 ## Verificación ejecutada
 
@@ -42,12 +42,13 @@ Resultado:
 ## Archivos tocados
 
 Código/UI:
-- `frontend/src/components/stories/EditorialLensSection.tsx`
+- `frontend/src/components/explorer/ExplorerContextRail.tsx`
+- `frontend/src/styles.css`
 
 Artefactos de iteración:
 - `RESULTS.md`
 - `STATUS.md`
-- `logs/iterations/013.md`
+- `logs/iterations/014.md`
 
 ## Git / disciplina
 
@@ -56,4 +57,4 @@ Sin backend, sin contratos nuevos, sin rediseños colaterales.
 
 ## Veredicto honesto
 
-El problema no era profundo; era markup usando clases fantasma. Ahora los dos resúmenes por fuente parecen items de verdad en vez de texto pegado con cinta aislante.
+Era exactamente lo que parecía: clases fantasma en un bloque y un left rail demasiado muerto en el otro. Ya no parece roto, que era el puto objetivo.

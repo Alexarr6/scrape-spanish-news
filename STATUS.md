@@ -1,13 +1,12 @@
 - State: DONE
-- Iteration: iter/013
-- Focus: polish the Editorial Lens source-row Type mix / Editorial mix summaries so they read as real compact summary items
+- Iteration: iter/014
+- Focus: fix Cluster Context metric formatting in Explorer and restore the default left accent on Stories article cards
 - Notes:
-  - `EditorialLensSection.tsx` was rendering the two source-row summaries with unstyled `metric-*` classes.
-  - Replaced that loose markup with the existing `.editorial-dimension-*` item pattern already supported in `frontend/src/styles.css`.
-  - Kept `.editorial-source-grid.compact` unchanged so the source row stays one-column, compact, and stable.
-  - No CSS changes were needed; the existing editorial dimension styles already solved the presentation issue cleanly.
-  - Scope stayed tiny and frontend-only in `frontend/src/components/stories/EditorialLensSection.tsx`.
+  - `ExplorerContextRail.tsx` now renders Cluster Context stats with the existing `.editorial-dimension-*` item pattern instead of undefined `metric-*` classes.
+  - `.member-card` in `frontend/src/styles.css` now has a subtle default left rail, while `.member-card.selected` keeps the stronger accent state.
+  - Scope stayed tiny and frontend-only: one React markup/classname adjustment plus one surgical CSS tweak.
 - Verification:
   - `cd frontend && npm run build` ✅
 - Result:
-  - `Type mix` and `Editorial mix` now render as deliberate compact summary items instead of loose inline text, with the rest of Editorial Lens left untouched.
+  - Cluster Context metrics now display as deliberate label/value items.
+  - Stories article cards regained a visible default left-side anchor without changing the rest of the layout.

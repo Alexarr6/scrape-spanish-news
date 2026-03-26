@@ -868,7 +868,7 @@ input::placeholder {
   padding: var(--space-3) var(--space-4);
   background: var(--color-surface-muted);
   border: 1px solid var(--color-border);
-  border-left: 2px solid transparent;
+  border-left: 2px solid var(--color-border-strong);
   border-radius: var(--radius-sm);
   text-align: left;
   cursor: pointer;
