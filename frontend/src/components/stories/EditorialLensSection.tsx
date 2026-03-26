@@ -93,8 +93,8 @@ function EditorialSourceComparisonRow({
       )}
 
       <div className="editorial-source-grid compact">
-        <div className="metric-item"><span className="metric-label">Type mix</span><span className="metric-value">{formatBreakdownSummary(sourceSummary.article_type_breakdown)}</span></div>
-        <div className="metric-item"><span className="metric-label">Editorial mix</span><span className="metric-value">{secondarySummary}</span></div>
+        <div className="editorial-dimension-item"><span className="editorial-dimension-label">Type mix</span><span className="editorial-dimension-value">{formatBreakdownSummary(sourceSummary.article_type_breakdown)}</span></div>
+        <div className="editorial-dimension-item"><span className="editorial-dimension-label">Editorial mix</span><span className="editorial-dimension-value">{secondarySummary}</span></div>
       </div>
 
       {sourceSummary.top_framing_devices.length > 0 && (

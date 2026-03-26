@@ -1,14 +1,13 @@
 - State: DONE
-- Iteration: iter/012
-- Focus: simplify the Stories lower detail area by aligning Articles by source with the shared major-section shell and stripping selected article detail down to product-facing essentials
+- Iteration: iter/013
+- Focus: polish the Editorial Lens source-row Type mix / Editorial mix summaries so they read as real compact summary items
 - Notes:
-  - Frontend.react rebuilt `Articles by source` onto the same `story-focus-major-section` / `story-focus-major-shell` structure as the rest of Stories, removing the old loose divider + `.focus-section` layout path.
-  - The final section now switches inside one shared shell between grouped source cards and the selected article drill-in, which fixes the structural misalignment without CSS duct tape.
-  - `ArticleDetailSection` now keeps only back affordance, source/section context, headline, published date, summary/excerpt fallback, `Open in Explorer`, and nearby articles when neighbors exist.
-  - Removed from Stories selected article detail: `Open article ↗`, `EditorialAnalysisCard`, cluster membership diagnostics, semantic context metrics, and dead helper code/imports tied to those blocks.
-  - Nearby articles now lives inside the selected article drill-in again for this iteration, with a lighter inner layout to avoid ugly double-card nesting.
-  - Scope stayed frontend-only in `frontend/src/components/stories/StoryFocusPanel.tsx` and `frontend/src/styles.css`.
+  - `EditorialLensSection.tsx` was rendering the two source-row summaries with unstyled `metric-*` classes.
+  - Replaced that loose markup with the existing `.editorial-dimension-*` item pattern already supported in `frontend/src/styles.css`.
+  - Kept `.editorial-source-grid.compact` unchanged so the source row stays one-column, compact, and stable.
+  - No CSS changes were needed; the existing editorial dimension styles already solved the presentation issue cleanly.
+  - Scope stayed tiny and frontend-only in `frontend/src/components/stories/EditorialLensSection.tsx`.
 - Verification:
   - `cd frontend && npm run build` ✅
 - Result:
-  - Stories lower detail is now cleaner and aligned: the final section matches the major-section system, and selected article detail stays on product-facing essentials instead of drifting into diagnostics.
+  - `Type mix` and `Editorial mix` now render as deliberate compact summary items instead of loose inline text, with the rest of Editorial Lens left untouched.
