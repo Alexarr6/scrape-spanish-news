@@ -76,16 +76,18 @@ help:
 	  '  make semantic-build DATABASE_URL=... LIMIT=500   Export semantic artifacts from persisted state' \
 	  '  make semantic-smoke DATABASE_URL=...             Export a bounded semantic smoke artifact set' \
 	  '' \
-	  'Scheduler + verification:' \
-	  '  make scheduler-dry-run        Show LEGACY scrape-only execution plan (prefer stories-refresh-once)' \
-	  '  make scheduler-once           Run the LEGACY scrape-only wrapper once (prefer stories-refresh-once)' \
+	  'Canonical refresh + verification:' \
 	  '  make stories-refresh-once     Run scrape + analysis + clustering refresh once' \
 	  '  make explorer-refresh-once    Run semantic explorer refresh once' \
 	  '  make full-refresh-once        Run stories refresh, then explorer refresh' \
-	  '  make status                   Show LEGACY scheduler state files' \
-	  '  make tail-log                 Tail LEGACY scheduler log' \
 	  '  make verify-output            Check expected JSON/metrics files for DATE' \
 	  '  make verify-db DATABASE_URL=postgresql+psycopg://...  Check article row count' \
+	  '' \
+	  'Legacy scheduler helpers (retained, not canonical):' \
+	  '  make scheduler-dry-run        Show LEGACY scrape-only execution plan (prefer stories-refresh-once)' \
+	  '  make scheduler-once           Run the LEGACY scrape-only wrapper once (prefer stories-refresh-once)' \
+	  '  make status                   Show LEGACY scheduler state files' \
+	  '  make tail-log                 Tail LEGACY scheduler log' \
 	  '' \
 	  'Optional local DB:' \
 	  '  make db-url                   Print the local dev DATABASE_URL' \

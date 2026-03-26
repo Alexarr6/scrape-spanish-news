@@ -1,17 +1,19 @@
 - State: IMPLEMENTATION_DONE
-- Iteration: iter/021
-- Focus: three failing tests only (`layered_discovery`, `llm_client_usage`, `run_traceability`)
+- Iteration: iter/022
+- Focus: evidence-backed reclassification of ambiguous legacy/manual surfaces (`rss_discovery.py`, story-matching helper scripts, legacy scheduler surface)
 - Implemented changes:
-  - `tests/test_layered_discovery.py` updated to the current layered discovery metrics contract by adding the newer zero-value counters emitted by `run_layered_discovery()`.
-  - `tests/test_llm_client_usage.py` hardened env isolation for `test_empty_generic_base_url_overrides_legacy_openrouter_base_url` by clearing ambient generic/legacy vars that could contaminate the assertion.
-  - `tests/fixtures/evidence/20260314-1212-8ff9/run_manifest.json` updated from the old repo name/path `scrape-spanish-news` to the canonical current repo `spain-news-bias-scraper`.
+  - classified `src/core/strategies/rss_discovery.py` + `src/core/strategies/__init__.py` as `safe remove later` based on zero in-repo imports of `RSSDiscoveryStrategy` and only residual barrel export coupling
+  - classified the story-matching / review helper scripts as `manual-but-supported` based on live support-module usage plus a coherent documented manual workflow in `docs/architecture/story-matching-eval.md`
+  - classified `scripts/run_scheduled.sh` as `legacy-but-retained`
+  - demoted legacy scheduler discoverability in `make help` by splitting canonical refresh commands from `Legacy scheduler helpers (retained, not canonical)`
 - Verification run:
-  - `uv run pytest -q tests/test_layered_discovery.py::test_layered_discovery_tracks_rejected_noise_and_cap tests/test_llm_client_usage.py::test_empty_generic_base_url_overrides_legacy_openrouter_base_url tests/test_run_traceability.py::RunTraceabilityTests::test_manifest_points_to_canonical_fixture_bundle`
-  - `make test`
+  - repo-wide reference checks for `RSSDiscoveryStrategy` / `rss_discovery`
+  - direct inspection of target scripts/docs/operator surfaces
+  - `make help`
 - Verification result:
-  - targeted verification passed: `3 passed`
-  - full suite passed: `213 passed`
+  - `make help` passed and now reflects the canonical-vs-legacy split honestly
+  - no speculative deletion performed
 - Notes:
-  - the checked-in `.venv` was linked to a non-existent interpreter on this host, so `uv run` was used as the repo-native equivalent to recreate a working env and run pytest honestly
-  - no layered discovery runtime logic changed
-  - no LLM env precedence logic changed
+  - active `rss_discovery` references in the repo are metrics/strategy-name labels from `ProfiledRSSAdapter`, not imports of `RSSDiscoveryStrategy`
+  - the story-review scripts are not product happy-path commands, but they are also not random leftovers; they form a real analyst calibration loop
+  - `run_scheduled.sh` remains runnable and intentionally legacy, so removal still requires external/operator proof rather than repo vibes
