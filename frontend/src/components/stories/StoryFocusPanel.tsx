@@ -1,7 +1,6 @@
 import { clampText, formatDate, formatSimilarity } from '../../lib/format'
 import { buildSemanticExplorerHref } from '../../lib/navigation'
 import type { ExplorerArticleDetail, StoryClusterDetail, StoryClusterMemberItem } from '../../lib/types'
-import { EditorialAnalysisCard } from '../editorial/EditorialAnalysisCard'
 import { EditorialStatusBadge } from '../editorial/EditorialStatusBadge'
 import { SectionDivider } from '../layout/SectionDivider'
 import { ErrorState } from '../system/ErrorState'
@@ -68,11 +67,11 @@ export function StoryFocusPanel({
     )
   }
 
+  const showArticleDetail = selectedArticleId != null && (article != null || articleLoading || articleError != null)
   const explorerHref = buildSemanticExplorerHref({ detail, articleId: selectedArticleId })
 
   return (
     <div className="story-focus-panel">
-      {/* Section 1: Story brief */}
       <section className="story-focus-major-section">
         <SectionDivider label="Breaking event" />
         <div className="story-focus-major-shell focus-brief">
@@ -111,41 +110,30 @@ export function StoryFocusPanel({
         </div>
       </section>
 
-      {article && article.neighbors.length > 0 && (
-        <section className="story-focus-major-section">
-          <SectionDivider label="Nearby articles" />
-          <div className="story-focus-major-shell">
-            <NearbyArticlesSection neighbors={article.neighbors} />
-          </div>
-        </section>
-      )}
-
-      <SectionDivider label="Articles by source" />
-
-      {/* Section 3 or 4: Article list or article detail */}
-      <section className="focus-section">
-        {selectedArticleId && (article || articleLoading || articleError) ? (
-          <ArticleDetailSection
-            article={article}
-            loading={articleLoading}
-            error={articleError}
-            detail={detail}
-            onBack={() => onSelectArticle(null)}
-            onSelectArticle={onSelectArticle}
-          />
-        ) : (
-          <SourceGroupList
-            members={detail.members}
-            selectedArticleId={selectedArticleId}
-            onSelectArticle={onSelectArticle}
-          />
-        )}
+      <section className="story-focus-major-section">
+        <SectionDivider label="Articles by source" />
+        <div className="story-focus-major-shell story-focus-major-shell-final">
+          {showArticleDetail ? (
+            <ArticleDetailSection
+              article={article}
+              loading={articleLoading}
+              error={articleError}
+              detail={detail}
+              onBack={() => onSelectArticle(null)}
+            />
+          ) : (
+            <SourceGroupList
+              members={detail.members}
+              selectedArticleId={selectedArticleId}
+              onSelectArticle={onSelectArticle}
+            />
+          )}
+        </div>
       </section>
     </div>
   )
 }
 
-/* ─── Source group list ────────────────────────────────────────────────── */
 function SourceGroupList({
   members,
   selectedArticleId,
@@ -208,21 +196,18 @@ function SourceGroupList({
   )
 }
 
-/* ─── Article detail section ───────────────────────────────────────────── */
 function ArticleDetailSection({
   article,
   loading,
   error,
   detail,
   onBack,
-  onSelectArticle,
 }: {
   article: ExplorerArticleDetail | null
   loading: boolean
   error: string | null
   detail: StoryClusterDetail
   onBack: () => void
-  onSelectArticle: (articleId: number | null) => void
 }) {
   return (
     <div className="article-detail">
@@ -232,13 +217,9 @@ function ArticleDetailSection({
         </button>
       </div>
 
-      {loading && !article && (
-        <LoadingState label="Loading article…" centered={false} />
-      )}
+      {loading && !article && <LoadingState label="Loading article…" centered={false} />}
 
-      {error && (
-        <ErrorState message="Failed to load article detail" hint={error} centered={false} />
-      )}
+      {error && <ErrorState message="Failed to load article detail" hint={error} centered={false} />}
 
       {article && (
         <>
@@ -256,14 +237,6 @@ function ArticleDetailSection({
 
           <div className="article-detail-actions">
             <a
-              href={article.article.url}
-              target="_blank"
-              rel="noreferrer"
-              className="btn-ghost"
-            >
-              Open article ↗
-            </a>
-            <a
               href={buildSemanticExplorerHref({ detail, article, articleId: article.article.article_id })}
               className="btn-ghost"
             >
@@ -271,82 +244,16 @@ function ArticleDetailSection({
             </a>
           </div>
 
-          <div style={{ marginTop: 'var(--space-2)' }}>
-            <EditorialAnalysisCard
-              editorial={article.editorial}
-              variant="full"
-              clusterId={article.semantic_summary.cluster_id}
-            />
-          </div>
-
-          <div style={{ marginTop: 'var(--space-2)' }}>
-            <div className="section-divider-label">Cluster membership</div>
-            <ClusterMembershipDiagnostics
-              member={detail.members.find((item) => item.article_id === article.article.article_id) ?? null}
-              onSelectArticle={onSelectArticle}
-            />
-          </div>
-
-          <div style={{ marginTop: 'var(--space-2)' }}>
-            <div className="section-divider-label">Semantic context</div>
-            <div className="article-detail-metrics">
-              <MetricItem label="Cluster" value={article.semantic_summary.cluster_id == null ? '—' : `#${article.semantic_summary.cluster_id}`} />
-              <MetricItem label="Outlier" value={article.semantic_summary.is_outlier ? 'Yes' : 'No'} />
-              <MetricItem label="Neighbors" value={String(article.semantic_summary.neighbor_count)} />
-              <MetricItem label="Src diversity" value={String(article.semantic_summary.source_neighbor_diversity ?? 0)} />
+          {article.neighbors.length > 0 && (
+            <div className="article-detail-nearby">
+              <div className="article-detail-nearby-header">
+                <span className="section-divider-label">Nearby articles</span>
+                <p className="editorial-empty-copy">Semantically adjacent coverage for this article.</p>
+              </div>
+              <NearbyArticlesSection neighbors={article.neighbors} />
             </div>
-          </div>
-
+          )}
         </>
-      )}
-    </div>
-  )
-}
-
-function ClusterMembershipDiagnostics({
-  member,
-  onSelectArticle,
-}: {
-  member: StoryClusterMemberItem | null
-  onSelectArticle: (articleId: number | null) => void
-}) {
-  const diagnostics = member?.membership_diagnostics
-  if (!member || !diagnostics) {
-    return (
-      <p className="editorial-empty-copy">
-        Cluster membership diagnostics are not available for this article.
-      </p>
-    )
-  }
-
-  return (
-    <div className="context-cluster">
-      <p className="context-cluster-meta">
-        Why this belongs here: {diagnostics.support_edge_count} supporting edge
-        {diagnostics.support_edge_count === 1 ? '' : 's'} with best score {diagnostics.best_support_score.toFixed(2)}
-        {diagnostics.mean_support_score > 0 ? ` and mean support ${diagnostics.mean_support_score.toFixed(2)}` : ''}.
-      </p>
-      <div className="context-metrics">
-        <MetricItem label="Membership" value={formatSimilarity(member.membership_score)} />
-        <MetricItem label="Support edges" value={String(diagnostics.support_edge_count)} />
-        <MetricItem label="Best support" value={diagnostics.best_support_score.toFixed(2)} />
-        <MetricItem label="Risky bridge" value={diagnostics.risky_bridge_support ? 'Yes' : 'No'} />
-      </div>
-      <div className="editorial-badge-row editorial-badge-row-wrap">
-        {diagnostics.accepted_via_guarded_merge && <span className="badge muted">Guarded merge</span>}
-        {diagnostics.risky_bridge_support && <EditorialStatusBadge kind="needs_review" compact>bridge risk</EditorialStatusBadge>}
-        {diagnostics.penalties.map((penalty) => (
-          <span key={penalty} className="badge muted">{penalty.replace(/_/g, ' ')}</span>
-        ))}
-      </div>
-      {diagnostics.supporting_article_ids.length > 0 && (
-        <div className="editorial-badge-row editorial-badge-row-wrap" style={{ marginTop: 'var(--space-2)' }}>
-          {diagnostics.supporting_article_ids.slice(0, 4).map((articleId) => (
-            <button key={articleId} type="button" className="btn-text" onClick={() => onSelectArticle(articleId)}>
-              Support article {articleId}
-            </button>
-          ))}
-        </div>
       )}
     </div>
   )
@@ -359,7 +266,6 @@ function NearbyArticlesSection({
 }) {
   return (
     <div className="nearby-articles-section">
-      <p className="editorial-empty-copy">Semantically adjacent coverage for the currently selected article.</p>
       <ul className="neighbor-list">
         {neighbors.slice(0, 4).map((neighbor) => (
           <li key={neighbor.article_id}>
@@ -375,15 +281,6 @@ function NearbyArticlesSection({
           </li>
         ))}
       </ul>
-    </div>
-  )
-}
-
-function MetricItem({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="metric-item">
-      <span className="metric-label">{label}</span>
-      <span className="metric-value">{value}</span>
     </div>
   )
 }

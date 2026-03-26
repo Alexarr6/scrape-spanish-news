@@ -1,13 +1,14 @@
 - State: DONE
-- Iteration: iter/011
-- Focus: simplify Stories detail editorial lens, separate Nearby Articles, and fix top-section alignment
+- Iteration: iter/012
+- Focus: simplify the Stories lower detail area by aligning Articles by source with the shared major-section shell and stripping selected article detail down to product-facing essentials
 - Notes:
-  - Frontend.react normalized Breaking Event, Coverage, and Editorial Lens under one shared major-section shell in `StoryFocusPanel.tsx` and `frontend/src/styles.css`.
-  - `EditorialLensSection.tsx` was simplified to a compact, source-centric layout: source rows remain, weak comparative diagnostics were removed from the default surface, and thin-signal fallback copy was reduced to one muted note.
-  - Nearby Articles now renders as its own section below Editorial Lens while still using the selected article's existing `article.neighbors` data.
-  - The inline nearby block was removed from `ArticleDetailSection`; the rest of article detail stayed stable.
-  - Scope stayed bounded to frontend Stories detail/components/styles; no backend or data-contract changes were made.
+  - Frontend.react rebuilt `Articles by source` onto the same `story-focus-major-section` / `story-focus-major-shell` structure as the rest of Stories, removing the old loose divider + `.focus-section` layout path.
+  - The final section now switches inside one shared shell between grouped source cards and the selected article drill-in, which fixes the structural misalignment without CSS duct tape.
+  - `ArticleDetailSection` now keeps only back affordance, source/section context, headline, published date, summary/excerpt fallback, `Open in Explorer`, and nearby articles when neighbors exist.
+  - Removed from Stories selected article detail: `Open article ↗`, `EditorialAnalysisCard`, cluster membership diagnostics, semantic context metrics, and dead helper code/imports tied to those blocks.
+  - Nearby articles now lives inside the selected article drill-in again for this iteration, with a lighter inner layout to avoid ugly double-card nesting.
+  - Scope stayed frontend-only in `frontend/src/components/stories/StoryFocusPanel.tsx` and `frontend/src/styles.css`.
 - Verification:
   - `cd frontend && npm run build` ✅
 - Result:
-  - Stories detail now reads as a cleaner brief: aligned major sections, tighter Editorial Lens, and a properly separated Nearby Articles section.
+  - Stories lower detail is now cleaner and aligned: the final section matches the major-section system, and selected article detail stays on product-facing essentials instead of drifting into diagnostics.

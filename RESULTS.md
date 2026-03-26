@@ -1,53 +1,48 @@
-# RESULTS.md — iter/011 frontend.react pass
+# RESULTS.md — iter/012 frontend.react pass
 
 ## Resumen breve
 
-Este iter arregla el problema real sin inventarse backend nuevo:
-- **Breaking Event, Coverage y Editorial Lens** ahora usan el mismo contrato estructural de sección mayor
-- **Editorial Lens** dejó de ser una feria de métricas flojas y pasó a un bloque compacto, centrado en fuente
-- **Nearby Articles** salió del detalle inline del artículo y vive como sección propia justo debajo de Editorial Lens
-- el resto del drill-in de artículo quedó estable salvo esa extracción deliberada
+Este iter termina de limpiar la parte baja de Stories sin tocar backend ni inventar contratos nuevos:
+- **Articles by source** ahora usa el mismo shell de sección mayor que el resto del panel
+- el drill-in de artículo quedó reducido a lo que sí aporta: **volver, contexto, titular, fecha, resumen, Open in Explorer y nearby articles**
+- desaparecen de Stories los bloques medio-debug que sobraban: **Open article, EditorialAnalysisCard, cluster membership diagnostics y semantic context metrics**
+- **Nearby articles** vuelve al drill-in del artículo seleccionado, que era donde tenía sentido para esta iteración
 
 ## Qué cambió
 
-### 1. Shell compartido para las secciones mayores
-En `frontend/src/components/stories/StoryFocusPanel.tsx` y `frontend/src/styles.css`:
-- añadí un patrón común `story-focus-major-section` + `story-focus-major-shell`
-- lo apliqué a:
-  - `Breaking event`
-  - `Coverage`
-  - `Editorial lens`
-  - y también al bloque nuevo de `Nearby articles`
-- con eso desaparece la sensación de que cada sección viene de un planeta distinto
+### 1. Alineación estructural real para `Articles by source`
+En `frontend/src/components/stories/StoryFocusPanel.tsx`:
+- moví `Articles by source` al mismo patrón `story-focus-major-section` + `story-focus-major-shell`
+- el shell final ahora cambia limpiamente entre:
+  - listado agrupado por fuente, o
+  - detalle del artículo seleccionado
+- eliminé el viejo camino con `SectionDivider` suelto + `.focus-section`, que era el parche feo que desalineaba la sección
 
-### 2. Simplificación fuerte de Editorial Lens
-En `frontend/src/components/stories/EditorialLensSection.tsx`:
-- eliminé del surface principal:
-  - coverage grids superiores de applicability/article type
-  - comparative metric index grid por fuente
-  - metric notes
-  - divergence callouts
-  - cluster signals block
-  - confidence/scope callouts sobredimensionados
-- dejé sólo lo que sí aporta:
-  - título + intro breve
-  - badges de analyzed/pending/failed
-  - fallback corto cuando la señal comparativa es floja
-  - lista compacta por fuente
-- cada fila de fuente ahora muestra:
-  - nombre de fuente
-  - analyzed / total (+ usable si existe)
-  - badges de review relevantes
-  - comparison note si existe
-  - un resumen compacto con `Type mix` + `Editorial mix`
-  - framing chips sólo si de verdad hay soporte
+En `frontend/src/styles.css`:
+- añadí una variante ligera `story-focus-major-shell-final` para que el shell mayor dé el marco general sin crear una muñeca rusa de cards dentro de cards
 
-### 3. Nearby Articles movido a su propia sección
+### 2. Drill-in de artículo reducido a surface de producto
 En `StoryFocusPanel.tsx`:
-- añadí `NearbyArticlesSection` bajo Editorial Lens
-- sigue usando exactamente `article.neighbors` del artículo seleccionado
-- sólo aparece cuando hay artículo seleccionado y vecinos disponibles
-- eliminé el bloque inline de nearby articles dentro de `ArticleDetailSection`
+- `ArticleDetailSection` conserva sólo:
+  - back affordance
+  - source/section eyebrow
+  - headline
+  - published date
+  - summary / excerpt fallback
+  - `Open in Explorer`
+  - nearby articles cuando existen vecinos
+- eliminé por completo:
+  - `Open article ↗`
+  - `EditorialAnalysisCard`
+  - `ClusterMembershipDiagnostics`
+  - grid de métricas semánticas
+  - helpers muertos como `MetricItem`
+
+### 3. Nearby articles vuelve al flujo del artículo seleccionado
+- quité la sección mayor independiente de `Nearby articles`
+- ahora se renderiza dentro del detalle del artículo, debajo del resumen y CTA
+- sólo aparece cuando `article.neighbors.length > 0`
+- añadí un header ligero para ese bloque y mantuve el listado de vecinos estable
 
 ## Verificación ejecutada
 
@@ -57,26 +52,25 @@ cd frontend && npm run build
 
 Resultado:
 - build **OK**
-- Vite emitió el warning ya existente de chunk grande, pero la compilación terminó correctamente
+- Vite siguió mostrando warnings ya existentes de bundle/chunk grande y un warning de `spawn` desde `@loaders.gl/worker-utils`, pero la compilación terminó correctamente
 
 ## Archivos tocados
 
 Código/UI:
 - `frontend/src/components/stories/StoryFocusPanel.tsx`
-- `frontend/src/components/stories/EditorialLensSection.tsx`
 - `frontend/src/styles.css`
 
 Artefactos de iteración:
 - `RESULTS.md`
 - `STATUS.md`
-- `logs/iterations/011.md`
+- `logs/iterations/012.md`
 
 ## Git / disciplina
 
-Implementación acotada al frontend Stories detail.
+Implementación acotada al frontend de Stories.
 Sin cambios de backend ni de contratos de datos.
-Commit atómico realizado para el pass de implementación.
+Commit atómico realizado para este pass de simplificación del lower detail.
 
 ## Veredicto honesto
 
-La versión anterior enseñaba demasiada fontanería medio vacía. Esta queda bastante más limpia y coherente: Editorial Lens vuelve a contar algo útil, Nearby Articles deja de estorbar dentro del detalle, y la cabecera analítica por fin se alinea como un producto serio en vez de un collage.
+Antes esta parte parecía un cruce raro entre producto y panel de fontanería. Ahora Stories vuelve a hacer su trabajo: comparar cobertura, abrir un artículo, darte lo esencial y mandarte a Explorer cuando quieras cavar más hondo. Mucho mejor. 
