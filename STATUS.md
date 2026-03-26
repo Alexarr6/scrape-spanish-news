@@ -1,12 +1,17 @@
 - State: IMPLEMENTATION_DONE
-- Iteration: iter/020
-- Focus: lot 4B docs/operator contract alignment
+- Iteration: iter/021
+- Focus: three failing tests only (`layered_discovery`, `llm_client_usage`, `run_traceability`)
+- Implemented changes:
+  - `tests/test_layered_discovery.py` updated to the current layered discovery metrics contract by adding the newer zero-value counters emitted by `run_layered_discovery()`.
+  - `tests/test_llm_client_usage.py` hardened env isolation for `test_empty_generic_base_url_overrides_legacy_openrouter_base_url` by clearing ambient generic/legacy vars that could contaminate the assertion.
+  - `tests/fixtures/evidence/20260314-1212-8ff9/run_manifest.json` updated from the old repo name/path `scrape-spanish-news` to the canonical current repo `spain-news-bias-scraper`.
+- Verification run:
+  - `uv run pytest -q tests/test_layered_discovery.py::test_layered_discovery_tracks_rejected_noise_and_cap tests/test_llm_client_usage.py::test_empty_generic_base_url_overrides_legacy_openrouter_base_url tests/test_run_traceability.py::RunTraceabilityTests::test_manifest_points_to_canonical_fixture_bundle`
+  - `make test`
+- Verification result:
+  - targeted verification passed: `3 passed`
+  - full suite passed: `213 passed`
 - Notes:
-  - Re-read `PROJECT_BRIEF.md`, `TASK_CONTRACT.md`, `PLAN.md`, `STATUS.md`, and `TECH_DEBT_AUDIT.md`, then compared `docs/operator-guide/workflows.md` and `docs/reference/outputs.md` against `docs/operator-guide/scheduler.md`, `README.md`, and `Makefile`.
-  - Updated `docs/operator-guide/workflows.md` so the active recurring operator surface is the Stories + Explorer split wrappers plus `make full-refresh-once`, with `run_scheduled.sh` kept explicitly as a legacy scrape-only path.
-  - Updated `docs/reference/outputs.md` to document the active per-job lock/log/state layout for Stories and Explorer, while keeping the legacy scheduler files documented as legacy.
-  - Kept the iteration tightly bounded: no code changes, no `Makefile` changes, no legacy-path removal or broad docs rewrite.
-- Verification:
-  - `make docs-build` ✅
-- Result:
-  - The docs/operator contract now matches the current canonical scheduler surface and active output/state layout without lying about the surviving legacy wrapper.
+  - the checked-in `.venv` was linked to a non-existent interpreter on this host, so `uv run` was used as the repo-native equivalent to recreate a working env and run pytest honestly
+  - no layered discovery runtime logic changed
+  - no LLM env precedence logic changed

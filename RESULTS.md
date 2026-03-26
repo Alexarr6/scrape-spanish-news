@@ -1,52 +1,52 @@
-# RESULTS.md — iter/020 lot 4B docs/operator contract alignment
+# RESULTS.md — iter/021 three failing tests fixed
 
 ## Resumen breve
 
-Iter/020 hizo la limpieza mínima aprobada del **lot 4B** del `TECH_DEBT_AUDIT.md`.
-
-Se tocaron solo las superficies docs/operator aprobadas para alinear el contrato con la superficie canónica real:
-- `docs/operator-guide/workflows.md`
-- `docs/reference/outputs.md`
-
-No hubo cambios de código, no hubo cambios de `Makefile` y no se vendió la ruta legacy como si hubiera desaparecido mágicamente.
+Iter/021 arregló exactamente los **tres tests rotos** que estaban tumbando `make test`, sin tocar lógica runtime fuera de contrato:
+- contrato de métricas en `layered_discovery`
+- aislamiento de entorno en el test de `LLMSettings`
+- fixture manifest de traceability con el nombre/path viejo del repo
 
 ## Qué se hizo
 
-- se reescribió la sección de scheduler en `docs/operator-guide/workflows.md` para que el flujo principal apunte a:
-  - `bash scripts/run_stories_refresh.sh`
-  - `bash scripts/run_explorer_refresh.sh`
-  - `make full-refresh-once`
-- se documentó el split activo Stories + Explorer con su cron shape recomendada
-- se mantuvo `bash scripts/run_scheduled.sh` documentado como wrapper legacy scrape-only, dejando claro que sigue existiendo pero ya no es la entrada canónica del producto principal
-- se actualizó `docs/reference/outputs.md` para reflejar el layout activo por job:
-  - `var/lock/stories-refresh.lock`
-  - `var/lock/explorer-refresh.lock`
-  - `var/log/stories-refresh.log`
-  - `var/log/explorer-refresh.log`
-  - `var/state/stories_*`
-  - `var/state/explorer_*`
-- se conservaron y documentaron honestamente los ficheros legacy del scheduler scrape-only:
-  - `var/log/scheduler.log`
-  - `var/state/last_*`
-  - `var/state/consecutive_failures`
-  - `var/state/last_alert_utc`
+- `tests/test_layered_discovery.py`
+  - se actualizó `test_layered_discovery_tracks_rejected_noise_and_cap`
+  - ahora espera el payload completo de métricas que `run_layered_discovery()` emite hoy:
+    - `rejected_scope`
+    - `rejected_stale`
+    - `rejected_locality`
+    - `rejected_article_type`
+    - `same_local_day_candidates`
+  - no se cambió la lógica de descubrimiento
+
+- `tests/test_llm_client_usage.py`
+  - se endureció `test_empty_generic_base_url_overrides_legacy_openrouter_base_url`
+  - el test ahora limpia explícitamente vars ambiente que podían contaminar el caso:
+    - `LLM_API_KEY`
+    - `OPENAI_BASE_URL`
+    - `OPENROUTER_API_KEY`
+  - no se cambió la precedencia real de `LLMSettings.from_env()`; el fallo era del test, no del código
+
+- `tests/fixtures/evidence/20260314-1212-8ff9/run_manifest.json`
+  - se reemplazaron las rutas con repo viejo `scrape-spanish-news`
+  - ahora apuntan al repo canónico actual `spain-news-bias-scraper`
 
 ## Verificación ejecutada
 
-1. `make docs-build`
+1. `uv run pytest -q tests/test_layered_discovery.py::test_layered_discovery_tracks_rejected_noise_and_cap tests/test_llm_client_usage.py::test_empty_generic_base_url_overrides_legacy_openrouter_base_url tests/test_run_traceability.py::RunTraceabilityTests::test_manifest_points_to_canonical_fixture_bundle`
+2. `make test`
 
 ## Resultado de verificación
 
-- `make docs-build` pasó con **exit 0**
-- MkDocs construyó el sitio correctamente
-- siguieron apareciendo avisos no bloqueantes sobre páginas existentes fuera de `nav`; son ruido conocido del repo, no un fallo introducido por este lote
+- los tres tests objetivo pasaron: **3 passed**
+- `make test` pasó completo: **213 passed**
 
-## Notas
+## Notas honestas
 
-- alcance mantenido estrecho de verdad: solo alineación del contrato docs/operator
-- no hizo falta tocar `docs/operator-guide/scheduler.md` ni `README.md`
-- el wording legacy quedó honesto: sigue ahí, sigue siendo runnable, pero no vuelve a ocupar el trono por accidente
+- el `.venv` del repo estaba enlazado a un intérprete inexistente (`/home/pi/...`) y era humo roto
+- para la verificación se usó `uv run`, que recreó un entorno funcional y ejecutó pytest correctamente
+- eso no cambió el alcance del fix; solo evitó pelearse con una venv hecha polvo
 
 ## Veredicto
 
-Cambio pequeño, correcto y sin teatro: las docs dejan de contar dos historias distintas sobre el scheduler y la referencia de outputs ya refleja el layout activo real.
+Arreglo pequeño, limpio y sin teatro: tres fallos fuera, suite verde otra vez, y cero refactors disfrazados de virtud.

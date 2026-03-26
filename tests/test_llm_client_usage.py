@@ -103,6 +103,9 @@ def test_llm_settings_accepts_custom_base_url_and_openrouter_fallback(monkeypatc
 
 
 def test_empty_generic_base_url_overrides_legacy_openrouter_base_url(monkeypatch) -> None:
+    monkeypatch.delenv("LLM_API_KEY", raising=False)
+    monkeypatch.delenv("OPENAI_BASE_URL", raising=False)
+    monkeypatch.delenv("OPENROUTER_API_KEY", raising=False)
     monkeypatch.setenv("OPENAI_API_KEY", "openai-key")
     monkeypatch.setenv("LLM_MODEL", "gpt-5-mini")
     monkeypatch.setenv("LLM_BASE_URL", "")
