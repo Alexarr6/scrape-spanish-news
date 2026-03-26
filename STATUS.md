@@ -1,14 +1,12 @@
 - State: IMPLEMENTATION_DONE
-- Iteration: iter/019
-- Focus: apply the approved lot 2D Makefile hygiene change set and verify it without widening scope
+- Iteration: iter/020
+- Focus: lot 4B docs/operator contract alignment
 - Notes:
-  - Re-read `PROJECT_BRIEF.md`, `TASK_CONTRACT.md`, and the lot 2D findings in `TECH_DEBT_AUDIT.md` before editing.
-  - Updated only `Makefile` to add `frontend-install`, `frontend-build`, and `frontend-check` to `.PHONY`.
-  - Updated only `Makefile` help output to advertise `frontend-install`, `frontend-build`, and `frontend-check`.
-  - Preserved target names and target semantics.
-  - Did not touch scheduler cleanup, docs alignment, or any other surface outside the approved lot 2D hygiene pass.
+  - Re-read `PROJECT_BRIEF.md`, `TASK_CONTRACT.md`, `PLAN.md`, `STATUS.md`, and `TECH_DEBT_AUDIT.md`, then compared `docs/operator-guide/workflows.md` and `docs/reference/outputs.md` against `docs/operator-guide/scheduler.md`, `README.md`, and `Makefile`.
+  - Updated `docs/operator-guide/workflows.md` so the active recurring operator surface is the Stories + Explorer split wrappers plus `make full-refresh-once`, with `run_scheduled.sh` kept explicitly as a legacy scrape-only path.
+  - Updated `docs/reference/outputs.md` to document the active per-job lock/log/state layout for Stories and Explorer, while keeping the legacy scheduler files documented as legacy.
+  - Kept the iteration tightly bounded: no code changes, no `Makefile` changes, no legacy-path removal or broad docs rewrite.
 - Verification:
-  - Passed: `make help`
-  - Passed: `make frontend-build`
+  - `make docs-build` ✅
 - Result:
-  - Implementation complete. The frontend targets are now properly marked as `.PHONY` and visible in `make help`, with `make frontend-build` still succeeding.
+  - The docs/operator contract now matches the current canonical scheduler surface and active output/state layout without lying about the surviving legacy wrapper.

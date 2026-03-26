@@ -117,13 +117,58 @@ uv run python scripts/build_semantic_map.py --db-url "$DATABASE_URL" --projectio
 
 ## Scheduler wrapper flow
 
-The supported scheduler entrypoint is:
+The active recurring operator surface is the split Stories + Explorer refresh flow.
+
+Supported entrypoints:
 
 ```bash
-bash scripts/run_scheduled.sh
+export DATABASE_URL='postgresql+psycopg://user:pass@host:5432/dbname'
+export OPENAI_API_KEY='sk-...'
+
+bash scripts/run_stories_refresh.sh
+bash scripts/run_explorer_refresh.sh
+make full-refresh-once
 ```
 
-What it currently does per attempt:
+What the active wrappers do:
+
+### Stories refresh
+
+1. `make preflight`
+2. `make run-all-persist`
+3. `make analysis-db-init`
+4. `make enrich-articles DAYS_BACK=3 LIMIT=500`
+5. `make build-story-clusters DAYS_BACK=3 LIMIT=500 SCORE_THRESHOLD=0.55`
+6. `make verify-output`
+7. `make verify-db`
+
+### Explorer refresh
+
+1. `make preflight`
+2. `make semantic-db-init SEMANTIC_ARGS='--embedding-model text-embedding-3-large'`
+3. `make semantic-sync LIMIT=250 SEMANTIC_ARGS='--embedding-model text-embedding-3-large --days-back 3 --prioritize-story-members --priority-story-cluster-min-size 2'`
+4. `make semantic-project SEMANTIC_ARGS='--days-back 3'`
+5. `make semantic-build LIMIT=500 SEMANTIC_ARGS='--days-back 3'`
+
+`make full-refresh-once` is the one-shot wrapper for both jobs when you want the obvious end-to-end command.
+
+Recommended cron shape:
+
+```cron
+CRON_TZ=Europe/Madrid
+
+# Stories refresh every 6 hours
+5 */6 * * * cd /path/to/spain-news-bias-scraper && DATABASE_URL='postgresql+psycopg://***' bash scripts/run_stories_refresh.sh >> var/log/cron.log 2>&1
+
+# Explorer refresh every 6 hours, offset so stories work lands first
+35 */6 * * * cd /path/to/spain-news-bias-scraper && DATABASE_URL='postgresql+psycopg://***' OPENAI_API_KEY='sk-...' bash scripts/run_explorer_refresh.sh >> var/log/cron.log 2>&1
+```
+
+### Legacy scrape-only wrapper
+
+`bash scripts/run_scheduled.sh` still exists and remains runnable for the old scrape + verify path, but it is not the main product scheduler entrypoint anymore.
+
+What it does per attempt:
 
 1. `make preflight`
 2. `make run-all-persist`
@@ -134,15 +179,8 @@ It also handles:
 
 - flock-based single-run locking
 - retry with delay
-- state files under `var/state/`
+- legacy scheduler state files under `var/state/`
 - optional alert command after repeated failures
-
-Recommended cron example:
-
-```cron
-CRON_TZ=Europe/Madrid
-15 7,12,17,22 * * * cd /path/to/spain-news-bias-scraper && DATABASE_URL='postgresql+psycopg://***' bash scripts/run_scheduled.sh
-```
 
 ## Optional local database flow
 

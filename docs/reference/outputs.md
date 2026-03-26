@@ -25,8 +25,36 @@ FastAPI mounts the built explorer only when this directory contains `index.html`
 
 ## Scheduler state
 
-- `var/lock/` — flock lock files
-- `var/log/scheduler.log` — scheduler log
+### Active per-job refresh layout
+
+Locks:
+
+- `var/lock/stories-refresh.lock`
+- `var/lock/explorer-refresh.lock`
+
+Logs:
+
+- `var/log/stories-refresh.log`
+- `var/log/explorer-refresh.log`
+
+State files:
+
+- `var/state/stories_last_status`
+- `var/state/stories_last_run_utc`
+- `var/state/stories_last_success_utc`
+- `var/state/stories_last_error`
+- `var/state/explorer_last_status`
+- `var/state/explorer_last_run_utc`
+- `var/state/explorer_last_success_utc`
+- `var/state/explorer_last_error`
+
+The active refresh wrappers write `lock_busy` and exit `0` when a job lock is already held. That is deliberate: double-starting the same job is dumb and buys you nothing.
+
+### Legacy scrape-only scheduler layout
+
+These files still exist for the deprecated `run_scheduled.sh` path:
+
+- `var/log/scheduler.log`
 - `var/state/last_status`
 - `var/state/last_run_utc`
 - `var/state/last_success_utc`

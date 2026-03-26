@@ -1,42 +1,52 @@
-# RESULTS.md — iter/019 lot 2D Makefile hygiene
+# RESULTS.md — iter/020 lot 4B docs/operator contract alignment
 
 ## Resumen breve
 
-Iter/019 hizo exactamente la limpieza mínima aprobada del **lot 2D** del `TECH_DEBT_AUDIT.md`.
+Iter/020 hizo la limpieza mínima aprobada del **lot 4B** del `TECH_DEBT_AUDIT.md`.
 
-Se cambió **solo** el `Makefile` para:
-- añadir `frontend-install`, `frontend-build` y `frontend-check` a `.PHONY`
-- exponer esos tres targets en `make help`
+Se tocaron solo las superficies docs/operator aprobadas para alinear el contrato con la superficie canónica real:
+- `docs/operator-guide/workflows.md`
+- `docs/reference/outputs.md`
 
-No hubo renombres, no cambió la semántica de ningún target y no se tocó nada del cleanup legacy del scheduler.
+No hubo cambios de código, no hubo cambios de `Makefile` y no se vendió la ruta legacy como si hubiera desaparecido mágicamente.
 
 ## Qué se hizo
 
-- se añadió cobertura `.PHONY` para los tres targets frontend ya existentes
-- se amplió el bloque `help` para anunciar `frontend-install`, `frontend-build` y `frontend-check`
-- se mantuvo intacto el comportamiento de los targets
-- no hubo cambios fuera del `Makefile`
+- se reescribió la sección de scheduler en `docs/operator-guide/workflows.md` para que el flujo principal apunte a:
+  - `bash scripts/run_stories_refresh.sh`
+  - `bash scripts/run_explorer_refresh.sh`
+  - `make full-refresh-once`
+- se documentó el split activo Stories + Explorer con su cron shape recomendada
+- se mantuvo `bash scripts/run_scheduled.sh` documentado como wrapper legacy scrape-only, dejando claro que sigue existiendo pero ya no es la entrada canónica del producto principal
+- se actualizó `docs/reference/outputs.md` para reflejar el layout activo por job:
+  - `var/lock/stories-refresh.lock`
+  - `var/lock/explorer-refresh.lock`
+  - `var/log/stories-refresh.log`
+  - `var/log/explorer-refresh.log`
+  - `var/state/stories_*`
+  - `var/state/explorer_*`
+- se conservaron y documentaron honestamente los ficheros legacy del scheduler scrape-only:
+  - `var/log/scheduler.log`
+  - `var/state/last_*`
+  - `var/state/consecutive_failures`
+  - `var/state/last_alert_utc`
 
 ## Verificación ejecutada
 
-1. `make help`
-2. `make frontend-build`
+1. `make docs-build`
 
 ## Resultado de verificación
 
-- `make help` pasó y ahora muestra explícitamente:
-  - `make frontend-install`
-  - `make frontend-build`
-  - `make frontend-check`
-- `make frontend-build` pasó y generó el build frontend correctamente
-- el build emitió warnings no bloqueantes ya existentes de bundle/chunk size y un warning de export de `spawn` desde `__vite-browser-external`, pero el comando terminó con **exit 0**
+- `make docs-build` pasó con **exit 0**
+- MkDocs construyó el sitio correctamente
+- siguieron apareciendo avisos no bloqueantes sobre páginas existentes fuera de `nav`; son ruido conocido del repo, no un fallo introducido por este lote
 
 ## Notas
 
-- alcance mantenido brutalmente estrecho: solo higiene de superficie del `Makefile`
-- no hizo falta tocar docs ni scheduler para cumplir este lote
-- cualquier limpieza adicional aquí habría sido scope creep con mejor branding
+- alcance mantenido estrecho de verdad: solo alineación del contrato docs/operator
+- no hizo falta tocar `docs/operator-guide/scheduler.md` ni `README.md`
+- el wording legacy quedó honesto: sigue ahí, sigue siendo runnable, pero no vuelve a ocupar el trono por accidente
 
 ## Veredicto
 
-Cambio pequeño, correcto y sin teatro: el `Makefile` ahora anuncia y marca como `.PHONY` los targets frontend reales, y `make frontend-build` sigue funcionando.
+Cambio pequeño, correcto y sin teatro: las docs dejan de contar dos historias distintas sobre el scheduler y la referencia de outputs ya refleja el layout activo real.
