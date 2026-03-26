@@ -1,47 +1,42 @@
-# RESULTS.md — iter/016 lot 2A cleanup
+# RESULTS.md — iter/017 lot 2C dead frontend hooks cleanup
 
 ## Resumen breve
 
-Iter/016 ejecutó una limpieza mínima y disciplinada del **lot 2A** del `TECH_DEBT_AUDIT.md`.
+Iter/017 ejecutó una limpieza mínima y disciplinada del **lot 2C** del `TECH_DEBT_AUDIT.md`.
 
-Se borraron **solo** los seis archivos aprobados:
-- `frontend/vite.config.js`
-- `frontend/vite.config.d.ts`
-- `frontend/tsconfig.app.tsbuildinfo`
-- `frontend/tsconfig.node.tsbuildinfo`
-- `docs/architecture/2026-03-24-explorer-bias-lens-architecture.md`
-- `docs/reviews/2026-03-24-iter-009-explorer-bias-lens-review.md`
+Se borraron **solo** los tres hooks aprobados:
+- `frontend/src/hooks/useClusterFilters.ts`
+- `frontend/src/hooks/useExplorerBootstrap.ts`
+- `frontend/src/hooks/useExplorerFilters.ts`
 
-Se preservó explícitamente `frontend/vite.config.ts` como fuente canónica.
+No hubo refactors, rewiring ni cleanup colateral.
 
 ## Qué se hizo
 
-- eliminación de cuatro byproducts generados del frontend
-- eliminación de dos docs leftovers untracked fuera de la superficie canónica
+- eliminación exacta de los tres hooks frontend clasificados como `safe delete`
 - ningún borrado fuera del lote aprobado
-- ninguna refactorización ni cleanup adicional
+- ningún cambio de comportamiento ni ajuste de wiring
+- diff pequeño y revisable
 
 ## Verificación ejecutada
 
-1. `test -f frontend/vite.config.ts`
-2. `git status --short`
-3. `cd frontend && npm run build`
-4. `make docs-build`
-5. `git status --short docs/architecture docs/reviews frontend`
+1. `grep -RIn "useClusterFilters" frontend/src`
+2. `grep -RIn "useExplorerBootstrap" frontend/src`
+3. `grep -RIn "useExplorerFilters" frontend/src`
+4. `cd frontend && npm run build`
+5. `git status --short frontend/src/hooks`
 
 ## Resultado de verificación
 
-- `frontend/vite.config.ts` sigue existiendo
-- el build del frontend pasó correctamente
-- `make docs-build` pasó correctamente
-- los seis archivos objetivo dejaron de estar en el working tree
-- no se tocaron otros archivos fuera del bookkeeping de la iteración
+- los tres `grep` quedaron sin resultados, consistente con cero referencias restantes en `frontend/src`
+- `npm run build` pasó correctamente en `frontend`
+- `git status --short frontend/src/hooks` mostró solo las tres eliminaciones previstas
 
 ## Notas
 
-- `git status` sigue mostrando `?? artifacts/`, pero estaba fuera de alcance y se dejó intacto a propósito
-- `npm run build` y `make docs-build` emitieron warnings no bloqueantes preexistentes; no formaban parte de este lote
+- el build emitió warnings no bloqueantes preexistentes de Vite/Rollup sobre chunk size y un warning de `@loaders.gl/worker-utils`; no bloquearon la compilación y no forman parte de este lote
+- no apareció ningún importador vivo ni necesidad de ampliar alcance, así que el lote se mantuvo limpio
 
 ## Veredicto
 
-Limpieza pequeña, limpia y sin teatro: menos ruido falso en el repo, mismo comportamiento, un commit atómico.
+Limpieza pequeña, segura y sin teatro: tres hojas muertas menos, mismo comportamiento, commit atómico.

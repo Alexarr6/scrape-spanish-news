@@ -1,16 +1,16 @@
-- State: DONE
-- Iteration: iter/016
-- Focus: execute the exact lot 2A safe-delete set and verify repo behavior stays intact
+- State: IMPLEMENTATION_DONE
+- Iteration: iter/017
+- Focus: execute the exact lot 2C dead frontend hook cleanup and verify the branch stays disciplined
 - Notes:
-  - Re-read `PROJECT_BRIEF.md`, `TASK_CONTRACT.md`, `PLAN.md`, `STATUS.md`, and the relevant lot 2A findings from `TECH_DEBT_AUDIT.md` before implementation.
-  - Deleted only the six approved lot 2A files: four generated frontend byproducts plus two untracked docs leftovers.
-  - Preserved `frontend/vite.config.ts` as the canonical frontend config source.
-  - Left unrelated repo noise such as `artifacts/` untouched because it is outside the approved scope.
+  - Re-read `PROJECT_BRIEF.md`, `TASK_CONTRACT.md`, `PLAN.md`, `STATUS.md`, and the relevant lot 2C findings in `TECH_DEBT_AUDIT.md`.
+  - Deleted only the approved three hook files: `useClusterFilters.ts`, `useExplorerBootstrap.ts`, and `useExplorerFilters.ts`.
+  - No live importer appeared during verification, so no scope expansion was needed.
+  - Kept the branch bounded to the three deletions plus iteration bookkeeping updates.
 - Verification:
-  - `test -f frontend/vite.config.ts`
-  - `git status --short`
+  - `grep -RIn "useClusterFilters" frontend/src`
+  - `grep -RIn "useExplorerBootstrap" frontend/src`
+  - `grep -RIn "useExplorerFilters" frontend/src`
   - `cd frontend && npm run build`
-  - `make docs-build`
-  - `git status --short docs/architecture docs/reviews frontend`
+  - `git status --short frontend/src/hooks`
 - Result:
-  - Lot 2A cleanup completed successfully with scope held tight and verification passing.
+  - Implementation complete. The three approved dead hooks were removed, frontend build passed, and hook status showed only the intended deletions.
