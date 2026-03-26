@@ -1,16 +1,14 @@
 - State: IMPLEMENTATION_DONE
-- Iteration: iter/018
-- Focus: execute the narrowed lot 2B delete set without pretending `rss_discovery.py` is still safely dead
+- Iteration: iter/019
+- Focus: apply the approved lot 2D Makefile hygiene change set and verify it without widening scope
 - Notes:
-  - Re-read `PROJECT_BRIEF.md`, `TASK_CONTRACT.md`, and the lot 2B findings in `TECH_DEBT_AUDIT.md`.
-  - Reconfirmed `src/persistence/contracts.py` as the only clean live-branch safe-delete candidate in lot 2B.
-  - Reconfirmed again that `src/core/strategies/rss_discovery.py` no longer matches the audit claim of zero in-repo importers because `src/core/strategies/__init__.py` imports and re-exports `RSSDiscoveryStrategy`, with additional live string usage in adapters/tests.
-  - Deleted only `src/persistence/contracts.py`.
-  - Left `src/core/strategies/rss_discovery.py` untouched and recorded that it needs reclassification rather than deletion.
+  - Re-read `PROJECT_BRIEF.md`, `TASK_CONTRACT.md`, and the lot 2D findings in `TECH_DEBT_AUDIT.md` before editing.
+  - Updated only `Makefile` to add `frontend-install`, `frontend-build`, and `frontend-check` to `.PHONY`.
+  - Updated only `Makefile` help output to advertise `frontend-install`, `frontend-build`, and `frontend-check`.
+  - Preserved target names and target semantics.
+  - Did not touch scheduler cleanup, docs alignment, or any other surface outside the approved lot 2D hygiene pass.
 - Verification:
-  - `grep -RIn "src\.persistence\.contracts\|from src\.persistence\.contracts\|import src\.persistence\.contracts" src tests scripts docs README.md Makefile` → no results
-  - `grep -RIn "RSSDiscoveryStrategy\|rss_discovery" src tests scripts` → live references remain; no deletion attempted
-  - `make test` → failed with three unrelated pre-existing failures in `test_layered_discovery`, `test_llm_client_usage`, and `test_run_traceability`
-  - `git status --short src/persistence src/core/strategies` → `D src/persistence/contracts.py`
+  - Passed: `make help`
+  - Passed: `make frontend-build`
 - Result:
-  - Implementation complete for the narrowed safe-delete set. Only `src/persistence/contracts.py` was removed. `src/core/strategies/rss_discovery.py` should be reclassified before any future deletion attempt.
+  - Implementation complete. The frontend targets are now properly marked as `.PHONY` and visible in `make help`, with `make frontend-build` still succeeding.

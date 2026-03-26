@@ -36,7 +36,7 @@ LOCAL_DB_USER ?= spain_news
 LOCAL_DB_PASSWORD ?= spain_news_dev
 LOCAL_DATABASE_URL := postgresql+psycopg://$(LOCAL_DB_USER):$(LOCAL_DB_PASSWORD)@$(LOCAL_DB_HOST):$(LOCAL_DB_PORT)/$(LOCAL_DB_NAME)
 
-.PHONY: help print-app-root preflight sync pre-commit lint check test docs-build docs-serve smoke run-source run-source-persist run-all run-all-persist api analysis-db-init build-matching-corpus enrich-articles analyze-editorial analyze-editorial-failed build-story-clusters story-cluster-report semantic-db-init semantic-sync semantic-project semantic-neighbors semantic-build semantic-smoke scheduler-once scheduler-dry-run stories-refresh-once explorer-refresh-once full-refresh-once status tail-log verify-output verify-db db-url db-up db-down db-logs db-psql db-check clean-state
+.PHONY: help print-app-root preflight sync pre-commit lint check test docs-build docs-serve frontend-install frontend-build frontend-check smoke run-source run-source-persist run-all run-all-persist api analysis-db-init build-matching-corpus enrich-articles analyze-editorial analyze-editorial-failed build-story-clusters story-cluster-report semantic-db-init semantic-sync semantic-project semantic-neighbors semantic-build semantic-smoke scheduler-once scheduler-dry-run stories-refresh-once explorer-refresh-once full-refresh-once status tail-log verify-output verify-db db-url db-up db-down db-logs db-psql db-check clean-state
 
 help:
 	@printf '%s\n' \
@@ -51,6 +51,9 @@ help:
 	  '  make test                     Run tests from repo root' \
   '  make docs-build               Build the MkDocs site into site/' \
   '  make docs-serve               Serve the MkDocs site locally' \
+  '  make frontend-install         Install frontend dependencies' \
+  '  make frontend-build           Build the frontend app' \
+  '  make frontend-check           Install deps, then build the frontend app' \
 	  '' \
 	  'Runtime:' \
 	  '  make smoke SOURCE=elpais      Quick non-persistent scrape' \

@@ -1,48 +1,42 @@
-# RESULTS.md — iter/018 lot 2B narrowed dead Python cleanup
+# RESULTS.md — iter/019 lot 2D Makefile hygiene
 
 ## Resumen breve
 
-Iter/018 ejecutó una limpieza mínima y disciplinada del **lot 2B** del `TECH_DEBT_AUDIT.md`, pero solo para el elemento que seguía siendo borrable de verdad en la rama viva.
+Iter/019 hizo exactamente la limpieza mínima aprobada del **lot 2D** del `TECH_DEBT_AUDIT.md`.
 
-Se borró **solo**:
-- `src/persistence/contracts.py`
+Se cambió **solo** el `Makefile` para:
+- añadir `frontend-install`, `frontend-build` y `frontend-check` a `.PHONY`
+- exponer esos tres targets en `make help`
 
-**No** se borró:
-- `src/core/strategies/rss_discovery.py`
-
-No hubo refactors, rewiring ni cleanup colateral.
+No hubo renombres, no cambió la semántica de ningún target y no se tocó nada del cleanup legacy del scheduler.
 
 ## Qué se hizo
 
-- reconfirmación del delete set real contra la rama `iter/018`
-- eliminación exacta de `src/persistence/contracts.py`
-- preservación explícita de `src/core/strategies/rss_discovery.py` porque ya no cumple el criterio de hoja muerta
-- ningún borrado fuera del set aprobado y reconfirmado
-- diff pequeño y revisable
+- se añadió cobertura `.PHONY` para los tres targets frontend ya existentes
+- se amplió el bloque `help` para anunciar `frontend-install`, `frontend-build` y `frontend-check`
+- se mantuvo intacto el comportamiento de los targets
+- no hubo cambios fuera del `Makefile`
 
 ## Verificación ejecutada
 
-1. `grep -RIn "src\.persistence\.contracts\|from src\.persistence\.contracts\|import src\.persistence\.contracts" src tests scripts docs README.md Makefile`
-2. `grep -RIn "RSSDiscoveryStrategy\|rss_discovery" src tests scripts`
-3. `make test`
-4. `git status --short src/persistence src/core/strategies`
+1. `make help`
+2. `make frontend-build`
 
 ## Resultado de verificación
 
-- el `grep` de `src.persistence.contracts` quedó sin resultados, consistente con cero referencias vivas en el repo para ese barrel de compatibilidad
-- el `grep` de `RSSDiscoveryStrategy|rss_discovery` **sí** devolvió referencias vivas, incluyendo `src/core/strategies/__init__.py` y varios tests/adapters, así que `rss_discovery.py` no era un safe-delete limpio en esta iteración
-- `git status --short src/persistence src/core/strategies` mostró únicamente la eliminación prevista de `src/persistence/contracts.py`; no hubo cambios en `src/core/strategies`
-- `make test` **no pasó**, pero los fallos observados no apuntan a `src/persistence/contracts.py`:
-  - `tests/test_layered_discovery.py::test_layered_discovery_tracks_rejected_noise_and_cap`
-  - `tests/test_llm_client_usage.py::test_empty_generic_base_url_overrides_legacy_openrouter_base_url`
-  - `tests/test_run_traceability.py::RunTraceabilityTests::test_manifest_points_to_canonical_fixture_bundle`
+- `make help` pasó y ahora muestra explícitamente:
+  - `make frontend-install`
+  - `make frontend-build`
+  - `make frontend-check`
+- `make frontend-build` pasó y generó el build frontend correctamente
+- el build emitió warnings no bloqueantes ya existentes de bundle/chunk size y un warning de export de `spawn` desde `__vite-browser-external`, pero el comando terminó con **exit 0**
 
 ## Notas
 
-- `src/persistence/contracts.py` era solo un barrel de reexport desde `src.persistence.core`; el repo ya no tenía importadores vivos de ese módulo
-- `src/core/strategies/rss_discovery.py` necesita **reclasificación**, no borrado automático: el audit quedó desfasado respecto a la rama viva
-- esto confirma que borrar por auditoría vieja sin revalidar la rama actual habría sido una cagada
+- alcance mantenido brutalmente estrecho: solo higiene de superficie del `Makefile`
+- no hizo falta tocar docs ni scheduler para cumplir este lote
+- cualquier limpieza adicional aquí habría sido scope creep con mejor branding
 
 ## Veredicto
 
-Limpieza pequeña, segura y sin teatro: una hoja muerta menos, `rss_discovery.py` retenido por evidencia, y el lote quedó acotado aunque `make test` siga teniendo tres fallos ajenos a esta eliminación.
+Cambio pequeño, correcto y sin teatro: el `Makefile` ahora anuncia y marca como `.PHONY` los targets frontend reales, y `make frontend-build` sigue funcionando.
