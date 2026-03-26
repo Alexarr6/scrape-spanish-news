@@ -1,10 +1,15 @@
-- State: DONE
-- Iteration: iter/009
-- Focus: bounded guarded-closure fix for coherent medium-only raw components
+- State: IMPLEMENTATION_DONE
+- Iteration: iter/010
+- Focus: trace exact loss stage for story membership mismatch between Explorer semantic neighborhood and Stories persisted members
 - Notes:
-  - Implemented a bounded medium-component preservation subphase inside guarded closure.
-  - Slice is intentionally narrow: only raw components of size 2-3 that are medium-only, temporally short, and supported by compatible non-risky signals can survive as final clusters.
-  - Explicit guardrails remain in force against `risky_bridge_pair`, `entity_glue_penalty`, `late_story_drift_penalty`, and secondary-form bleed.
-  - `seed_pair` attachment was tightened so the same guardrail penalties cannot sneak risky medium-only pairs through the old singleton path.
-  - Verification executed with `uv run pytest tests/test_story_clustering.py tests/test_story_pair_scoring.py tests/test_story_matching_eval.py tests/test_story_candidate_generation.py tests/test_story_review.py` (`22 passed`).
-  - Out-of-scope noise remains intentionally uncommitted (`artifacts/`, unrelated explorer-bias docs).
+  - Implementer traced the real bottleneck to guarded closure in `src/analysis/pipeline.py`, not to Stories read-side.
+  - Exact loss stage: a coherent medium-only raw component of 5 accepted articles could shrink to a 2-member final cluster plus 3 singletons because `_audit_medium_component(...)` refused to preserve components larger than 3, and later singleton attach could not recover the low-medium tail.
+  - Bounded fix shipped: medium-only component preservation now allows size up to 5, with slightly stricter default-mode thresholds for size 4-5 (`mean >= 0.55`, `best >= 0.56`) while keeping all existing guardrails against risky bridges, secondary forms, and penalty-bearing pairs.
+  - Regression protection added in `tests/test_story_clustering.py::test_guarded_components_preserve_coherent_medium_only_chain_of_five`.
+  - Stories remains a faithful read of `cluster_members`; Explorer can still show wider embedding neighbors, but the actual 5->2 count-loss bottleneck was upstream in guarded closure.
+  - Local Postgres was unavailable on `127.0.0.1:5433` during the pass, so the trace was locked via pipeline-level mechanical reproduction instead of live DB inspection.
+- Verification:
+  - `/home/node/.local/bin/uv run pytest tests/test_story_clustering.py tests/test_story_pair_scoring.py tests/test_story_matching_eval.py tests/test_story_candidate_generation.py tests/test_story_review.py`
+  - Result: `40 passed`
+- Result:
+  - iter/010 implementation complete with bounded closure fix, explicit loss-stage diagnosis, and regression coverage.

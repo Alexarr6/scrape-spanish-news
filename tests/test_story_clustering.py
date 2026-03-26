@@ -789,6 +789,86 @@ def test_guarded_components_do_not_preserve_medium_only_secondary_form_pair():
     assert guarded_components == [[1], [2]]
 
 
+def test_guarded_components_preserve_coherent_medium_only_chain_of_five() -> None:
+    pipeline = ClusterPipeline(session=None)  # type: ignore[arg-type]
+    accepted_edges = [
+        (
+            1,
+            2,
+            StoryClusterMemberReason(
+                score=0.56,
+                semantic_similarity=0.6,
+                title_similarity=0.52,
+                shared_entity_score=0.8,
+                tag_overlap_score=0.5,
+                keyphrase_overlap_score=0.3,
+                temporal_proximity_score=0.95,
+                days_delta=1,
+                shared_entity_count=2,
+                shared_tag_count=1,
+                shared_keyphrase_count=1,
+            ),
+        ),
+        (
+            2,
+            3,
+            StoryClusterMemberReason(
+                score=0.55,
+                semantic_similarity=0.59,
+                title_similarity=0.51,
+                shared_entity_score=0.8,
+                tag_overlap_score=0.5,
+                keyphrase_overlap_score=0.3,
+                temporal_proximity_score=0.95,
+                days_delta=1,
+                shared_entity_count=2,
+                shared_tag_count=1,
+                shared_keyphrase_count=1,
+            ),
+        ),
+        (
+            3,
+            4,
+            StoryClusterMemberReason(
+                score=0.55,
+                semantic_similarity=0.59,
+                title_similarity=0.51,
+                shared_entity_score=0.8,
+                tag_overlap_score=0.5,
+                keyphrase_overlap_score=0.3,
+                temporal_proximity_score=0.95,
+                days_delta=1,
+                shared_entity_count=2,
+                shared_tag_count=1,
+                shared_keyphrase_count=1,
+            ),
+        ),
+        (
+            4,
+            5,
+            StoryClusterMemberReason(
+                score=0.55,
+                semantic_similarity=0.59,
+                title_similarity=0.51,
+                shared_entity_score=0.8,
+                tag_overlap_score=0.5,
+                keyphrase_overlap_score=0.3,
+                temporal_proximity_score=0.95,
+                days_delta=1,
+                shared_entity_count=2,
+                shared_tag_count=1,
+                shared_keyphrase_count=1,
+            ),
+        ),
+    ]
+
+    raw_components = pipeline._raw_connected_components([1, 2, 3, 4, 5], accepted_edges)
+    guarded_components = pipeline._connected_components([1, 2, 3, 4, 5], accepted_edges)
+
+    assert raw_components == [[1, 2, 3, 4, 5]]
+    assert guarded_components == [[1, 2, 3, 4, 5]]
+
+
 def test_build_clusters_rolls_back_failed_rebuild() -> None:
     class RecordingSession:
         def __init__(self) -> None:

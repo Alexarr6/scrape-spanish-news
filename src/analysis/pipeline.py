@@ -1887,7 +1887,8 @@ class ClusterPipeline:
         raw_adjacency: dict[int, dict[int, StoryClusterMemberReason]],
         strong_adjacency: dict[int, dict[int, StoryClusterMemberReason]],
     ) -> dict[str, object]:
-        if len(raw_component) < 2 or len(raw_component) > 3:
+        component_size = len(raw_component)
+        if component_size < 2 or component_size > 5:
             return {"preserve": False}
         if any(strong_adjacency.get(node, {}) for node in raw_component):
             return {"preserve": False}
@@ -1910,7 +1911,7 @@ class ClusterPipeline:
                     non_entity_signal_count += 1
                 if self._is_medium_component_edge_compatible(reason):
                     compatible_edge_count += 1
-        minimum_edges = 1 if len(raw_component) == 2 else 2
+        minimum_edges = 1 if component_size == 2 else 2
         if len(edges) < minimum_edges:
             return {"preserve": False}
         if compatible_edge_count != len(edges):
@@ -1921,8 +1922,15 @@ class ClusterPipeline:
             return {"preserve": False}
         mean_score = sum(reason.score for reason in edges) / len(edges)
         best_score = max(reason.score for reason in edges)
-        minimum_mean = 0.5 if self._is_high_recall_mode() else 0.54
-        minimum_best = 0.52 if self._is_high_recall_mode() else 0.56
+        if self._is_high_recall_mode():
+            minimum_mean = 0.5
+            minimum_best = 0.52
+        elif component_size <= 3:
+            minimum_mean = 0.54
+            minimum_best = 0.56
+        else:
+            minimum_mean = 0.55
+            minimum_best = 0.56
         if mean_score < minimum_mean or best_score < minimum_best:
             return {"preserve": False}
         return {
