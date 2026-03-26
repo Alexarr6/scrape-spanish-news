@@ -1,19 +1,11 @@
 - State: IMPLEMENTATION_DONE
-- Iteration: iter/022
-- Focus: evidence-backed reclassification of ambiguous legacy/manual surfaces (`rss_discovery.py`, story-matching helper scripts, legacy scheduler surface)
-- Implemented changes:
-  - classified `src/core/strategies/rss_discovery.py` + `src/core/strategies/__init__.py` as `safe remove later` based on zero in-repo imports of `RSSDiscoveryStrategy` and only residual barrel export coupling
-  - classified the story-matching / review helper scripts as `manual-but-supported` based on live support-module usage plus a coherent documented manual workflow in `docs/architecture/story-matching-eval.md`
-  - classified `scripts/run_scheduled.sh` as `legacy-but-retained`
-  - demoted legacy scheduler discoverability in `make help` by splitting canonical refresh commands from `Legacy scheduler helpers (retained, not canonical)`
-- Verification run:
-  - repo-wide reference checks for `RSSDiscoveryStrategy` / `rss_discovery`
-  - direct inspection of target scripts/docs/operator surfaces
-  - `make help`
-- Verification result:
-  - `make help` passed and now reflects the canonical-vs-legacy split honestly
-  - no speculative deletion performed
-- Notes:
-  - active `rss_discovery` references in the repo are metrics/strategy-name labels from `ProfiledRSSAdapter`, not imports of `RSSDiscoveryStrategy`
-  - the story-review scripts are not product happy-path commands, but they are also not random leftovers; they form a real analyst calibration loop
-  - `run_scheduled.sh` remains runnable and intentionally legacy, so removal still requires external/operator proof rather than repo vibes
+- Iteration: iter/023
+- Focus: remove the orphaned `RSSDiscoveryStrategy` compatibility leaf without touching broader discovery code
+- Implementation verdict:
+  - removed `src/core/strategies/rss_discovery.py`
+  - removed the `RSSDiscoveryStrategy` re-export from `src/core/strategies/__init__.py`
+  - repo reference check still shows no live in-repo import consumers of `RSSDiscoveryStrategy` or `src.core.strategies.rss_discovery`; remaining `rss_discovery` hits are strategy-name/metrics labels plus historical notes
+  - `make test` passed (`213 passed`)
+- Result:
+  - the orphaned compatibility leaf is now removed cleanly for in-repo code
+  - only off-repo/external compatibility imports remain unknowable from repo evidence alone
