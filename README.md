@@ -188,17 +188,7 @@ Use the same embedding model for schema init and sync. `text-embedding-3-small` 
 
 ### Scheduler and verification
 
-Legacy scrape-only scheduler (deprecated; keeps scrape + verify only, no enrichment or clustering):
-
-```bash
-export DATABASE_URL='postgresql+psycopg://user:pass@host:5432/dbname'
-make scheduler-dry-run
-make scheduler-once
-make status
-make tail-log
-```
-
-New recurring orchestration wrappers:
+Recurring orchestration wrappers:
 
 ```bash
 export DATABASE_URL='postgresql+psycopg://user:pass@host:5432/dbname'
@@ -211,14 +201,13 @@ make verify-db
 ```
 
 Entrypoints:
-- `bash scripts/run_scheduled.sh` — deprecated legacy scrape + verify wrapper; does **not** run analysis or clustering
 - `bash scripts/run_stories_refresh.sh` — scrape + persist + analysis + clustering
 - `bash scripts/run_explorer_refresh.sh` — semantic sync + projection + explorer export
 - `make full-refresh-once` — one-shot operator command that runs the stories refresh first, then the explorer refresh
 
 Stories and Explorer are intentionally separate pipelines. That split is fine, but it means fresh story-cluster members can briefly exist in Stories before Explorer catches up. The explorer refresh now compensates more aggressively: it prioritizes embeddable members of qualifying story clusters (`story_clusters.article_count >= 2`) during semantic sync, completes those clusters before plain-recency backlog rows, and keeps complete qualifying clusters together in bounded Explorer exports. Rows with too little text still cannot embed, so non-embeddable members remain uncovered by design.
 
-The new wrappers keep separate lock, log, and state files under `var/` and are the right surface for recurring 6-hour jobs. If you want fresh story clusters, using `run_scheduled.sh` is the wrong hammer.
+The new wrappers keep separate lock, log, and state files under `var/` and are the right surface for recurring 6-hour jobs.
 
 Shared wrapper defaults:
 - `REFRESH_DAYS_BACK=3` — shared recency window for both Stories and Explorer

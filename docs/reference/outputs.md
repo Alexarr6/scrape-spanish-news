@@ -50,18 +50,6 @@ State files:
 
 The active refresh wrappers write `lock_busy` and exit `0` when a job lock is already held. That is deliberate: double-starting the same job is dumb and buys you nothing.
 
-### Legacy scrape-only scheduler layout
-
-These files still exist for the deprecated `run_scheduled.sh` path:
-
-- `var/log/scheduler.log`
-- `var/state/last_status`
-- `var/state/last_run_utc`
-- `var/state/last_success_utc`
-- `var/state/last_error`
-- `var/state/consecutive_failures`
-- `var/state/last_alert_utc`
-
 ## Notes
 
 The repo root is the canonical app root. Current runtime code and tests do not depend on the old historical `runs/` layout.

@@ -21,7 +21,6 @@ OUT_PREFIX ?= manual
 DATABASE_URL ?=
 API_HOST ?= 127.0.0.1
 API_PORT ?= 8000
-SCHEDULER_SCRIPT := scripts/run_scheduled.sh
 VAR_ROOT := var
 LOCK_DIR := $(VAR_ROOT)/lock
 LOG_DIR := $(VAR_ROOT)/log
@@ -36,7 +35,7 @@ LOCAL_DB_USER ?= spain_news
 LOCAL_DB_PASSWORD ?= spain_news_dev
 LOCAL_DATABASE_URL := postgresql+psycopg://$(LOCAL_DB_USER):$(LOCAL_DB_PASSWORD)@$(LOCAL_DB_HOST):$(LOCAL_DB_PORT)/$(LOCAL_DB_NAME)
 
-.PHONY: help print-app-root preflight sync pre-commit lint check test docs-build docs-serve frontend-install frontend-build frontend-check smoke run-source run-source-persist run-all run-all-persist api analysis-db-init build-matching-corpus enrich-articles analyze-editorial analyze-editorial-failed build-story-clusters story-cluster-report semantic-db-init semantic-sync semantic-project semantic-neighbors semantic-build semantic-smoke scheduler-once scheduler-dry-run stories-refresh-once explorer-refresh-once full-refresh-once status tail-log verify-output verify-db db-url db-up db-down db-logs db-psql db-check clean-state
+.PHONY: help print-app-root preflight sync pre-commit lint check test docs-build docs-serve frontend-install frontend-build frontend-check smoke run-source run-source-persist run-all run-all-persist api analysis-db-init build-matching-corpus enrich-articles analyze-editorial analyze-editorial-failed build-story-clusters story-cluster-report semantic-db-init semantic-sync semantic-project semantic-neighbors semantic-build semantic-smoke stories-refresh-once explorer-refresh-once full-refresh-once verify-output verify-db db-url db-up db-down db-logs db-psql db-check clean-state
 
 help:
 	@printf '%s\n' \
@@ -82,12 +81,6 @@ help:
 	  '  make full-refresh-once        Run stories refresh, then explorer refresh' \
 	  '  make verify-output            Check expected JSON/metrics files for DATE' \
 	  '  make verify-db DATABASE_URL=postgresql+psycopg://...  Check article row count' \
-	  '' \
-	  'Legacy scheduler helpers (retained, not canonical):' \
-	  '  make scheduler-dry-run        Show LEGACY scrape-only execution plan (prefer stories-refresh-once)' \
-	  '  make scheduler-once           Run the LEGACY scrape-only wrapper once (prefer stories-refresh-once)' \
-	  '  make status                   Show LEGACY scheduler state files' \
-	  '  make tail-log                 Tail LEGACY scheduler log' \
 	  '' \
 	  'Optional local DB:' \
 	  '  make db-url                   Print the local dev DATABASE_URL' \
@@ -249,12 +242,6 @@ semantic-smoke: preflight
 	[[ -n "$(DATABASE_URL)" ]] || { echo 'DATABASE_URL is required for semantic-smoke'; exit 1; }; \
 	cd "$(APP_ROOT)" && PYTHONPATH="$(APP_ROOT):$${PYTHONPATH:-}" $(PYTHON) scripts/build_semantic_map.py --db-url "$(DATABASE_URL)" --limit "$${LIMIT:-50}" --projection-set "$${PROJECTION_SET:-pca_3d_latest}" $${SEMANTIC_ARGS:-}
 
-scheduler-dry-run:
-	@DRY_RUN=1 DATABASE_URL="$(DATABASE_URL)" UV="$(UV)" bash "$(SCHEDULER_SCRIPT)"
-
-scheduler-once:
-	@DATABASE_URL="$(DATABASE_URL)" UV="$(UV)" bash "$(SCHEDULER_SCRIPT)"
-
 stories-refresh-once:
 	@DATABASE_URL="$(DATABASE_URL)" UV="$(UV)" bash scripts/run_stories_refresh.sh
 
@@ -264,16 +251,6 @@ explorer-refresh-once:
 full-refresh-once:
 	@$(MAKE) --no-print-directory stories-refresh-once DATABASE_URL="$(DATABASE_URL)" UV="$(UV)"
 	@$(MAKE) --no-print-directory explorer-refresh-once DATABASE_URL="$(DATABASE_URL)" OPENAI_API_KEY="$(OPENAI_API_KEY)" UV="$(UV)"
-
-status:
-	@set -euo pipefail; \
-	mkdir -p "$(STATE_DIR)"; \
-	for file in last_status last_run_utc last_success_utc last_error consecutive_failures last_alert_utc; do \
-	  if [[ -f "$(STATE_DIR)/$$file" ]]; then printf '%s=%s\n' "$$file" "$$(cat "$(STATE_DIR)/$$file")"; else printf '%s=%s\n' "$$file" '<missing>'; fi; \
-	done
-
-tail-log:
-	@mkdir -p "$(LOG_DIR)"; tail -n 50 -f "$(LOG_DIR)/scheduler.log"
 
 verify-output: preflight
 	@set -euo pipefail; \

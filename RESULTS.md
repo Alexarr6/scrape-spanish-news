@@ -1,46 +1,80 @@
-# RESULTS.md — iter/023 orphaned RSSDiscoveryStrategy compatibility leaf removal
+# RESULTS.md — iter/024 legacy scrape-only scheduler family removal
 
 ## Resumen breve
 
-Iter/023 hizo la limpieza mínima prometida: borrar el módulo huérfano `src/core/strategies/rss_discovery.py` y quitar su re-export residual en `src/core/strategies/__init__.py`.
+Iter/024 eliminó por completo la familia legacy del scheduler scrape-only que seguía viva en el repo: se borró `scripts/run_scheduled.sh`, se quitó su wiring en `Makefile`, y se limpiaron las referencias explícitas pedidas en README y docs.
 
-No se tocó nada más. Las referencias vivas a `rss_discovery` siguen siendo etiquetas de estrategia/métricas, no wiring al módulo borrado. `make test` pasó entero.
+La superficie canónica moderna quedó intacta: `run_stories_refresh.sh`, `run_explorer_refresh.sh`, `make stories-refresh-once`, `make explorer-refresh-once`, y `make full-refresh-once`, junto con la documentación `stories_*` / `explorer_*` de lock/log/state.
 
 ## Cambio aplicado
 
 ### Eliminado
-- `src/core/strategies/rss_discovery.py`
+- `scripts/run_scheduled.sh`
+- variable `SCHEDULER_SCRIPT` en `Makefile`
+- targets `scheduler-dry-run`, `scheduler-once`, `status`, `tail-log`
+- bloque legacy de ayuda en `make help`
 
 ### Actualizado
-- `src/core/strategies/__init__.py`
-  - eliminado `from .rss_discovery import RSSDiscoveryStrategy`
-  - eliminado `"RSSDiscoveryStrategy"` de `__all__`
+- `README.md`
+  - eliminado el bloque del scheduler legacy
+  - eliminada la referencia de entrypoint `bash scripts/run_scheduled.sh`
+  - ajustada la sección para exponer sólo la superficie moderna
+- `docs/operator-guide/scheduler.md`
+  - eliminados entrypoints/targets legacy
+  - eliminada la sección `Legacy wrapper`
+  - eliminado `var/log/scheduler.log` del layout documentado
+- `docs/operator-guide/workflows.md`
+  - eliminada la sección `Legacy scrape-only wrapper`
+- `docs/reference/outputs.md`
+  - eliminada la sección completa del layout legacy `scheduler.log` / `var/state/last_*`
 
 ## Evidencia de seguridad en repo
 
-### Comprobación de referencias
-La comprobación repo-wide tras el cambio mostró que:
-- no quedan consumidores in-repo de `RSSDiscoveryStrategy`
-- no quedan consumidores in-repo de `src.core.strategies.rss_discovery`
-- los hits restantes de `rss_discovery` son:
-  - `strategy_name="rss_discovery"` en adapters/tests
-  - documentación/histórico de iteraciones y auditorías
+### Comprobación de eliminación
+La comprobación acotada sobre los archivos objetivo no devolvió referencias restantes a:
+- `run_scheduled.sh`
+- `SCHEDULER_SCRIPT`
+- `scheduler-dry-run`
+- `scheduler-once`
+- `make status`
+- `make tail-log`
+- `scheduler.log`
+- `var/state/last_status`
+- `var/state/last_run_utc`
+- `var/state/last_success_utc`
+- `var/state/last_error`
+- `var/state/consecutive_failures`
+- `var/state/last_alert_utc`
 
-Eso encaja exactamente con el plan: eliminar sólo la hoja de compatibilidad huérfana sin tocar etiquetas ni el flujo de discovery más amplio.
+### Comprobación de preservación
+La comprobación de superficie moderna confirmó que siguen presentes y documentados:
+- `bash scripts/run_stories_refresh.sh`
+- `bash scripts/run_explorer_refresh.sh`
+- `make stories-refresh-once`
+- `make explorer-refresh-once`
+- `make full-refresh-once`
+- los archivos `stories_*` / `explorer_*` bajo `var/state/`
 
 ## Verificación ejecutada
 
-1. repo reference check para:
-   - `RSSDiscoveryStrategy`
-   - `src.core.strategies`
-   - `rss_discovery`
-2. `make test`
+1. grep acotado de referencias legacy eliminadas
+2. grep acotado de referencias modernas preservadas
+3. `make help`
+4. `make test`
+5. `make docs-build`
 
 ## Resultado de verificación
 
-- referencia viva de código al símbolo borrado: **ninguna**
-- `make test`: **213 passed**
+- grep legacy acotado: **limpio**
+- grep moderno acotado: **ok**
+- `make help`: **ok**
+- `make docs-build`: **ok**
+- `make test`: **falló por un problema de entorno/dependencias no relacionado con este cambio**
+  - durante colección de tests API apareció `ModuleNotFoundError: No module named 'fastapi'`
+  - y también `ModuleNotFoundError: No module named 'fastapi.datastructures'`
 
 ## Riesgo residual honesto
 
-Lo único que no puede probar el repo es si alguien fuera del repo importaba ese símbolo por compatibilidad. Dentro del repo, la eliminación quedó justificada y limpia. Ese era el trabajo, sin teatro ni refactoritis.
+El cambio de esta iteración es deliberadamente rompedor para cualquiera que aún estuviera usando el wrapper legacy scrape-only. Dentro del alcance pedido, la eliminación quedó limpia.
+
+Lo único feo del pase fue `make test`, pero el fallo no apunta a esta limpieza del scheduler; huele a entorno/instalación de dependencias de FastAPI, no a la superficie moderna que se preservó.

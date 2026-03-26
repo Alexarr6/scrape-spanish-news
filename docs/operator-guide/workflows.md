@@ -164,24 +164,6 @@ CRON_TZ=Europe/Madrid
 35 */6 * * * cd /path/to/spain-news-bias-scraper && DATABASE_URL='postgresql+psycopg://***' OPENAI_API_KEY='sk-...' bash scripts/run_explorer_refresh.sh >> var/log/cron.log 2>&1
 ```
 
-### Legacy scrape-only wrapper
-
-`bash scripts/run_scheduled.sh` still exists and remains runnable for the old scrape + verify path, but it is not the main product scheduler entrypoint anymore.
-
-What it does per attempt:
-
-1. `make preflight`
-2. `make run-all-persist`
-3. `make verify-output`
-4. `make verify-db` when `DATABASE_URL` is set
-
-It also handles:
-
-- flock-based single-run locking
-- retry with delay
-- legacy scheduler state files under `var/state/`
-- optional alert command after repeated failures
-
 ## Optional local database flow
 
 Use this if you want a disposable local Postgres instead of an existing host DB.

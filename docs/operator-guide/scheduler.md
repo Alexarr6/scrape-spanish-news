@@ -2,13 +2,12 @@
 
 ## Supported entrypoints
 
-The repo now has three scheduler-style wrappers:
+The repo now has two scheduler-style wrappers:
 
 ```bash
 export DATABASE_URL='postgresql+psycopg://user:pass@host:5432/dbname'
 export OPENAI_API_KEY='sk-...'
 
-bash scripts/run_scheduled.sh
 bash scripts/run_stories_refresh.sh
 bash scripts/run_explorer_refresh.sh
 ```
@@ -16,24 +15,12 @@ bash scripts/run_explorer_refresh.sh
 Makefile wrappers:
 
 ```bash
-make scheduler-dry-run
-make scheduler-once
 make stories-refresh-once
 make explorer-refresh-once
 make full-refresh-once
 ```
 
 ## Job split
-
-### Legacy wrapper
-`run_scheduled.sh` is the deprecated scrape-only scheduler. It keeps its retry/alert behavior, but it does **not** run enrichment or cluster rebuilds, so it is the wrong entrypoint for the main stories product. It still runs:
-
-1. `make preflight`
-2. `make run-all-persist`
-3. `make verify-output`
-4. `make verify-db`
-
-Useful if you only want persistent scraping and verification.
 
 ### Stories refresh
 `run_stories_refresh.sh` is the recurring stories pipeline:
@@ -99,7 +86,6 @@ Per-job locks via `flock -n`:
 Per-job logs:
 - `var/log/stories-refresh.log`
 - `var/log/explorer-refresh.log`
-- `var/log/scheduler.log` for the legacy wrapper
 
 Per-job state files:
 - `var/state/stories_last_status`

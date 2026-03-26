@@ -1,11 +1,20 @@
 - State: IMPLEMENTATION_DONE
-- Iteration: iter/023
-- Focus: remove the orphaned `RSSDiscoveryStrategy` compatibility leaf without touching broader discovery code
+- Iteration: iter/024
+- Focus: remove only the legacy scrape-only scheduler family while preserving the canonical modern Stories / Explorer refresh surface
 - Implementation verdict:
-  - removed `src/core/strategies/rss_discovery.py`
-  - removed the `RSSDiscoveryStrategy` re-export from `src/core/strategies/__init__.py`
-  - repo reference check still shows no live in-repo import consumers of `RSSDiscoveryStrategy` or `src.core.strategies.rss_discovery`; remaining `rss_discovery` hits are strategy-name/metrics labels plus historical notes
-  - `make test` passed (`213 passed`)
-- Result:
-  - the orphaned compatibility leaf is now removed cleanly for in-repo code
-  - only off-repo/external compatibility imports remain unknowable from repo evidence alone
+  - removed `scripts/run_scheduled.sh`
+  - removed Makefile variable `SCHEDULER_SCRIPT`
+  - removed Makefile targets `scheduler-dry-run`, `scheduler-once`, `status`, and `tail-log`
+  - removed the legacy help block from `make help`
+  - removed the explicit legacy references in `README.md`, `docs/operator-guide/scheduler.md`, `docs/operator-guide/workflows.md`, and `docs/reference/outputs.md`
+  - preserved `run_stories_refresh.sh`, `run_explorer_refresh.sh`, `make stories-refresh-once`, `make explorer-refresh-once`, `make full-refresh-once`, and the documented `stories_*` / `explorer_*` state surface
+- Verification:
+  - scoped legacy-reference grep: clean
+  - modern-surface grep: ok
+  - `make help`: passed
+  - `make docs-build`: passed
+  - `make test`: failed during API test collection with `ModuleNotFoundError` for `fastapi` / `fastapi.datastructures`; appears unrelated to the bounded scheduler removal
+- Scope guard:
+  - no wrapper-behavior changes
+  - no scheduler redesign
+  - no unrelated cleanup
