@@ -1,14 +1,14 @@
 {
   "project_mode": "persistent-single-repo",
-  "iteration": 10,
-  "active_branch": "iter/010",
-  "stack_template": "DATA_PIPELINE_STACK.md",
-  "updated_at": "2026-03-26T16:12:25Z",
+  "iteration": 11,
+  "active_branch": "iter/011",
+  "stack_template": "WEBAPP_STACK.md",
+  "updated_at": "2026-03-26T19:26:30Z",
   "key_files": {
     "brief": "PROJECT_BRIEF.md",
     "contract": "TASK_CONTRACT.md",
     "plan": "PLAN.md",
     "results": "RESULTS.md",
-    "iteration_log": "logs/iterations/010.md"
+    "iteration_log": "logs/iterations/011.md"
   }
 }
