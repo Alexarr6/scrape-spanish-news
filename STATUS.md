@@ -1,15 +1,16 @@
-- State: AUDIT_DONE
-- Iteration: iter/015
-- Focus: repo-wide technical-debt audit with evidence, risk classes, and bounded cleanup lots
+- State: DONE
+- Iteration: iter/016
+- Focus: execute the exact lot 2A safe-delete set and verify repo behavior stays intact
 - Notes:
-  - Added `TECH_DEBT_AUDIT.md` as the main audit artifact covering frontend, backend, scripts, contracts/docs alignment, generated/runtime clutter, and Makefile/tooling.
-  - Distinguished confirmed dead code from suspicious-but-unconfirmed debt.
-  - Classified findings into `safe delete`, `safe simplify`, `needs verification`, and `defer`.
-  - Included a concrete Makefile/tooling audit and grouped next work into bounded lots (`2A` through `4B`).
-  - No giant cleanup pass was performed; this iteration stayed audit-first and reviewable.
+  - Re-read `PROJECT_BRIEF.md`, `TASK_CONTRACT.md`, `PLAN.md`, `STATUS.md`, and the relevant lot 2A findings from `TECH_DEBT_AUDIT.md` before implementation.
+  - Deleted only the six approved lot 2A files: four generated frontend byproducts plus two untracked docs leftovers.
+  - Preserved `frontend/vite.config.ts` as the canonical frontend config source.
+  - Left unrelated repo noise such as `artifacts/` untouched because it is outside the approved scope.
 - Verification:
-  - Reviewed live entrypoints and operator wiring via `Makefile`, `README.md`, `mkdocs.yml`, `src/main.py`, and `src/api/app.py`.
-  - Performed structural reference scans across Python and frontend sources to distinguish dead leaves from live paths.
-  - Checked `git status`, `git ls-files`, `.gitignore`, and `frontend/.gitignore` to separate tracked source from generated/runtime clutter.
+  - `test -f frontend/vite.config.ts`
+  - `git status --short`
+  - `cd frontend && npm run build`
+  - `make docs-build`
+  - `git status --short docs/architecture docs/reviews frontend`
 - Result:
-  - Repo now has a trustworthy technical-debt audit and an execution-ready cleanup queue for later bounded phases.
+  - Lot 2A cleanup completed successfully with scope held tight and verification passing.
