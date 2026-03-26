@@ -1,15 +1,13 @@
-- State: IMPLEMENTATION_DONE
-- Iteration: iter/010
-- Focus: trace exact loss stage for story membership mismatch between Explorer semantic neighborhood and Stories persisted members
+- State: DONE
+- Iteration: iter/011
+- Focus: simplify Stories detail editorial lens, separate Nearby Articles, and fix top-section alignment
 - Notes:
-  - Implementer traced the real bottleneck to guarded closure in `src/analysis/pipeline.py`, not to Stories read-side.
-  - Exact loss stage: a coherent medium-only raw component of 5 accepted articles could shrink to a 2-member final cluster plus 3 singletons because `_audit_medium_component(...)` refused to preserve components larger than 3, and later singleton attach could not recover the low-medium tail.
-  - Bounded fix shipped: medium-only component preservation now allows size up to 5, with slightly stricter default-mode thresholds for size 4-5 (`mean >= 0.55`, `best >= 0.56`) while keeping all existing guardrails against risky bridges, secondary forms, and penalty-bearing pairs.
-  - Regression protection added in `tests/test_story_clustering.py::test_guarded_components_preserve_coherent_medium_only_chain_of_five`.
-  - Stories remains a faithful read of `cluster_members`; Explorer can still show wider embedding neighbors, but the actual 5->2 count-loss bottleneck was upstream in guarded closure.
-  - Local Postgres was unavailable on `127.0.0.1:5433` during the pass, so the trace was locked via pipeline-level mechanical reproduction instead of live DB inspection.
+  - Frontend.react normalized Breaking Event, Coverage, and Editorial Lens under one shared major-section shell in `StoryFocusPanel.tsx` and `frontend/src/styles.css`.
+  - `EditorialLensSection.tsx` was simplified to a compact, source-centric layout: source rows remain, weak comparative diagnostics were removed from the default surface, and thin-signal fallback copy was reduced to one muted note.
+  - Nearby Articles now renders as its own section below Editorial Lens while still using the selected article's existing `article.neighbors` data.
+  - The inline nearby block was removed from `ArticleDetailSection`; the rest of article detail stayed stable.
+  - Scope stayed bounded to frontend Stories detail/components/styles; no backend or data-contract changes were made.
 - Verification:
-  - `/home/node/.local/bin/uv run pytest tests/test_story_clustering.py tests/test_story_pair_scoring.py tests/test_story_matching_eval.py tests/test_story_candidate_generation.py tests/test_story_review.py`
-  - Result: `40 passed`
+  - `cd frontend && npm run build` ✅
 - Result:
-  - iter/010 implementation complete with bounded closure fix, explicit loss-stage diagnosis, and regression coverage.
+  - Stories detail now reads as a cleaner brief: aligned major sections, tighter Editorial Lens, and a properly separated Nearby Articles section.

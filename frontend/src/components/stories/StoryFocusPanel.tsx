@@ -73,39 +73,52 @@ export function StoryFocusPanel({
   return (
     <div className="story-focus-panel">
       {/* Section 1: Story brief */}
-      <section className="focus-brief">
-        <div className="focus-brief-type">
-          <span className="text-eyebrow">
-            {detail.cluster.cluster_type.replace(/_/g, ' ')} · {detail.cluster.status}
-          </span>
-        </div>
-        <h2>{detail.cluster.summary_headline}</h2>
-        <p className="focus-brief-summary">{detail.cluster.summary_text}</p>
-        <div className="focus-brief-meta">
-          {detail.cluster.article_count} articles · {detail.cluster.source_count} sources
-          {detail.cluster.first_article_published_at && (
-            <> · {formatDate(detail.cluster.first_article_published_at)}</>
-          )}
-        </div>
-        <div style={{ marginTop: 'var(--space-1)' }}>
-          <a href={explorerHref} className="btn-ghost">
-            Open in Explorer →
-          </a>
+      <section className="story-focus-major-section">
+        <SectionDivider label="Breaking event" />
+        <div className="story-focus-major-shell focus-brief">
+          <div className="focus-brief-type">
+            <span className="text-eyebrow">
+              {detail.cluster.cluster_type.replace(/_/g, ' ')} · {detail.cluster.status}
+            </span>
+          </div>
+          <h2>{detail.cluster.summary_headline}</h2>
+          <p className="focus-brief-summary">{detail.cluster.summary_text}</p>
+          <div className="focus-brief-meta">
+            {detail.cluster.article_count} articles · {detail.cluster.source_count} sources
+            {detail.cluster.first_article_published_at && (
+              <> · {formatDate(detail.cluster.first_article_published_at)}</>
+            )}
+          </div>
+          <div style={{ marginTop: 'var(--space-1)' }}>
+            <a href={explorerHref} className="btn-ghost">
+              Open in Explorer →
+            </a>
+          </div>
         </div>
       </section>
 
-      <SectionDivider label="Coverage" />
-
-      {/* Section 2: Coverage bar */}
-      <section className="focus-section">
-        <CoverageBar members={detail.members} />
+      <section className="story-focus-major-section">
+        <SectionDivider label="Coverage" />
+        <div className="story-focus-major-shell">
+          <CoverageBar members={detail.members} />
+        </div>
       </section>
 
-      <SectionDivider label="Editorial lens" />
-
-      <section className="focus-section">
-        <EditorialLensSection editorialSummary={detail.editorial_summary} onSelectArticle={(articleId) => onSelectArticle(articleId)} />
+      <section className="story-focus-major-section">
+        <SectionDivider label="Editorial lens" />
+        <div className="story-focus-major-shell">
+          <EditorialLensSection editorialSummary={detail.editorial_summary} onSelectArticle={(articleId) => onSelectArticle(articleId)} />
+        </div>
       </section>
+
+      {article && article.neighbors.length > 0 && (
+        <section className="story-focus-major-section">
+          <SectionDivider label="Nearby articles" />
+          <div className="story-focus-major-shell">
+            <NearbyArticlesSection neighbors={article.neighbors} />
+          </div>
+        </section>
+      )}
 
       <SectionDivider label="Articles by source" />
 
@@ -284,26 +297,6 @@ function ArticleDetailSection({
             </div>
           </div>
 
-          {article.neighbors.length > 0 && (
-            <div>
-              <div className="section-divider-label">Nearby articles</div>
-              <ul className="neighbor-list">
-                {article.neighbors.slice(0, 4).map((neighbor) => (
-                  <li key={neighbor.article_id}>
-                    <div className="neighbor-button">
-                      <div>
-                        <div className="neighbor-title">{neighbor.title}</div>
-                        <div className="neighbor-meta">
-                          {neighbor.source} · {formatDate(neighbor.published_at)}
-                        </div>
-                      </div>
-                      <span className="badge muted">{formatSimilarity(neighbor.similarity)}</span>
-                    </div>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
         </>
       )}
     </div>
@@ -355,6 +348,33 @@ function ClusterMembershipDiagnostics({
           ))}
         </div>
       )}
+    </div>
+  )
+}
+
+function NearbyArticlesSection({
+  neighbors,
+}: {
+  neighbors: ExplorerArticleDetail['neighbors']
+}) {
+  return (
+    <div className="nearby-articles-section">
+      <p className="editorial-empty-copy">Semantically adjacent coverage for the currently selected article.</p>
+      <ul className="neighbor-list">
+        {neighbors.slice(0, 4).map((neighbor) => (
+          <li key={neighbor.article_id}>
+            <div className="neighbor-button">
+              <div>
+                <div className="neighbor-title">{neighbor.title}</div>
+                <div className="neighbor-meta">
+                  {neighbor.source} · {formatDate(neighbor.published_at)}
+                </div>
+              </div>
+              <span className="badge muted">{formatSimilarity(neighbor.similarity)}</span>
+            </div>
+          </li>
+        ))}
+      </ul>
     </div>
   )
 }
