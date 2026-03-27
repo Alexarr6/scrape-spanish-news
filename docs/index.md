@@ -4,6 +4,8 @@ This project is not one script with delusions of grandeur. It is a scrape runtim
 
 Use this docs site for durable detail. Use the repo `README.md` for quickstart and command triage.
 
+The canonical docs surface is `README.md` + `docs/`. Historical audits/specs/reviews are filed under `docs/historical/` instead of cluttering repo root.
+
 ## Start here
 
 - New to the repo: read [Getting Started](getting-started.md)

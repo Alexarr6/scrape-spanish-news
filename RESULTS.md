@@ -1,54 +1,72 @@
-# RESULTS.md — iter/029 analysis pipeline structural refactor phase 2
+# RESULTS.md — iter/030 documentation cleanup, relocation, and English normalization
 
-## Resumen breve
+## Summary
 
-Iter/029 ejecutó la fase 2 del refactor estructural de `src/analysis/pipeline.py` con un corte real y sin tocar la heurística delicada. Se extrajo la generación de candidatos de historia y la carga de vecinos semánticos a `src/analysis/story_candidates.py`, y `ClusterPipeline` quedó como wrapper/orquestador fino para ese subsistema.
+iter/030 cleaned the repo docs surface without wiping history like an idiot.
 
-## Cambio aplicado
+The active documentation surface is now explicitly `README.md` + `docs/`, while worthwhile historical material moved into `docs/historical/` with named subfolders.
 
-### Nuevo módulo de candidatos
-- `src/analysis/story_candidates.py` (nuevo)
-  - introduce `StoryCandidateGenerator(session)`
-  - mueve sin rediseño funcional:
-    - `generate_candidate_pairs()`
-    - `load_semantic_neighbor_candidates()`
-  - conserva intactas las reglas de:
-    - prioridad de orígenes por `recall_mode`
-    - límites por origen y por seed
-    - carga/filtrado de semantic neighbors
-    - `semantic_backfill` en `high_recall`
-    - ensamblado de `pair.origins`, `pair.rank` y `CandidateGenerationSummary`
-    - degradación segura a `{}` cuando falla el adaptador semántico
+## What changed
 
-### Pipeline conservado como orquestación
-- `src/analysis/pipeline.py`
-  - mantiene `build_clusters()` sin cambios públicos
-  - mantiene `score_pair()` y cierre guardado donde estaban
-  - delega `_generate_candidate_pairs()` y `_load_semantic_neighbor_candidates()` al helper extraído
-  - conserva los nombres privados viejos como wrappers finos para no romper tests ni callers internos
+### Root de-cluttering
+Moved tracked historical docs out of repo root:
+- `ARCH_AUDIT.md` → `docs/historical/audits/ARCH_AUDIT_2026-03-20.md`
+- `ARCH_REVIEW.md` → `docs/historical/reviews/ARCH_REVIEW_iter-007_holistic_review.md`
+- `TECH_DEBT_AUDIT.md` → `docs/historical/audits/TECH_DEBT_AUDIT_iter-015.md`
+- `UI_SPEC.md` → `docs/historical/frontend/UI_SPEC_editorial_analysis_and_stories_simplification.md`
+- `COMPONENT_MAP.md` → `docs/historical/frontend/COMPONENT_MAP_editorial_analysis.md`
+- `DESIGN_TOKENS.md` → `docs/historical/frontend/DESIGN_TOKENS_visual_system.md`
 
-## Invariantes preservadas
+Moved retained tracked process artifacts out of repo root:
+- previous `RESULTS.md` → `docs/historical/process/RESULTS_iter-029_analysis_pipeline_refactor_phase_2.md`
+- `PROJECT_STATE.json` → `docs/historical/process/PROJECT_STATE_iter-027.json`
 
-- sin cambios en inclusión/exclusión de candidate pairs
-- sin cambios en el orden `default` vs `high_recall`
-- sin cambios en límites por origen ni overrides de `high_recall`
-- sin cambios en `semantic_backfill_limit`
-- sin cambios en fallback de semantic neighbors (`{}`)
-- sin cambios en filtrado temporal por `max_days_delta`
-- sin cambios en acumulación de `pair.origins`
-- sin cambios en semántica de `pair.rank`
-- sin cambios en campos/semántica de `CandidateGenerationSummary`
-- sin cambios en `build_clusters()` público
-- sin cambios en pair scoring, closure o persistencia
+Removed clearly worthless clutter:
+- deleted `info.txt`
 
-## Verificación ejecutada
+### Canonical docs clarification
+Updated:
+- `README.md`
+- `docs/index.md`
+- `docs/historical/index.md`
+- `mkdocs.yml`
 
-1. `uv run python -m pytest tests/test_story_candidate_generation.py tests/test_story_clustering.py tests/test_story_matching_eval.py tests/test_story_review.py tests/test_story_pair_scoring.py`
+These now make the docs split explicit:
+- `README.md` + `docs/` = current operator/developer truth
+- `docs/historical/` = preserved reviews, audits, specs, and archived process notes
 
-## Resultado de verificación
+### Agent scaffolding cleanup
+Relocated iter/030 scratch files out of the active root surface:
+- `PROJECT_BRIEF.md` → `.agent/iter-030/PROJECT_BRIEF.md`
+- `TASK_CONTRACT.md` → `.agent/iter-030/TASK_CONTRACT.md`
+- `PLAN.md` → `.agent/iter-030/PLAN.md`
+- deleted `TODO.md` because it was not present as meaningful retained content by the end of the pass
 
-- suite objetivo: **40 passed**
+### English normalization
+Translated the retained moved process summary at:
+- `docs/historical/process/RESULTS_iter-029_analysis_pipeline_refactor_phase_2.md`
 
-## Riesgo residual honesto
+I did **not** bulk-translate every historical file just to feel productive. The retained review/audit/spec material is already mostly English, and junk that disappeared did not deserve a translation ceremony.
 
-El refactor quedó donde debía: separar el blob de candidate generation sin fingir que pair scoring también estaba listo para salir. Meter ambas cosas juntas habría sido una idea bastante tonta.
+## Verification
+
+1. `make docs-build`
+2. fallback check: `python3 -m mkdocs build --strict`
+3. manual spot-check of moved paths under `docs/historical/`
+4. manual root-tree inspection to confirm the root is materially cleaner
+
+## Verification result
+
+- `make docs-build`: **failed in this environment** (`uv missing` from `preflight`)
+- `python3 -m mkdocs build --strict`: **failed in this environment** (`No module named mkdocs`)
+
+## Conservative calls worth noting
+
+- `STATUS.md` stayed at repo root because the workflow for this run still expects an active status file and the task explicitly required updating it.
+- `RESULTS.md` also remains active at repo root for the same reason, but the old iteration result was archived under `docs/historical/process/` so root no longer carries stale historical run output.
+- `PROJECT_STATE.json` was preserved, not deleted, because it is legitimate workflow history even if it does not belong at repo root.
+
+## Git summary
+
+- branch: `iter/027`
+- rollback hint after review: use `git log --oneline -n 5`

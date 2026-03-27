@@ -26,10 +26,20 @@ nav:
   - Historical Notes:
       - Overview: historical/index.md
       - Stack Context: STACK_CONTEXT.md
+      - Audits:
+          - Architecture audit (2026-03-20): historical/audits/ARCH_AUDIT_2026-03-20.md
+          - Technical debt audit (iter/015): historical/audits/TECH_DEBT_AUDIT_iter-015.md
       - Reviews:
+          - iter/007 holistic review: historical/reviews/ARCH_REVIEW_iter-007_holistic_review.md
           - Semantic second pass review: reviews/ARCH_REVIEW_semantic_second_pass_2026-03-17.md
           - Explorer clustering phase review: reviews/ARCH_REVIEW_explorer_clustering_phase_2026-03-18.md
           - Cluster first cycle review: reviews/ARCH_REVIEW_cluster_first_cycle_2026-03-18.md
+      - Frontend archive:
+          - UI spec history: historical/frontend/UI_SPEC_editorial_analysis_and_stories_simplification.md
+          - Component map history: historical/frontend/COMPONENT_MAP_editorial_analysis.md
+          - Design tokens history: historical/frontend/DESIGN_TOKENS_visual_system.md
+      - Process archive:
+          - iter/029 results: historical/process/RESULTS_iter-029_analysis_pipeline_refactor_phase_2.md
       - Archive:
           - Legacy architecture review: archive/ARCH_REVIEW_legacy.md
 markdown_extensions:

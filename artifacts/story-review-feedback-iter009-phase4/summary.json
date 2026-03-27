@@ -1,0 +1,112 @@
+{
+  "fixture": "tests/fixtures/story_matching_eval_fixture.json",
+  "review_jsonl": "artifacts/story-review-batch-iter009-phase4/review-batch.jsonl",
+  "summary": {
+    "row_count": 3,
+    "labeled_count": 3,
+    "decided_count": 2,
+    "uncertain_count": 1,
+    "label_counts": {
+      "same_event": 1,
+      "different_event": 1,
+      "uncertain": 1
+    },
+    "bucket_counts": {
+      "accepted_high": 1,
+      "borderline": 1
+    },
+    "confusion": {
+      "true_positive": 1,
+      "true_negative": 1
+    },
+    "precision": 1.0,
+    "recall": 1.0,
+    "f1": 1.0
+  },
+  "threshold_sweep": [
+    {
+      "threshold": 0.45,
+      "pair_summary": {
+        "labeled_pair_count": 2,
+        "positive_pair_count": 1,
+        "predicted_positive_count": 1,
+        "true_positive_count": 1,
+        "false_positive_count": 0,
+        "false_negative_count": 0,
+        "precision": 1.0,
+        "recall": 1.0,
+        "f1": 1.0
+      }
+    },
+    {
+      "threshold": 0.55,
+      "pair_summary": {
+        "labeled_pair_count": 2,
+        "positive_pair_count": 1,
+        "predicted_positive_count": 1,
+        "true_positive_count": 1,
+        "false_positive_count": 0,
+        "false_negative_count": 0,
+        "precision": 1.0,
+        "recall": 1.0,
+        "f1": 1.0
+      }
+    },
+    {
+      "threshold": 0.6,
+      "pair_summary": {
+        "labeled_pair_count": 2,
+        "positive_pair_count": 1,
+        "predicted_positive_count": 1,
+        "true_positive_count": 1,
+        "false_positive_count": 0,
+        "false_negative_count": 0,
+        "precision": 1.0,
+        "recall": 1.0,
+        "f1": 1.0
+      }
+    },
+    {
+      "threshold": 0.68,
+      "pair_summary": {
+        "labeled_pair_count": 2,
+        "positive_pair_count": 1,
+        "predicted_positive_count": 1,
+        "true_positive_count": 1,
+        "false_positive_count": 0,
+        "false_negative_count": 0,
+        "precision": 1.0,
+        "recall": 1.0,
+        "f1": 1.0
+      }
+    },
+    {
+      "threshold": 0.72,
+      "pair_summary": {
+        "labeled_pair_count": 2,
+        "positive_pair_count": 1,
+        "predicted_positive_count": 1,
+        "true_positive_count": 1,
+        "false_positive_count": 0,
+        "false_negative_count": 0,
+        "precision": 1.0,
+        "recall": 1.0,
+        "f1": 1.0
+      }
+    },
+    {
+      "threshold": 0.78,
+      "pair_summary": {
+        "labeled_pair_count": 2,
+        "positive_pair_count": 1,
+        "predicted_positive_count": 0,
+        "true_positive_count": 0,
+        "false_positive_count": 0,
+        "false_negative_count": 1,
+        "precision": 0.0,
+        "recall": 0.0,
+        "f1": 0.0
+      }
+    }
+  ]
+}
