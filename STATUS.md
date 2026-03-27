@@ -1,13 +1,11 @@
-- State: DONE
-- Iteration: iter/027
-- Focus: semantic layer structural refactor phase 1
+IMPLEMENTATION_DONE
+
+- Iteration: iter/028
+- Focus: analysis pipeline structural refactor phase 1
 - Result:
-  - extracted explorer read-model shaping and metadata helpers from `src/semantic/dbstore.py` into `src/semantic/explorer_readside.py`
-  - kept schema, persistence, SQL orchestration, and public explorer loader entrypoints in `src/semantic/dbstore.py`
-  - explicitly kept `src/semantic/export.py` out of scope beyond preserving existing import/contract behavior
+  - extracted guarded story closure / component assembly helpers from `src/analysis/pipeline.py` into `src/analysis/story_closure.py`
+  - kept `ClusterPipeline.build_clusters()` as orchestration wrapper
+  - preserved compatibility via thin private-method delegation wrappers in `ClusterPipeline`
 - Verification:
-  - `uv run python -m pytest tests/test_semantic_dbstore.py tests/test_api_semantic_explorer.py tests/test_semantic_export.py tests/test_semantic_build_cli.py`
-  - result: `60 passed`
-- Notes:
-  - scope stayed bounded to the approved read-side seam
-  - no semantic/explorer behavior changes were introduced
+  - `uv run python -m pytest tests/test_story_clustering.py tests/test_story_pair_scoring.py tests/test_story_candidate_generation.py tests/test_story_matching_eval.py tests/test_story_review.py`
+  - result: `40 passed`
