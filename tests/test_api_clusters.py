@@ -11,7 +11,7 @@ from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.pool import StaticPool
 
 from src.analysis.editorial.orm import ArticleEditorialAnalysisORM
-from src.analysis.orm_models import (
+from src.analysis.store.models import (
     ArticleAnalysisORM,
     ArticleTagORM,
     ClusterEntityORM,

@@ -3,9 +3,10 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from types import SimpleNamespace
 
-from src.analysis.contracts import ArticleAnalysisRead
-from src.analysis.pipeline import ClusterPipeline, EnrichedArticle
-from src.analysis.story_eval import build_pair_artifacts, evaluate_candidate_recall
+from src.analysis.shared.contracts import ArticleAnalysisRead
+from src.analysis.clustering import ClusterPipeline
+from src.analysis.shared.types import EnrichedArticle
+from src.analysis.ops.story_eval import build_pair_artifacts, evaluate_candidate_recall
 from src.persistence.core import ArticleRead
 
 
@@ -250,7 +251,7 @@ def test_candidate_generation_high_recall_prioritizes_semantic_neighbors(monkeyp
 
 
 def test_candidate_generation_recall_summary_counts_positive_pairs_covered_by_rank() -> None:
-    from src.analysis.story_eval import PairLabel
+    from src.analysis.ops.story_eval import PairLabel
 
     pipeline = ClusterPipeline(session=None)  # type: ignore[arg-type]
     now = datetime(2026, 3, 18, tzinfo=UTC)

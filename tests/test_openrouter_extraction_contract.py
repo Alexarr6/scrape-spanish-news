@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pytest
 
-from src.analysis.contracts import ArticleEnrichmentPayload
+from src.analysis.shared.contracts import ArticleEnrichmentPayload
 
 
 def test_enrichment_payload_rejects_unknown_tag_codes():

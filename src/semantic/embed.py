@@ -11,7 +11,7 @@ from src.semantic.contracts import (
     SemanticBuildConfig,
     SemanticMetrics,
 )
-from src.semantic.dbstore import assemble_article_text, summary_snippet
+from src.semantic.store.embeddings import assemble_article_text, summary_snippet
 
 
 def build_embedding_artifacts(

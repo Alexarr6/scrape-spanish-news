@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from src.analysis.editorial_replay import (
+from src.analysis.ops.replay import (
     evaluate_replay_corpus,
     load_replay_fixtures,
     render_replay_report,

@@ -5,7 +5,7 @@ import os
 from sqlalchemy import Engine, create_engine, inspect
 from sqlalchemy.orm import Session
 
-from src.analysis import orm_models as _analysis_orm_models  # noqa: F401
+from src.analysis.store import models as _analysis_models  # noqa: F401
 from src.persistence.orm import Base
 
 EDITORIAL_ADDITIVE_COLUMNS = {

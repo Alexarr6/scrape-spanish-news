@@ -9,9 +9,9 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
-from src.analysis.pipeline import ClusterPipeline  # noqa: E402
-from src.analysis.story_eval import build_pair_artifacts, load_fixture_dataset  # noqa: E402
-from src.analysis.story_review import (  # noqa: E402
+from src.analysis.clustering import ClusterPipeline  # noqa: E402
+from src.analysis.ops.story_eval import build_pair_artifacts, load_fixture_dataset  # noqa: E402
+from src.analysis.ops.story_review import (  # noqa: E402
     build_review_batch,
     dump_review_batch_jsonl,
     render_review_batch_markdown,

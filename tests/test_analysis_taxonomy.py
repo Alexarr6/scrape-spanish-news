@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pytest
 
-from src.analysis.taxonomy import validate_tag_codes
+from src.analysis.shared.taxonomy import validate_tag_codes
 
 
 def test_validate_tag_codes_accepts_known_codes_once():

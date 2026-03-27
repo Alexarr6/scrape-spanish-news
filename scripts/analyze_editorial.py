@@ -11,8 +11,8 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
-from src.analysis.llm_client import LLMSettings  # noqa: E402
-from src.analysis.pipeline import EditorialAnalysisPipeline  # noqa: E402
+from src.analysis.editorial.llm import LLMSettings  # noqa: E402
+from src.analysis.editorial.service import EditorialAnalysisPipeline  # noqa: E402
 from src.persistence.db import (  # noqa: E402
     create_postgres_engine,
     init_schema,

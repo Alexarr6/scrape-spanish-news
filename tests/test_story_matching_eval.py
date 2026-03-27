@@ -1,5 +1,5 @@
-from src.analysis.pipeline import ClusterPipeline
-from src.analysis.story_eval import evaluate_fixture, load_fixture_dataset
+from src.analysis.clustering import ClusterPipeline
+from src.analysis.ops.story_eval import evaluate_fixture, load_fixture_dataset
 
 FIXTURE_PATH = "tests/fixtures/story_matching_eval_fixture.json"
 

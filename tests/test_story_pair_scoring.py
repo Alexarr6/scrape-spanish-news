@@ -2,8 +2,9 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 
-from src.analysis.contracts import ArticleAnalysisRead
-from src.analysis.pipeline import ClusterPipeline, EnrichedArticle
+from src.analysis.shared.contracts import ArticleAnalysisRead
+from src.analysis.clustering import ClusterPipeline
+from src.analysis.shared.types import EnrichedArticle
 from src.persistence.core import ArticleRead
 
 

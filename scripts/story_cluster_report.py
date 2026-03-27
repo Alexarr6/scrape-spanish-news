@@ -11,7 +11,7 @@ if str(REPO_ROOT) not in sys.path:
 
 from sqlalchemy import select  # noqa: E402
 
-from src.analysis.orm_models import (  # noqa: E402
+from src.analysis.store.models import (  # noqa: E402
     ClusterEntityORM,
     ClusterMemberORM,
     EntityORM,

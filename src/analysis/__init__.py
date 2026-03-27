@@ -1,15 +1,5 @@
-from __future__ import annotations
+"""Analysis package root.
 
-__all__ = ["AnalysisPipeline", "ClusterPipeline"]
-
-
-def __getattr__(name: str):
-    if name == "AnalysisPipeline":
-        from src.analysis.pipeline import AnalysisPipeline
-
-        return AnalysisPipeline
-    if name == "ClusterPipeline":
-        from src.analysis.pipeline import ClusterPipeline
-
-        return ClusterPipeline
-    raise AttributeError(name)
+Runtime code should import from bounded subpackages such as `enrichment`,
+`editorial`, `clustering`, `readside`, `shared`, `store`, and `ops`.
+"""

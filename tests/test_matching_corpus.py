@@ -6,9 +6,9 @@ from sqlalchemy import create_engine, select
 from sqlalchemy.orm import Session
 from sqlalchemy.pool import StaticPool
 
-from src.analysis.matching_corpus import MatchingCorpusPipeline
-from src.analysis.orm_models import ArticleAnalysisORM, ArticleMatchingSelectionORM
-from src.analysis.pipeline import AnalysisPipeline
+from src.analysis.ops.matching_corpus import MatchingCorpusPipeline
+from src.analysis.store.models import ArticleAnalysisORM, ArticleMatchingSelectionORM
+from src.analysis.enrichment import AnalysisPipeline
 from src.persistence.orm import ArticleORM, Base
 
 

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pytest
 
-from src.analysis.editorial_normalization import (
+from src.analysis.editorial.normalization import (
     EditorialNormalizationError,
     normalize_editorial_payload,
 )

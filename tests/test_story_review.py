@@ -1,6 +1,6 @@
-from src.analysis.pipeline import ClusterPipeline
-from src.analysis.story_eval import build_pair_artifacts, load_fixture_dataset
-from src.analysis.story_review import (
+from src.analysis.clustering import ClusterPipeline
+from src.analysis.ops.story_eval import build_pair_artifacts, load_fixture_dataset
+from src.analysis.ops.story_review import (
     build_review_batch,
     build_threshold_sweep,
     summarize_review_labels,

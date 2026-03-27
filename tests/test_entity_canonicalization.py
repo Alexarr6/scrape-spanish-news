@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from src.analysis.canonicalization import EntityCanonicalizer
-from src.analysis.contracts import ArticleAnalysisExtractedEntity
+from src.analysis.shared.canonicalization import EntityCanonicalizer
+from src.analysis.shared.contracts import ArticleAnalysisExtractedEntity
 
 
 def test_known_aliases_collapse_to_same_canonical_entity():

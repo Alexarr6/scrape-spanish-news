@@ -8,9 +8,10 @@ from sqlalchemy import create_engine, func, select
 from sqlalchemy.orm import Session
 from sqlalchemy.pool import StaticPool
 
-from src.analysis.llm_client import EditorialAnalysisAttempt, EditorialAnalysisResult
-from src.analysis.orm_models import ArticleEditorialAnalysisORM
-from src.analysis.pipeline import EditorialAnalysisPipeline, EditorialSelectionFilters
+from src.analysis.editorial.llm import EditorialAnalysisAttempt, EditorialAnalysisResult
+from src.analysis.store.models import ArticleEditorialAnalysisORM
+from src.analysis.editorial.selection import EditorialSelectionFilters
+from src.analysis.editorial.service import EditorialAnalysisPipeline
 from src.persistence.orm import ArticleORM, Base
 
 
@@ -80,7 +81,7 @@ def _attempt(
     unclear_reasons=(),
     diagnostics=None,
 ):
-    from src.analysis.contracts import (
+    from src.analysis.shared.contracts import (
         ArticleEditorialAnalysisPayload,
         EditorialAnalysisDiagnostics,
         OpenRouterUsage,
@@ -182,14 +183,14 @@ def test_editorial_pipeline_counts_request_and_writes_artifact_on_parse_failure(
         )
     )
 
-    from src.analysis import pipeline as pipeline_module
+    from src.analysis.editorial import service as editorial_service_module
 
-    original = pipeline_module.editorial_debug_artifact_dir
-    pipeline_module.editorial_debug_artifact_dir = lambda: tmp_path
+    original = editorial_service_module.editorial_debug_artifact_dir
+    editorial_service_module.editorial_debug_artifact_dir = lambda: tmp_path
     try:
         metrics = pipeline.analyze_articles(days_back=10, limit=10)
     finally:
-        pipeline_module.editorial_debug_artifact_dir = original
+        editorial_service_module.editorial_debug_artifact_dir = original
 
     stored = session.execute(select(ArticleEditorialAnalysisORM)).scalar_one()
     artifacts = list(tmp_path.glob("*.json"))

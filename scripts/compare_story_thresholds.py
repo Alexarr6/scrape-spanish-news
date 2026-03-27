@@ -9,9 +9,9 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
-from src.analysis.pipeline import ClusterPipeline  # noqa: E402
-from src.analysis.story_eval import load_fixture_dataset  # noqa: E402
-from src.analysis.story_review import build_threshold_sweep  # noqa: E402
+from src.analysis.clustering import ClusterPipeline  # noqa: E402
+from src.analysis.ops.story_eval import load_fixture_dataset  # noqa: E402
+from src.analysis.ops.story_review import build_threshold_sweep  # noqa: E402
 
 
 def parse_args() -> argparse.Namespace:

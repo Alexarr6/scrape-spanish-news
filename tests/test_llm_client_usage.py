@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from src.analysis.llm_client import LLMClient, LLMSettings
+from src.analysis.editorial.llm import LLMClient, LLMSettings
 
 
 class _UsageWithModelDump:

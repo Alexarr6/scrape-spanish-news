@@ -3,12 +3,12 @@ from __future__ import annotations
 import pytest
 from pydantic import ValidationError
 
-from src.analysis.contracts import (
+from src.analysis.shared.contracts import (
     ArticleEditorialAnalysisPayload,
     ArticleEditorialAnalysisRawPayload,
     ArticleEnrichmentPayload,
 )
-from src.analysis.llm_client import (
+from src.analysis.editorial.llm import (
     build_editorial_analysis_prompt,
     editorial_analysis_json_schema,
     editorial_analysis_raw_json_schema,

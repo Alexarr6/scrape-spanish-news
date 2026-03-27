@@ -5,9 +5,9 @@ from datetime import datetime
 from sqlalchemy import create_engine, select
 from sqlalchemy.orm import Session
 
-from src.analysis.contracts import ArticleAnalysisExtractedEntity, ArticleEnrichmentPayload
-from src.analysis.orm_models import ArticleAnalysisORM, EntityMentionORM
-from src.analysis.pipeline import AnalysisPipeline
+from src.analysis.shared.contracts import ArticleAnalysisExtractedEntity, ArticleEnrichmentPayload
+from src.analysis.store.models import ArticleAnalysisORM, EntityMentionORM
+from src.analysis.enrichment import AnalysisPipeline
 from src.persistence.core import ArticleRead
 from src.persistence.orm import ArticleORM, Base
 

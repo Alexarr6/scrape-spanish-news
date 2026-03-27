@@ -16,6 +16,7 @@ dependencies = [
   "sqlalchemy>=2.0.39,<3.0",
   "trafilatura>=1.9,<2.0",
   "uvicorn>=0.34,<1.0",
+  "deadcode>=2.4.1",
 ]
 
 [dependency-groups]
@@ -46,3 +47,7 @@ select = ["E", "F", "I"]
 
 [tool.ruff.lint.isort]
 known-first-party = ["src"]
+
+[tool.deadcode]
+ignore-names = ["__getattr__"]
+ignore-bodies-if-inherits-from = ["BaseModel", "Base"]

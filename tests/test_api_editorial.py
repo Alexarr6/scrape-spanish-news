@@ -9,7 +9,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.pool import StaticPool
 
-from src.analysis.orm_models import ArticleEditorialAnalysisORM
+from src.analysis.store.models import ArticleEditorialAnalysisORM
 from src.api.v1.articles import get_session
 from src.api.v1.editorial import router
 from src.persistence.orm import ArticleORM, Base

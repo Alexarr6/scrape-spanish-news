@@ -35,7 +35,7 @@ LOCAL_DB_USER ?= spain_news
 LOCAL_DB_PASSWORD ?= spain_news_dev
 LOCAL_DATABASE_URL := postgresql+psycopg://$(LOCAL_DB_USER):$(LOCAL_DB_PASSWORD)@$(LOCAL_DB_HOST):$(LOCAL_DB_PORT)/$(LOCAL_DB_NAME)
 
-.PHONY: help print-app-root preflight sync pre-commit lint check test docs-build docs-serve frontend-install frontend-build frontend-check smoke run-source run-source-persist run-all run-all-persist api analysis-db-init build-matching-corpus enrich-articles analyze-editorial analyze-editorial-failed build-story-clusters story-cluster-report semantic-db-init semantic-sync semantic-project semantic-neighbors semantic-build semantic-smoke stories-refresh-once explorer-refresh-once full-refresh-once verify-output verify-db db-url db-up db-down db-logs db-psql db-check clean-state
+.PHONY: help print-app-root preflight sync pre-commit lint deadcode check test docs-build docs-serve frontend-install frontend-build frontend-check smoke run-source run-source-persist run-all run-all-persist api analysis-db-init build-matching-corpus enrich-articles analyze-editorial analyze-editorial-failed build-story-clusters story-cluster-report semantic-db-init semantic-sync semantic-project semantic-neighbors semantic-build semantic-smoke stories-refresh-once explorer-refresh-once full-refresh-once verify-output verify-db db-url db-up db-down db-logs db-psql db-check clean-state
 
 help:
 	@printf '%s\n' \
@@ -45,6 +45,7 @@ help:
 	  '  make sync                     Create/update the uv-managed environment' \
 	  '  make preflight                Check uv/runtime wiring' \
 	  '  make lint                     Run ruff using the managed environment' \
+	  '  make deadcode                 Run deadcode across src, scripts, and tests' \
 	  '  make pre-commit               Run repo hooks (ruff-check + ruff-format)' \
 	  '  make check                    Canonical local gate: pre-commit + tests' \
 	  '  make test                     Run tests from repo root' \
@@ -115,6 +116,10 @@ preflight:
 
 lint: preflight
 	@PYTHONPATH="$(APP_ROOT):$${PYTHONPATH:-}" $(RUFF) check src tests scripts
+
+deadcode: preflight
+	@cd "$(APP_ROOT)" && \
+	PYTHONPATH="$(APP_ROOT):$${PYTHONPATH:-}" $(UV_RUN) deadcode src scripts tests
 
 pre-commit: preflight
 	@cd "$(APP_ROOT)" && $(PRE_COMMIT) run --all-files

@@ -1,6 +1,6 @@
 from datetime import datetime, timezone
 
-from src.analysis.pipeline import AnalysisPipeline
+from src.analysis.enrichment import AnalysisPipeline
 
 
 class _Row:

@@ -11,7 +11,7 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
-from src.analysis.pipeline import ClusterPipeline  # noqa: E402
+from src.analysis.clustering import ClusterPipeline  # noqa: E402
 from src.persistence.db import (  # noqa: E402
     create_postgres_engine,
     init_schema,

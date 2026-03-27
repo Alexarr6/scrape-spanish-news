@@ -157,12 +157,6 @@ class EditorialAnalysisCRUD:
         self.session.flush()
         return analysis
 
-    def save(self, analysis: ArticleEditorialAnalysisORM) -> ArticleEditorialAnalysisORM:
-        self.session.add(analysis)
-        self.session.flush()
-        self.session.refresh(analysis)
-        return analysis
-
     def _dimension_status(self, diagnostics, name: str) -> str:
         dimension = diagnostics.dimension_status.get(name)
         return "" if dimension is None else dimension.status

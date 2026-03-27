@@ -17,7 +17,7 @@ For a small mixed set of articles, check:
 - `unclear` is used when signal is weak
 - the model is not obviously inheriting outlet stereotypes without textual support
 - strict structured mode failures degrade honestly instead of pretending no request happened
-- failure artifacts are written under `.artifacts/editorial-analysis/` when a row fails
+- failure artifacts are written under `var/analysis/editorial/` when a row fails
 - failure reasons start with a normalized class such as `provider_schema_rejected`, `json_parse_failed`, or `payload_validation_failed`
 
 ## Recommended order
@@ -179,7 +179,7 @@ After the first review, classify the system state into one of three buckets:
 
 ### Artifact hygiene
 - Artifacts are runtime debug files, not source docs
-- Expected location: `.artifacts/editorial-analysis/`
+- Expected location: `var/analysis/editorial/`
 - They should contain response/debug material, not full article bodies or secrets
 
 ## Recommendation
