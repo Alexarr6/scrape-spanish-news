@@ -65,8 +65,9 @@ I did **not** bulk-translate every historical file just to feel productive. The 
 - `STATUS.md` stayed at repo root because the workflow for this run still expects an active status file and the task explicitly required updating it.
 - `RESULTS.md` also remains active at repo root for the same reason, but the old iteration result was archived under `docs/historical/process/` so root no longer carries stale historical run output.
 - `PROJECT_STATE.json` was preserved, not deleted, because it is legitimate workflow history even if it does not belong at repo root.
+- local `artifacts/` research evidence was intentionally left untracked and is now ignored in `.gitignore` instead of being pulled into repo history.
 
 ## Git summary
 
-- branch: `iter/027`
+- branch: `iter/029`
 - rollback hint after review: use `git log --oneline -n 5`
