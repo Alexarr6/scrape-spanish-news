@@ -1,6 +1,0 @@
-{
-  "fixture": "tests/fixtures/story_matching_eval_fixture.json",
-  "score_threshold": 0.68,
-  "max_days_delta": 7,
-  "batch_size": 4
-}
