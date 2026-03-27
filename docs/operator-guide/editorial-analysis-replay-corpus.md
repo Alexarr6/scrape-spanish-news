@@ -57,15 +57,15 @@ The expectation block records what the current pipeline should do for that famil
 ## Run it
 
 ```bash
-cd /home/node/.openclaw/workspace/repos/spain-news-bias-scraper
-PYTHONPATH=. ~/.local/bin/uv run --project . python3 scripts/replay_editorial_corpus.py
+cd /path/to/spain-news-bias-scraper
+PYTHONPATH=. uv run --project . python scripts/replay_editorial_corpus.py
 ```
 
 If you want the test gate too:
 
 ```bash
-cd /home/node/.openclaw/workspace/repos/spain-news-bias-scraper
-PYTHONPATH=. ~/.local/bin/uv run --project . pytest -q tests/test_editorial_replay.py
+cd /path/to/spain-news-bias-scraper
+PYTHONPATH=. uv run --project . pytest -q tests/test_editorial_replay.py
 ```
 
 ## What the report tells you
@@ -109,4 +109,4 @@ If a live run finds a new interesting family, add a new replay fixture from the 
 - do **not** add article-id-specific runtime logic
 - fixtures are evaluation coverage, not production exceptions
 - prefer representative article families over one-off curiosities
-- if the pipeline changes intentionally, update fixture expectations explicitly and explain why in `RESULTS.md`
+- if the pipeline changes intentionally, update fixture expectations explicitly and document the reason in the relevant commit or docs update

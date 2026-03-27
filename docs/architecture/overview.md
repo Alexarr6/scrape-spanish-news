@@ -61,4 +61,4 @@ The React frontend consumes those endpoints for two operator-facing views:
 
 ## Docs truth policy
 
-The commands and behaviors described here are grounded in current code paths. Historical design review files under `docs/reviews/` are useful context, but they are not the canonical operator story.
+The commands and behaviors described here are grounded in current code paths. Architecture docs in this repo should describe current behavior and stable design decisions, not dated implementation handoffs.

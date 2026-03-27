@@ -4,14 +4,14 @@ A Spanish news ingestion and analysis repo with five real surfaces: source scrap
 
 This README is the operator front door. It covers the commands you actually run and points deeper detail at the docs site instead of turning into a prose landfill.
 
-Canonical docs live in `README.md` + `docs/`. Historical audits, reviews, frontend specs, and archived process notes now live under `docs/historical/` instead of squatting at repo root.
+Canonical docs live in `README.md` + `docs/`. Repo-tracked documentation should describe the current system and operator workflows, not internal agent handoffs or iteration logs.
 
 ## What lives here
 
 - `src/` — scraper runtime, persistence, analysis, semantic pipeline, API
 - `scripts/` — operational entrypoints for enrichment, clustering, semantic sync/project/export
 - `frontend/` — Vite + React + TypeScript explorer and story browser
-- `docs/` — MkDocs-backed project documentation plus archived historical material
+- `docs/` — MkDocs-backed project documentation for the current system
 - `tests/` — API, persistence, semantic, and runtime contract checks
 - `data/`, `logs/`, `var/` — generated artifacts, metrics, and scheduler state
 
@@ -365,7 +365,6 @@ Main docs entry points:
 - `docs/semantic/` — semantic storage, sync, projection, export
 - `docs/architecture/` — scrape, persistence, analysis, semantic, API/frontend architecture
 - `docs/reference/` — environment variables and output conventions
-- `docs/historical/` — review/archive material kept for context, not as primary docs
 
 ## Notes and constraints
 

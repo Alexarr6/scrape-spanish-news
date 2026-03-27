@@ -1,7 +1,5 @@
 # Editorial Analysis v1
 
-Status: draft proposal for planner/architect handoff
-
 ## Purpose
 
 Classify each article by:
@@ -343,17 +341,10 @@ Return `unclear` when:
 - classification depends mostly on outlet reputation rather than article wording
 - the strongest evidence comes from quoted third parties, not the article's own framing
 
-## Recommended implementation notes
+## Implementation notes
 
 1. Create a dedicated ORM model, not extra columns on `articles`.
 2. Keep JSON columns for `framing_devices` and `evidence_spans` in v1.
 3. Persist `prompt_version`, `schema_version`, `model_provider`, and `model_name`.
 4. Expose base CRUD via FastCRUD, but plan custom read endpoints for story/cluster comparisons.
 5. Reuse OpenRouter client style already present in `src/analysis/llm_client.py`.
-
-## Open questions for planner / architect
-
-- Should article type live in this new analysis table only, or remain duplicated in current enrichment outputs?
-- Should evidence spans remain JSON in v1, or be normalized into a child table later?
-- Should this run inside the existing enrichment job or as a new dedicated editorial-analysis job?
-- How should read-side aggregation by story cluster be exposed in API v1?

@@ -1,7 +1,5 @@
 # Editorial Analysis — Manual Test Plan
 
-Status: ready for first controlled human review
-
 ## Goal
 
 Validate that editorial analysis v1 is operationally sound and not saying obvious nonsense before Phase 3 adds rollups or comparison surfaces.
@@ -28,8 +26,8 @@ For a small mixed set of articles, check:
 Before spending provider calls, run the captured replay corpus.
 
 ```bash
-cd /home/node/.openclaw/workspace/repos/spain-news-bias-scraper
-PYTHONPATH=. ~/.local/bin/uv run --project . python3 scripts/replay_editorial_corpus.py
+cd /path/to/spain-news-bias-scraper
+PYTHONPATH=. uv run --project . python scripts/replay_editorial_corpus.py
 ```
 
 Use this to check whether recent code changes altered:

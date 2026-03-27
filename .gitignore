@@ -15,6 +15,9 @@ PLAN.md
 RESULTS.md
 STATUS.md
 TODO.md
+.agent/
+docs/plans/
+logs/iterations/
 frontend/node_modules/
 frontend/dist/
 .artifacts/

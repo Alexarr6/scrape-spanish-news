@@ -4,7 +4,7 @@ This project is not one script with delusions of grandeur. It is a scrape runtim
 
 Use this docs site for durable detail. Use the repo `README.md` for quickstart and command triage.
 
-The canonical docs surface is `README.md` + `docs/`. Historical audits/specs/reviews are filed under `docs/historical/` instead of cluttering repo root.
+The canonical docs surface is `README.md` + `docs/`. Repo-tracked documentation here should stay focused on current behavior, stable contracts, and operator workflows.
 
 ## Start here
 
